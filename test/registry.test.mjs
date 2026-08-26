@@ -126,6 +126,9 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   const settings = JSON.parse(await readFile(join(ROOT, ".pi", "settings.json"), "utf8"));
   assert.equal(settings.subagents.disableBuiltins, true);
   assert.equal(settings.subagents.projectRootResolution, "nearest");
+  assert.deepEqual(settings.subagents.agentOverrides, {
+    reviewer: { model: "deepseek/deepseek-v4-flash" },
+  });
   assert.deepEqual(settings.packages, [{
     source: "npm:pi-subagents",
     autoload: false,

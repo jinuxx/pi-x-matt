@@ -11,6 +11,11 @@
   ],
   "subagents": {
     "disableBuiltins": true,
-    "projectRootResolution": "nearest"
+    "projectRootResolution": "nearest",
+    "agentOverrides": {
+      "reviewer": {
+        "model": "deepseek/deepseek-v4-flash"
+      }
+    }
   }
 }
