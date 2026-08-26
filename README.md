@@ -2,13 +2,13 @@
 
 `pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
 
-当前已实现三个纵向切片：`research`、双轴 `code-review` 与分阶段 `tdd`。它们验证了父会话编排、私有 leaf skill、最小工具权限、异步子代理、结构化输出、唯一写者和 fresh reviewer 复核。
+当前已实现交互式需求澄清基础能力，以及三个执行纵向切片：`grilling`、`domain-modeling`、`grill-with-docs` 是交互式 parent；`research`、双轴 `code-review` 与分阶段 `tdd` 是执行型 parent。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 才使用 pi-subagents lanes。
 
 ## 架构
 
 系统分为三个边界：
 
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。
+1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`）留在当前会话中，直接使用用户问答和受限只读调查；执行型 parent（`research`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
@@ -24,7 +24,7 @@
   → 父会话核验并综合结果
 ```
 
-`research` 使用单 lane；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。pipeline gate 会在 worker 未返回 `COMPLETE` 或缺少非空 TDD 证据时阻止 review stage 启动，并在任一 reviewer 未返回 `PASS` 时让整个 workflow 失败。
+`research` 使用单 lane；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`grilling`、`domain-modeling` 和 `grill-with-docs` 是 `dispatch: none` 的 interaction parent：它们不定义 `workflow.json`，也不能传给 `pi_matt_dispatch`，其共享文档写入和最终 shared-understanding gate 由父会话负责。
 
 ## pi-subagents 最小加载
 
@@ -63,10 +63,10 @@
 每个 Pi-native `SKILL.md` 的标准 `metadata` 保存以下移植信息：
 
 - `pi-scope`：`parent` 或 `leaf`
-- `pi-class`：parent 必须为 `orchestration`；leaf 必须为 `executor` 或 `reviewer`
-- `pi-agent`：唯一允许接收其 leaf 闭包的 agent
-- `pi-dispatch`：由父 workflow 的 `workflow.json` 定义 `single`、`parallel` 或 `pipeline`；leaf skill 为 `none`
-- `pi-depends-on`：逗号分隔的 leaf 依赖
+- `pi-class`：parent 为 `orchestration` 或 `interaction`；leaf 必须为 `executor` 或 `reviewer`
+- `pi-agent`：唯一允许接收其 leaf 闭包的 agent（仅 leaf）
+- `pi-dispatch`：执行型 parent 的 `workflow.json` 定义 `single`、`parallel` 或 `pipeline`；interaction parent 固定为 `none`
+- `pi-depends-on`：执行型 parent 的 lane leaf 依赖，或 interaction parent 的 interaction parent 依赖
 - `pi-upstream-path` / `pi-upstream-sha`：上游来源
 
 运行：
@@ -79,7 +79,7 @@ npm run test           # 聚焦测试
 npm run check          # 测试 + registry freshness + upstream drift
 ```
 
-生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch 和 SHA 漂移。parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`。pipeline 的 stage 必须从 1 连续编号，lane gate 必须引用 schema 中声明的 enum 值；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。registry 同时记录 port 与上游源文件的 SHA-256。
+生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch 和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`；interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号，lane gate 必须引用 schema 中声明的 enum 值；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
 项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定，然后通过 pi-subagents 的进程内 RPC 发起异步 run。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
@@ -92,6 +92,8 @@ npm run check          # 测试 + registry freshness + upstream drift
 ```text
 /reload
 ```
+
+需求尚未明确时，使用 `grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。frontier 为空后，先确认 shared understanding；`to-spec` 是下一阶段能力，当前尚未移植。
 
 随后可以直接提出需要外部一手资料的问题，或提出需要评审的固定范围代码变化。父会话匹配对应 skill 后，应调用：
 

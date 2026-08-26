@@ -15,6 +15,7 @@ const COMMON_METADATA = [
   "pi-upstream-sha",
 ];
 const LEAF_METADATA = ["pi-agent", "pi-dispatch", "pi-depends-on"];
+const INTERACTION_METADATA = ["pi-dispatch", "pi-depends-on"];
 
 function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
@@ -241,6 +242,23 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
   };
 }
 
+function assertAbsentMetadata(metadata, keys, sourcePath, kind) {
+  for (const key of keys) {
+    if (key in metadata) throw new Error(`${sourcePath}: ${kind} must not define metadata.${key}`);
+  }
+}
+
+async function assertNoWorkflow(projectRoot, skillPath, skillName) {
+  const workflowPath = join(dirname(skillPath), "workflow.json");
+  try {
+    await readFile(workflowPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  throw new Error(`${assertProjectPath(projectRoot, workflowPath, "Workflow path")}: interaction parent '${skillName}' must not define workflow.json`);
+}
+
 function assertProjectPath(root, path, label) {
   const rel = relative(root, path);
   if (!rel || rel === ".." || rel.startsWith(`..${sep}`)) {
@@ -310,8 +328,12 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
       if (metadata["pi-upstream-sha"] !== upstreamSha) {
         throw new Error(`${sourcePath}: pi-upstream-sha does not match vendor/UPSTREAM_SHA`);
       }
-      if (sourceRoot.scope === "parent" && metadata["pi-class"] !== "orchestration") {
-        throw new Error(`${sourcePath}: parent metadata.pi-class must be 'orchestration'`);
+      if (
+        sourceRoot.scope === "parent" &&
+        metadata["pi-class"] !== "orchestration" &&
+        metadata["pi-class"] !== "interaction"
+      ) {
+        throw new Error(`${sourcePath}: parent metadata.pi-class must be 'orchestration' or 'interaction'`);
       }
       if (sourceRoot.scope === "leaf" && metadata["pi-class"] !== "executor" && metadata["pi-class"] !== "reviewer") {
         throw new Error(`${sourcePath}: leaf metadata.pi-class must be 'executor' or 'reviewer'`);
@@ -329,14 +351,29 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
       let workflowPath;
       let workflowDigest;
       if (sourceRoot.scope === "parent") {
-        const loaded = await loadWorkflow(projectRoot, skillPath, parsed.name, agentNames);
-        workflow = loaded.definition;
-        workflowPath = loaded.path;
-        workflowDigest = loaded.digest;
-        dispatch = workflow.mode;
-        dependsOn = [...new Set(workflow.lanes.flatMap((lane) => lane.skills))];
-        const agents = [...new Set(workflow.lanes.map((lane) => lane.agent))];
-        agent = agents.length === 1 ? agents[0] : null;
+        if (metadata["pi-class"] === "orchestration") {
+          assertAbsentMetadata(metadata, ["pi-agent", "pi-dispatch", "pi-depends-on"], sourcePath, "orchestration parent skills");
+          const loaded = await loadWorkflow(projectRoot, skillPath, parsed.name, agentNames);
+          workflow = loaded.definition;
+          workflowPath = loaded.path;
+          workflowDigest = loaded.digest;
+          dispatch = workflow.mode;
+          dependsOn = [...new Set(workflow.lanes.flatMap((lane) => lane.skills))];
+          const agents = [...new Set(workflow.lanes.map((lane) => lane.agent))];
+          agent = agents.length === 1 ? agents[0] : null;
+        } else {
+          assertAbsentMetadata(metadata, ["pi-agent"], sourcePath, "interaction parent skills");
+          for (const key of INTERACTION_METADATA) {
+            if (!(key in metadata)) throw new Error(`${sourcePath}: metadata.${key} is required for interaction parent skills`);
+          }
+          if (metadata["pi-dispatch"] !== "none") {
+            throw new Error(`${sourcePath}: interaction parent metadata.pi-dispatch must be 'none'`);
+          }
+          await assertNoWorkflow(projectRoot, skillPath, parsed.name);
+          agent = null;
+          dispatch = "none";
+          dependsOn = splitDependencies(metadata["pi-depends-on"]);
+        }
       } else {
         for (const key of LEAF_METADATA) {
           if (!(key in metadata)) throw new Error(`${sourcePath}: metadata.${key} is required for leaf skills`);
@@ -381,13 +418,19 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
     for (const dependency of entry.dependsOn) {
       const target = entriesByName.get(dependency);
       if (!target) throw new Error(`${entry.name}: missing dependency '${dependency}'`);
-      if (target.scope !== "leaf") throw new Error(`${entry.name}: dependency '${dependency}' must be a leaf skill`);
-      if (entry.scope === "leaf" && target.agent !== entry.agent) {
-        throw new Error(`${entry.name}: dependency '${dependency}' targets agent '${target.agent}', expected '${entry.agent}'`);
+      if (entry.scope === "parent" && entry.class === "interaction") {
+        if (target.scope !== "parent" || target.class !== "interaction") {
+          throw new Error(`${entry.name}: interaction dependency '${dependency}' must be an interaction parent skill`);
+        }
+      } else {
+        if (target.scope !== "leaf") throw new Error(`${entry.name}: dependency '${dependency}' must be a leaf skill`);
+        if (entry.scope === "leaf" && target.agent !== entry.agent) {
+          throw new Error(`${entry.name}: dependency '${dependency}' targets agent '${target.agent}', expected '${entry.agent}'`);
+        }
       }
     }
 
-    if (entry.scope === "parent") {
+    if (entry.scope === "parent" && entry.class === "orchestration") {
       for (const lane of entry.workflow.lanes) {
         for (const skillName of lane.skills) {
           const target = entriesByName.get(skillName);
@@ -397,6 +440,10 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
             throw new Error(`${entry.name}: lane '${lane.key}' cannot grant '${skillName}' to agent '${lane.agent}'`);
           }
         }
+      }
+    } else if (entry.scope === "parent") {
+      if (entry.class !== "interaction" || entry.dispatch !== "none" || entry.agent !== null) {
+        throw new Error(`${entry.name}: invalid interaction parent routing`);
       }
     } else if (entry.dispatch !== "none") {
       throw new Error(`${entry.name}: leaf dispatch must be 'none'`);

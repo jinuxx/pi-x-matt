@@ -207,6 +207,15 @@ test("dispatcher fails closed on malformed lanes and cross-agent grants", async 
   );
 });
 
+test("dispatcher rejects interaction parents", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const interaction = registry.skills["grill-with-docs"];
+  assert.throws(
+    () => buildDispatchRequest(registry, interaction, "不要委派 HITL 访谈", ROOT),
+    /not a parent orchestration workflow/,
+  );
+});
+
 test("dispatcher registry paths cannot escape the project root", () => {
   assert.throws(() => resolveProjectPath(ROOT, "../outside", "Source path"), /inside the project root/);
   assert.throws(() => resolveProjectPath(ROOT, "/tmp/outside", "Source path"), /project-relative/);

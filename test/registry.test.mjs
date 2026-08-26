@@ -43,6 +43,9 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.deepEqual(Object.keys(registry.skills), [
     "code-review",
     "codebase-design",
+    "domain-modeling",
+    "grill-with-docs",
+    "grilling",
     "research",
     "research-executor",
     "review-spec",
@@ -84,6 +87,17 @@ test("registry captures parent workflows and their private leaves", async () => 
   );
   assert.deepEqual(registry.skills["tdd-executor"].dependsOn, ["codebase-design"]);
   assert.equal(registry.skills["codebase-design"].agent, "worker");
+
+  for (const name of ["grilling", "domain-modeling", "grill-with-docs"]) {
+    const interaction = registry.skills[name];
+    assert.equal(interaction.scope, "parent");
+    assert.equal(interaction.class, "interaction");
+    assert.equal(interaction.dispatch, "none");
+    assert.equal(interaction.agent, null);
+    assert.equal(interaction.workflow, undefined);
+    assert.equal(interaction.workflowPath, undefined);
+  }
+  assert.deepEqual(registry.skills["grill-with-docs"].dependsOn, ["grilling", "domain-modeling"]);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -126,6 +140,26 @@ test("all project agents are leaf-only and use the private skill path", async ()
   const researcher = await readFile(join(ROOT, ".pi", "agents", "researcher.md"), "utf8");
   assert.doesNotMatch(researcher, /^async:/m);
   assert.doesNotMatch(researcher, /^output:/m);
+});
+
+test("interactive parent skills preserve HITL and document boundaries", async () => {
+  const grilling = await readFile(join(ROOT, ".pi", "skills", "grilling", "SKILL.md"), "utf8");
+  assert.match(grilling, /ask_user_question/);
+  assert.match(grilling, /Frontier/);
+  assert.match(grilling, /shared understanding/);
+
+  const domain = await readFile(join(ROOT, ".pi", "skills", "domain-modeling", "SKILL.md"), "utf8");
+  assert.match(domain, /CONTEXT\.md/);
+  assert.match(domain, /ADR gate/);
+  assert.match(domain, /架构形状/);
+  assert.match(domain, /唯一写者/);
+
+  const combined = await readFile(join(ROOT, ".pi", "skills", "grill-with-docs", "SKILL.md"), "utf8");
+  assert.match(combined, /disable-model-invocation:\s*true/);
+  assert.match(combined, /pi-depends-on:\s*grilling, domain-modeling/);
+  assert.match(combined, /Shared-understanding gate/);
+  assert.match(combined, /不要在本 skill 中生成 spec、tickets 或生产实现/);
+  assert.match(combined, /wayfinding.*尚未移植/);
 });
 
 test("parent workflows require structured completion results", async () => {
@@ -220,6 +254,38 @@ test("registry generation rejects dependency cycles and upstream SHA mismatch", 
     const path = join(temp, "skillpacks", "leaf", "research-executor", "SKILL.md");
     await replace(path, /pi-upstream-sha: [0-9a-f]{40}/.exec(await readFile(path, "utf8"))[0], `pi-upstream-sha: ${"0".repeat(40)}`);
     await assert.rejects(() => buildRegistry(temp), /pi-upstream-sha does not match/);
+  });
+});
+
+test("registry generation rejects invalid interaction parent routing", async () => {
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "grilling", "SKILL.md");
+    await replace(path, "pi-dispatch: none", "pi-dispatch: parallel");
+    await assert.rejects(() => buildRegistry(temp), /interaction parent metadata\.pi-dispatch must be 'none'/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "grill-with-docs", "SKILL.md");
+    await replace(path, "pi-depends-on: grilling, domain-modeling", "pi-depends-on: research");
+    await assert.rejects(() => buildRegistry(temp), /interaction dependency 'research' must be an interaction parent skill/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "grilling", "SKILL.md");
+    await replace(path, "pi-class: interaction", "pi-class: interaction\n  pi-agent: worker");
+    await assert.rejects(() => buildRegistry(temp), /interaction parent skills must not define metadata\.pi-agent/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "research", "SKILL.md");
+    await replace(path, "pi-class: orchestration", "pi-class: orchestration\n  pi-dispatch: single");
+    await assert.rejects(() => buildRegistry(temp), /orchestration parent skills must not define metadata\.pi-dispatch/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "research", "SKILL.md");
+    await replace(path, "pi-class: orchestration", "pi-class: orchestration\n  pi-agent: researcher\n  pi-depends-on: research-executor");
+    await assert.rejects(() => buildRegistry(temp), /orchestration parent skills must not define metadata\.pi-agent/);
   });
 });
 

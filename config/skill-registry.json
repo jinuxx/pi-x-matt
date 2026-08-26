@@ -221,6 +221,51 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
+    "domain-modeling": {
+      "name": "domain-modeling",
+      "description": "在设计讨论中澄清项目术语、维护 CONTEXT.md，并只为难逆转且存在真实权衡的决定记录 ADR。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": ".pi/skills/domain-modeling/SKILL.md",
+      "sourceDigest": "93028acf769c813fb64ee6886b15fe8eaa2fb19632f7ba2d6b79afd942bca414",
+      "upstreamPath": "skills/engineering/domain-modeling/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "327a2b50620e2fd70abc6893cd6965e76b20f8d0adb0dc2c8d5eb3845efb643e"
+    },
+    "grill-with-docs": {
+      "name": "grill-with-docs",
+      "description": "在代码库中分轮澄清计划或设计，并在术语与重大决定形成时更新 CONTEXT.md 和 ADR。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [
+        "grilling",
+        "domain-modeling"
+      ],
+      "sourcePath": ".pi/skills/grill-with-docs/SKILL.md",
+      "sourceDigest": "efd520f7b93ae7fbff1894b756c508e9b85bdc707d372f622e31c716a1baccf6",
+      "upstreamPath": "skills/engineering/grill-with-docs/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
+    },
+    "grilling": {
+      "name": "grilling",
+      "description": "通过分轮 decision tree 追问计划、决定或想法，直到用户确认 shared understanding。用于压力测试思路或任何 grill 类请求。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": ".pi/skills/grilling/SKILL.md",
+      "sourceDigest": "5ea2aac92c05f9c22948882bdf0208f5a5c3a3e4cb307cdb6be1d5d3e61ab8ff",
+      "upstreamPath": "skills/productivity/grilling/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "10ff989e7498b23b5acb49d5048f11dcd906757d2f79c5cdf8a00001381296f2"
+    },
     "research": {
       "name": "research",
       "description": "将需要一手外部证据的问题交给受限 researcher 子代理，并在父会话中综合结果。用于调查官方文档、规范、源代码、第一方 API 或近期生态事实。",
