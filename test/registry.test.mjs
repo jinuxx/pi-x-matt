@@ -52,6 +52,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     "review-standards",
     "tdd",
     "tdd-executor",
+    "to-spec",
   ]);
   assert.deepEqual(registry.skills.research.dependsOn, ["research-executor"]);
   assert.equal(registry.skills.research.agent, "researcher");
@@ -98,6 +99,10 @@ test("registry captures parent workflows and their private leaves", async () => 
     assert.equal(interaction.workflowPath, undefined);
   }
   assert.deepEqual(registry.skills["grill-with-docs"].dependsOn, ["grilling", "domain-modeling"]);
+  assert.equal(registry.skills["to-spec"].scope, "parent");
+  assert.equal(registry.skills["to-spec"].class, "interaction");
+  assert.equal(registry.skills["to-spec"].dispatch, "none");
+  assert.equal(registry.skills["to-spec"].agent, null);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -160,6 +165,20 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(combined, /Shared-understanding gate/);
   assert.match(combined, /不要在本 skill 中生成 spec、tickets 或生产实现/);
   assert.match(combined, /wayfinding.*尚未移植/);
+
+  const toSpec = await readFile(join(ROOT, ".pi", "skills", "to-spec", "SKILL.md"), "utf8");
+  assert.match(toSpec, /不重新 interview/);
+  assert.match(toSpec, /Seam gate/);
+  assert.match(toSpec, /issue tracker/);
+  assert.match(toSpec, /ready-for-agent/);
+  assert.match(toSpec, /当前项目尚未移植 `setup-matt-pocock-skills`/);
+  assert.match(toSpec, /尽可能穷举为 numbered user stories/);
+  assert.match(toSpec, /不要为了“完整”发明用户未确认的需求/);
+
+  const readme = await readFile(join(ROOT, "README.md"), "utf8");
+  assert.match(readme, /4 个交互式 parent/);
+  assert.match(readme, /交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`）/);
+  assert.match(readme, /`grilling`、`domain-modeling`、`grill-with-docs` 和 `to-spec` 是 `dispatch: none`/);
 });
 
 test("parent workflows require structured completion results", async () => {

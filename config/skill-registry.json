@@ -803,6 +803,20 @@
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
+    },
+    "to-spec": {
+      "name": "to-spec",
+      "description": "将当前已完成的设计讨论综合为规格，并在 issue tracker 已配置时发布为 ready-for-agent 的单个 issue。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": ".pi/skills/to-spec/SKILL.md",
+      "sourceDigest": "380c600bd4c00ba79989a6f89ba59299a52f37a5e9e97f583b7e75fe1bf04940",
+      "upstreamPath": "skills/engineering/to-spec/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
     }
   }
 }
