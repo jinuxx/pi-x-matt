@@ -26,9 +26,9 @@ export default function (pi: ExtensionAPI) {
     label: "Git Read",
     description: "Run a fixed allowlist of read-only Git queries for review. Output is truncated to 50KB/2000 lines.",
     parameters: Type.Object({
-      action: StringEnum(["status", "resolve", "commits", "diff-files", "diff", "show"] as const),
-      ref: Type.Optional(Type.String({ description: "Base ref or object name; required except for status" })),
-      path: Type.Optional(Type.String({ description: "Optional project-relative file path for diff/show" })),
+      action: StringEnum(["status", "resolve", "commits", "diff-files", "diff", "worktree-files", "worktree-diff", "show"] as const),
+      ref: Type.Optional(Type.String({ description: "Base ref or object name; required for resolve/commits/diff/show" })),
+      path: Type.Optional(Type.String({ description: "Optional project-relative path for diff/show/worktree queries" })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       let args: string[];
@@ -48,6 +48,12 @@ export default function (pi: ExtensionAPI) {
           break;
         case "diff":
           args = ["diff", "--no-ext-diff", "--unified=80", `${requireRef(params.ref)}...HEAD`, "--", ...(path ? [path] : [])];
+          break;
+        case "worktree-files":
+          args = ["status", "--short", "--untracked-files=all", "--", ...(path ? [path] : [])];
+          break;
+        case "worktree-diff":
+          args = ["diff", "--no-ext-diff", "--unified=80", "HEAD", "--", ...(path ? [path] : [])];
           break;
         case "show":
           args = ["show", "--no-ext-diff", "--format=fuller", requireRef(params.ref), "--", ...(path ? [path] : [])];

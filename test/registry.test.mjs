@@ -42,10 +42,13 @@ test("registry captures parent workflows and their private leaves", async () => 
   const registry = await buildRegistry(ROOT);
   assert.deepEqual(Object.keys(registry.skills), [
     "code-review",
+    "codebase-design",
     "research",
     "research-executor",
     "review-spec",
     "review-standards",
+    "tdd",
+    "tdd-executor",
   ]);
   assert.deepEqual(registry.skills.research.dependsOn, ["research-executor"]);
   assert.equal(registry.skills.research.agent, "researcher");
@@ -62,6 +65,25 @@ test("registry captures parent workflows and their private leaves", async () => 
     ],
   );
   assert.deepEqual(review.dependsOn, ["review-standards", "review-spec"]);
+
+  const tdd = registry.skills.tdd;
+  assert.equal(tdd.workflow.mode, "pipeline");
+  assert.deepEqual(
+    tdd.workflow.lanes.map(({ key, stage, agent, skills, gate }) => ({ key, stage, agent, skills, gate })),
+    [
+      {
+        key: "implement",
+        stage: 1,
+        agent: "worker",
+        skills: ["tdd-executor"],
+        gate: { field: "status", equals: "COMPLETE", nonEmpty: ["confirmedSeams", "cycles", "changedFiles", "commands"] },
+      },
+      { key: "standards", stage: 2, agent: "reviewer", skills: ["review-standards"], gate: { field: "verdict", equals: "PASS" } },
+      { key: "spec", stage: 2, agent: "reviewer", skills: ["review-spec"], gate: { field: "verdict", equals: "PASS" } },
+    ],
+  );
+  assert.deepEqual(registry.skills["tdd-executor"].dependsOn, ["codebase-design"]);
+  assert.equal(registry.skills["codebase-design"].agent, "worker");
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -87,7 +109,19 @@ test("all project agents are leaf-only and use the private skill path", async ()
 
   const reviewer = await readFile(join(ROOT, ".pi", "agents", "reviewer.md"), "utf8");
   assert.match(reviewer, /tools:.*\bgit_read\b/);
+  assert.doesNotMatch(reviewer.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write|bash)\b/);
   assert.match(reviewer, /subagentOnlyExtensions:\s*\.\.\/\.\.\/child-tools\/review-readonly-git\.ts/);
+  const gitTool = await readFile(join(ROOT, "child-tools", "review-readonly-git.ts"), "utf8");
+  assert.match(gitTool, /"worktree-files"/);
+  assert.match(gitTool, /"worktree-diff"/);
+
+  const worker = await readFile(join(ROOT, ".pi", "agents", "worker.md"), "utf8");
+  assert.match(worker, /tools:.*\bedit\b/);
+  assert.match(worker, /tools:.*\bwrite\b/);
+  for (const name of ["reader", "researcher", "reviewer"]) {
+    const content = await readFile(join(ROOT, ".pi", "agents", `${name}.md`), "utf8");
+    assert.doesNotMatch(content.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write)\b/);
+  }
 
   const researcher = await readFile(join(ROOT, ".pi", "agents", "researcher.md"), "utf8");
   assert.doesNotMatch(researcher, /^async:/m);
@@ -95,7 +129,7 @@ test("all project agents are leaf-only and use the private skill path", async ()
 });
 
 test("parent workflows require structured completion results", async () => {
-  for (const name of ["research", "code-review"]) {
+  for (const name of ["research", "code-review", "tdd"]) {
     const content = await readFile(join(ROOT, ".pi", "skills", name, "SKILL.md"), "utf8");
     assert.match(content, /structuredOutput/);
     assert.match(content, /fail|失败/);
@@ -116,6 +150,22 @@ test("workflow schemas require structured output and distinct review axes", asyn
     assert.deepEqual(lane.outputSchema.required, ["axis", "verdict", "summary", "findings", "notes"]);
     assert.equal(lane.outputSchema.properties.findings.items.properties.severity.enum.join(","), "P0,P1,P2");
   }
+
+  const [implement, tddStandards, tddSpec] = registry.skills.tdd.workflow.lanes;
+  assert.equal(implement.outputSchema.properties.status.enum.join(","), "COMPLETE,BLOCKED");
+  assert.deepEqual(implement.gate, {
+    field: "status",
+    equals: "COMPLETE",
+    nonEmpty: ["confirmedSeams", "cycles", "changedFiles", "commands"],
+  });
+  assert.equal(implement.outputSchema.properties.confirmedSeams.minItems, 1);
+  assert.equal(implement.outputSchema.properties.cycles.minItems, 1);
+  assert.equal(implement.outputSchema.properties.commands.minItems, 2);
+  assert.equal(implement.outputSchema.properties.cycles.items.properties.redEvidence.minLength, 1);
+  assert.equal(implement.outputSchema.properties.cycles.items.properties.greenEvidence.minLength, 1);
+  assert.deepEqual([implement.stage, tddStandards.stage, tddSpec.stage], [1, 2, 2]);
+  assert.deepEqual(tddStandards.gate, { field: "verdict", equals: "PASS" });
+  assert.deepEqual(tddSpec.gate, { field: "verdict", equals: "PASS" });
 });
 
 test("registry generation fails closed on a missing dependency", async () => {
@@ -186,5 +236,40 @@ test("registry generation rejects weak workflow schemas and invalid leaf dispatc
     const path = join(temp, "skillpacks", "leaf", "review-spec", "SKILL.md");
     await replace(path, "pi-dispatch: none", "pi-dispatch: parallel");
     await assert.rejects(() => buildRegistry(temp), /leaf metadata\.pi-dispatch must be 'none'/);
+  });
+});
+
+test("registry generation rejects malformed pipeline stages and gates", async () => {
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "tdd", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[1].stage = 3;
+    workflow.lanes[2].stage = 3;
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /pipeline stages must be contiguous/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "tdd", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[0].gate.equals = "NOT_DECLARED";
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /gate must match a declared enum value/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "tdd", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[0].gate.nonEmpty = ["summary"];
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /gate\.nonEmpty must name unique array properties/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "research", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[0].stage = 1;
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /only pipeline lanes may define stage or gate/);
   });
 });

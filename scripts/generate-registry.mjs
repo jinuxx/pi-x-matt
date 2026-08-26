@@ -112,8 +112,8 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
 
   if (workflow.version !== 1) throw new Error(`${sourcePath}: version must be 1`);
   if (workflow.name !== skillName) throw new Error(`${sourcePath}: name must match '${skillName}'`);
-  if (workflow.mode !== "single" && workflow.mode !== "parallel") {
-    throw new Error(`${sourcePath}: mode must be 'single' or 'parallel'`);
+  if (workflow.mode !== "single" && workflow.mode !== "parallel" && workflow.mode !== "pipeline") {
+    throw new Error(`${sourcePath}: mode must be 'single', 'parallel', or 'pipeline'`);
   }
   if (!Array.isArray(workflow.lanes) || workflow.lanes.length === 0) {
     throw new Error(`${sourcePath}: lanes must be a non-empty array`);
@@ -123,6 +123,9 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
   }
   if (workflow.mode === "parallel" && workflow.lanes.length < 2) {
     throw new Error(`${sourcePath}: parallel mode requires at least two lanes`);
+  }
+  if (workflow.mode === "pipeline" && workflow.lanes.length < 2) {
+    throw new Error(`${sourcePath}: pipeline mode requires at least two lanes`);
   }
 
   const laneKeys = new Set();
@@ -168,8 +171,49 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
     if (lane.turnBudget.graceTurns !== undefined && (!Number.isInteger(lane.turnBudget.graceTurns) || lane.turnBudget.graceTurns < 0)) {
       throw new Error(`${sourcePath}: lane '${lane.key}' has invalid turnBudget.graceTurns`);
     }
+
+    let stage;
+    let gate;
+    if (workflow.mode === "pipeline") {
+      if (!Number.isInteger(lane.stage) || lane.stage <= 0) {
+        throw new Error(`${sourcePath}: pipeline lane '${lane.key}' requires a positive stage`);
+      }
+      stage = lane.stage;
+      if (lane.gate !== undefined) {
+        if (
+          !isObject(lane.gate) ||
+          typeof lane.gate.field !== "string" ||
+          !lane.gate.field ||
+          !(lane.gate.field in lane.outputSchema.properties) ||
+          typeof lane.gate.equals !== "string"
+        ) {
+          throw new Error(`${sourcePath}: pipeline lane '${lane.key}' has an invalid gate`);
+        }
+        const gatedProperty = lane.outputSchema.properties[lane.gate.field];
+        if (!isObject(gatedProperty) || !Array.isArray(gatedProperty.enum) || !gatedProperty.enum.includes(lane.gate.equals)) {
+          throw new Error(`${sourcePath}: pipeline lane '${lane.key}' gate must match a declared enum value`);
+        }
+        let nonEmpty;
+        if (lane.gate.nonEmpty !== undefined) {
+          if (
+            !Array.isArray(lane.gate.nonEmpty) ||
+            lane.gate.nonEmpty.length === 0 ||
+            lane.gate.nonEmpty.some((name) => typeof name !== "string" || lane.outputSchema.properties[name]?.type !== "array") ||
+            new Set(lane.gate.nonEmpty).size !== lane.gate.nonEmpty.length
+          ) {
+            throw new Error(`${sourcePath}: pipeline lane '${lane.key}' gate.nonEmpty must name unique array properties`);
+          }
+          nonEmpty = [...lane.gate.nonEmpty];
+        }
+        gate = { field: lane.gate.field, equals: lane.gate.equals, ...(nonEmpty ? { nonEmpty } : {}) };
+      }
+    } else if (lane.stage !== undefined || lane.gate !== undefined) {
+      throw new Error(`${sourcePath}: only pipeline lanes may define stage or gate`);
+    }
+
     return {
       key: lane.key,
+      ...(stage !== undefined ? { stage } : {}),
       agent: lane.agent,
       skills: [...new Set(lane.skills.map((name) => name.trim()))],
       timeoutMs: lane.timeoutMs,
@@ -178,9 +222,17 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
         ...(lane.turnBudget.graceTurns !== undefined ? { graceTurns: lane.turnBudget.graceTurns } : {}),
       },
       taskPrefix: lane.taskPrefix.trim(),
+      ...(gate ? { gate } : {}),
       outputSchema: lane.outputSchema,
     };
   });
+
+  if (workflow.mode === "pipeline") {
+    const stages = [...new Set(lanes.map((lane) => lane.stage))].sort((a, b) => a - b);
+    if (stages.length < 2 || stages.some((stage, index) => stage !== index + 1)) {
+      throw new Error(`${sourcePath}: pipeline stages must be contiguous and include at least stages 1 and 2`);
+    }
+  }
 
   return {
     path: sourcePath,

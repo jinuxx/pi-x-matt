@@ -20,6 +20,26 @@ function parseWorkflowItems(workflowScript) {
   return JSON.parse(firstLine.slice(prefix.length, -2));
 }
 
+function parsePipelineStages(workflowScript) {
+  return [...workflowScript.matchAll(/^const stage\d+Items = (\[.*\]);$/gm)]
+    .map((match) => JSON.parse(match[1]));
+}
+
+function completeWorkerOutput() {
+  return {
+    status: "COMPLETE",
+    summary: "done",
+    confirmedSeams: [{ name: "module", interface: "public", behaviors: ["works"] }],
+    cycles: [{ test: "works", redEvidence: "failed first", greenEvidence: "passed next", files: ["file.mjs"] }],
+    changedFiles: ["file.mjs"],
+    commands: [
+      { command: "test red", outcome: "failed as expected" },
+      { command: "test green", outcome: "passed" },
+    ],
+    residualRisks: [],
+  };
+}
+
 test("dispatcher builds one guarded fresh child for research", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills.research;
@@ -57,12 +77,113 @@ test("dispatcher builds two independent guarded review lanes", async () => {
   assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
 });
 
+test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills.tdd, "已确认 seams 的实现任务", ROOT);
+  const stages = parsePipelineStages(plan.rpcParams.workflowScript);
+
+  assert.deepEqual(plan.lanes.map(({ key, stage, agent, skills }) => ({ key, stage, agent, skills })), [
+    { key: "implement", stage: 1, agent: "worker", skills: ["codebase-design", "tdd-executor"] },
+    { key: "standards", stage: 2, agent: "reviewer", skills: ["review-standards"] },
+    { key: "spec", stage: 2, agent: "reviewer", skills: ["review-spec"] },
+  ]);
+  assert.equal(stages.length, 2);
+  assert.deepEqual(stages[0].map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
+    { key: "implement", agent: "worker", context: "fresh", skill: ["codebase-design", "tdd-executor"], output: false },
+  ]);
+  assert.deepEqual(stages[1].map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
+    { key: "standards", agent: "reviewer", context: "fresh", skill: ["review-standards"], output: false },
+    { key: "spec", agent: "reviewer", context: "fresh", skill: ["review-spec"], output: false },
+  ]);
+  assert.match(plan.rpcParams.workflowScript, /Workflow gate 'implement\.status' did not equal 'COMPLETE'/);
+  assert.match(plan.rpcParams.workflowScript, /Workflow gate 'standards\.verdict' did not equal 'PASS'/);
+  assert.match(plan.rpcParams.workflowScript, /前序阶段结构化结果/);
+
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  let calls = 0;
+  await assert.rejects(
+    () => execute({ all: async () => {
+      calls += 1;
+      return [{ key: "implement", structuredOutput: { status: "BLOCKED" } }];
+    } }),
+    /implement\.status/,
+  );
+  assert.equal(calls, 1, "review stage must not launch after a blocked implementation");
+
+  calls = 0;
+  await assert.rejects(
+    () => execute({ all: async () => {
+      calls += 1;
+      return [{
+        key: "implement",
+        structuredOutput: {
+          status: "COMPLETE",
+          summary: "",
+          confirmedSeams: [],
+          cycles: [],
+          changedFiles: [],
+          commands: [],
+          residualRisks: [],
+        },
+      }];
+    } }),
+    /requires non-empty 'confirmedSeams'/,
+  );
+  assert.equal(calls, 1, "review stage must not launch without TDD evidence");
+
+  calls = 0;
+  const results = await execute({ all: async (items) => {
+    calls += 1;
+    if (calls === 2) {
+      assert.ok(items.every((item) => item.task.includes("前序阶段结构化结果")));
+      assert.ok(items.every((item) => item.task.includes('"status":"COMPLETE"')));
+    }
+    return items.map((item) => ({
+      key: item.key,
+      structuredOutput: item.key === "implement" ? completeWorkerOutput() : { axis: item.key, verdict: "PASS" },
+    }));
+  } });
+  assert.equal(calls, 2);
+  assert.deepEqual(results.map((result) => result.key), ["implement", "standards", "spec"]);
+
+  calls = 0;
+  await assert.rejects(
+    () => execute({ all: async (items) => {
+      calls += 1;
+      return items.map((item) => ({
+        key: item.key,
+        structuredOutput: item.key === "implement"
+          ? completeWorkerOutput()
+          : { axis: item.key, verdict: item.key === "standards" ? "FAIL" : "PASS" },
+      }));
+    } }),
+    /standards\.verdict/,
+  );
+  assert.equal(calls, 2);
+
+  calls = 0;
+  await assert.rejects(
+    () => execute({ all: async (items) => {
+      calls += 1;
+      if (calls === 1) return [{ key: "implement", structuredOutput: completeWorkerOutput() }];
+      return [{ key: items[0].key, structuredOutput: { axis: items[0].key, verdict: "PASS" } }];
+    } }),
+    /expected 2 lane result/,
+  );
+  assert.equal(calls, 2);
+});
+
 test("dispatcher workflow guard rejects missing structured output", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills.research, "research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
 
+  await assert.rejects(
+    () => execute({ all: async () => [] }),
+    /expected 1 lane result/,
+  );
   await assert.rejects(
     () => execute({ all: async () => [{ key: "research", ok: true, output: "prose only" }] }),
     /completed without valid structuredOutput/,

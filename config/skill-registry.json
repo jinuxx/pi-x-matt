@@ -207,6 +207,20 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
     },
+    "codebase-design": {
+      "name": "codebase-design",
+      "description": "为 TDD worker 提供 deep module、interface、seam、adapter、leverage 与 locality 的统一设计词汇。仅供受限 worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/codebase-design/SKILL.md",
+      "sourceDigest": "c48b77081198b6ca4aa28957f54fd671e27b0ebf2e0daac3c52277c533af1aa0",
+      "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
+    },
     "research": {
       "name": "research",
       "description": "将需要一手外部证据的问题交给受限 researcher 子代理，并在父会话中综合结果。用于调查官方文档、规范、源代码、第一方 API 或近期生态事实。",
@@ -362,6 +376,388 @@
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
+    },
+    "tdd": {
+      "name": "tdd",
+      "description": "在用户确认测试 seam 后，以唯一 worker 执行逐片 red→green，并由 fresh Standards/Spec reviewer 复核结果。用于测试驱动实现功能或修复缺陷。",
+      "scope": "parent",
+      "class": "orchestration",
+      "agent": null,
+      "dispatch": "pipeline",
+      "dependsOn": [
+        "tdd-executor",
+        "review-standards",
+        "review-spec"
+      ],
+      "sourcePath": ".pi/skills/tdd/SKILL.md",
+      "sourceDigest": "5a574ddf7d0086c81dac8f931260ee9ffdc0bc0ff27ed341cff083ad176053c5",
+      "workflowPath": ".pi/skills/tdd/workflow.json",
+      "workflowDigest": "6bb97cfc20e9fe5ea3645dbd62222c275f357f14136f9069c0e9b4f2e1ef241c",
+      "workflow": {
+        "version": 1,
+        "name": "tdd",
+        "mode": "pipeline",
+        "lanes": [
+          {
+            "key": "implement",
+            "stage": 1,
+            "agent": "worker",
+            "skills": [
+              "tdd-executor"
+            ],
+            "timeoutMs": 600000,
+            "turnBudget": {
+              "maxTurns": 24,
+              "graceTurns": 4
+            },
+            "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、固定基线和允许范围；逐个 vertical slice 取得真实 RED 后写最小 GREEN。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
+            "gate": {
+              "field": "status",
+              "equals": "COMPLETE",
+              "nonEmpty": [
+                "confirmedSeams",
+                "cycles",
+                "changedFiles",
+                "commands"
+              ]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "COMPLETE",
+                    "BLOCKED"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confirmedSeams": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "interface": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "behaviors": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "interface",
+                      "behaviors"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "cycles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "test": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "redEvidence": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "greenEvidence": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "files": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "required": [
+                      "test",
+                      "redEvidence",
+                      "greenEvidence",
+                      "files"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "changedFiles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "commands": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "command",
+                      "outcome"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "residualRisks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "summary",
+                "confirmedSeams",
+                "cycles",
+                "changedFiles",
+                "commands",
+                "residualRisks"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "key": "standards",
+            "stage": 2,
+            "agent": "reviewer",
+            "skills": [
+              "review-standards"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 12,
+              "graceTurns": 2
+            },
+            "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核。Dispatcher 会附加 implement 的 structuredOutput 作为 RED/GREEN 命令证据；结合 git_read status/worktree-files/worktree-diff、任务固定基线和真实文件核验，只读检查仓库规则、正确性、测试质量及范围。不要修改文件，不要审计未列入范围的基础设施。",
+            "gate": {
+              "field": "verdict",
+              "equals": "PASS"
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "axis": {
+                  "type": "string",
+                  "enum": [
+                    "standards"
+                  ]
+                },
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "PASS",
+                    "FAIL",
+                    "NO_EVIDENCE"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "string"
+                      },
+                      "locations": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "recommendation": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "severity",
+                      "title",
+                      "evidence",
+                      "locations",
+                      "recommendation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "axis",
+                "verdict",
+                "summary",
+                "findings",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "key": "spec",
+            "stage": 2,
+            "agent": "reviewer",
+            "skills": [
+              "review-spec"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 12,
+              "graceTurns": 2
+            },
+            "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核。Dispatcher 会附加 implement 的 structuredOutput 作为实现证据；结合 git_read status/worktree-files/worktree-diff、任务固定基线和真实文件核验，只依据任务中的明确需求、已确认 seams 与验收标准检查遗漏、错误行为和范围膨胀。不要修改文件；没有可用 spec 时返回 NO_EVIDENCE。",
+            "gate": {
+              "field": "verdict",
+              "equals": "PASS"
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "axis": {
+                  "type": "string",
+                  "enum": [
+                    "spec"
+                  ]
+                },
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "PASS",
+                    "FAIL",
+                    "NO_EVIDENCE"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "string"
+                      },
+                      "locations": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "recommendation": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "severity",
+                      "title",
+                      "evidence",
+                      "locations",
+                      "recommendation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "axis",
+                "verdict",
+                "summary",
+                "findings",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "upstreamPath": "skills/engineering/tdd/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
+    },
+    "tdd-executor": {
+      "name": "tdd-executor",
+      "description": "在已确认 seam 与固定范围内，以唯一写者逐片执行真实 red→green，并返回可审计证据。仅供受限 worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [
+        "codebase-design"
+      ],
+      "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
+      "sourceDigest": "0d505dfea265f500faf6c7c378a4cb6df81993587792aac7f4cef178ffcb35e8",
+      "upstreamPath": "skills/engineering/tdd/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
     }
   }
 }
