@@ -51,6 +51,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     "research-executor",
     "review-spec",
     "review-standards",
+    "setup-matt-pocock-skills",
     "tdd",
     "tdd-executor",
     "to-spec",
@@ -95,7 +96,7 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.deepEqual(registry.skills["tdd-executor"].dependsOn, ["codebase-design"]);
   assert.equal(registry.skills["codebase-design"].agent, "worker");
 
-  for (const name of ["grilling", "domain-modeling", "grill-with-docs"]) {
+  for (const name of ["setup-matt-pocock-skills", "grilling", "domain-modeling", "grill-with-docs"]) {
     const interaction = registry.skills[name];
     assert.equal(interaction.scope, "parent");
     assert.equal(interaction.class, "interaction");
@@ -106,6 +107,7 @@ test("registry captures parent workflows and their private leaves", async () => 
   }
   assert.deepEqual(registry.skills["grill-with-docs"].dependsOn, ["grilling", "domain-modeling"]);
   assert.equal(registry.skills["to-spec"].scope, "parent");
+  assert.match(registry.skills["to-spec"].description, /parent spec.*spec-ready/);
   assert.equal(registry.skills["to-spec"].class, "interaction");
   assert.equal(registry.skills["to-spec"].dispatch, "none");
   assert.equal(registry.skills["to-spec"].agent, null);
@@ -131,6 +133,38 @@ test("project package filter keeps only the pi-subagents extension", async () =>
     prompts: [],
     themes: [],
   }]);
+});
+
+test("repository tracker setup is executable and discoverable by Pi", async () => {
+  const agents = await readFile(join(ROOT, "AGENTS.md"), "utf8");
+  assert.equal((agents.match(/^## Agent skills$/gm) ?? []).length, 1);
+  assert.match(agents, /docs\/agents\/issue-tracker\.md/);
+  assert.match(agents, /docs\/agents\/triage-labels\.md/);
+  assert.match(agents, /docs\/agents\/domain\.md/);
+
+  const tracker = await readFile(join(ROOT, "docs", "agents", "issue-tracker.md"), "utf8");
+  assert.match(tracker, /Issue Tracker: Local Markdown/);
+  assert.match(tracker, /\.scratch\/<feature-slug>\/spec\.md/);
+  assert.match(tracker, /issues\/<NN>-<slug>\.md/);
+  assert.match(tracker, /Type: spec/);
+  assert.match(tracker, /Status: spec-ready/);
+  assert.match(tracker, /Type: ticket/);
+  assert.match(tracker, /Parent:/);
+  assert.match(tracker, /Status: ready-for-agent/);
+  assert.match(tracker, /Blocked by:/);
+  assert.match(tracker, /Status: resolved/);
+  assert.match(tracker, /## Comments/);
+  assert.match(tracker, /同一个最终提交/);
+  assert.match(tracker, /重新读取目标文件/);
+
+  const labels = await readFile(join(ROOT, "docs", "agents", "triage-labels.md"), "utf8");
+  assert.match(labels, /`ready-for-agent` \| `ready-for-agent`/);
+  assert.match(labels, /`spec-ready`/);
+  assert.match(labels, /`resolved`/);
+  const domain = await readFile(join(ROOT, "docs", "agents", "domain.md"), "utf8");
+  assert.match(domain, /single-context/);
+  assert.match(domain, /CONTEXT\.md/);
+  assert.match(domain, /docs\/adr\//);
 });
 
 test("all project agents are leaf-only and use the private skill path", async () => {
@@ -164,6 +198,23 @@ test("all project agents are leaf-only and use the private skill path", async ()
 });
 
 test("interactive parent skills preserve HITL and document boundaries", async () => {
+  const setup = await readFile(join(ROOT, ".pi", "skills", "setup-matt-pocock-skills", "SKILL.md"), "utf8");
+  assert.match(setup, /disable-model-invocation:\s*true/);
+  assert.match(setup, /pi-class:\s*interaction/);
+  assert.match(setup, /ask_user_question/);
+  assert.match(setup, /docs\/agents\/issue-tracker\.md/);
+  assert.match(setup, /docs\/agents\/triage-labels\.md/);
+  assert.match(setup, /docs\/agents\/domain\.md/);
+  assert.match(setup, /不创建远端 issue、label/);
+  assert.match(setup, /Pi-only/);
+  assert.match(setup, /`spec-ready`、`ready-for-agent` 与 `resolved`/);
+  assert.match(setup, /`ready-for-agent` 是 canonical triage role/);
+  for (const seed of ["issue-tracker-github.md", "issue-tracker-gitlab.md", "issue-tracker-local.md", "domain.md"]) {
+    const relativeSeed = `vendor/mattpocock-skills/skills/engineering/setup-matt-pocock-skills/${seed}`;
+    assert.ok(setup.includes(relativeSeed), `setup must reference ${relativeSeed}`);
+    await readFile(join(ROOT, relativeSeed), "utf8");
+  }
+
   const grilling = await readFile(join(ROOT, ".pi", "skills", "grilling", "SKILL.md"), "utf8");
   assert.match(grilling, /ask_user_question/);
   assert.match(grilling, /Frontier/);
@@ -186,9 +237,14 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   const toSpec = await readFile(join(ROOT, ".pi", "skills", "to-spec", "SKILL.md"), "utf8");
   assert.match(toSpec, /不重新 interview/);
   assert.match(toSpec, /Seam gate/);
-  assert.match(toSpec, /issue tracker/);
+  assert.match(toSpec, /tracker/);
   assert.match(toSpec, /ready-for-agent/);
-  assert.match(toSpec, /当前项目尚未移植 `setup-matt-pocock-skills`/);
+  assert.match(toSpec, /已移植的 `setup-matt-pocock-skills`/);
+  assert.match(toSpec, /docs\/agents\/issue-tracker\.md/);
+  assert.match(toSpec, /docs\/agents\/triage-labels\.md/);
+  assert.match(toSpec, /Type: spec/);
+  assert.match(toSpec, /Status: spec-ready/);
+  assert.match(toSpec, /^description:.*parent spec.*spec-ready/m);
   assert.match(toSpec, /尽可能穷举为 numbered user stories/);
   assert.match(toSpec, /`to-tickets` 已移植/);
   assert.match(toSpec, /`implement`，它每次只处理一个已确认 ticket/);
@@ -202,11 +258,16 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /Blocking edges/);
   assert.match(toTickets, /ask_user_question/);
   assert.match(toTickets, /ready-for-agent/);
-  assert.match(toTickets, /当前项目尚未移植 `setup-matt-pocock-skills`/);
+  assert.match(toTickets, /已移植的 `setup-matt-pocock-skills`/);
+  assert.match(toTickets, /docs\/agents\/issue-tracker\.md/);
+  assert.match(toTickets, /docs\/agents\/triage-labels\.md/);
   assert.match(toTickets, /wide refactor/i);
   assert.match(toTickets, /native relationship/);
   assert.match(toTickets, /Real tracker issue template/);
-  assert.match(toTickets, /\*\*Parent:\*\*/);
+  assert.match(toTickets, /Type: ticket/);
+  assert.match(toTickets, /^Parent:/m);
+  assert.match(toTickets, /## Comments/);
+  assert.match(toTickets, /Blocked by: <ticket 路径\/编号/);
   assert.match(toTickets, /## Parent/);
   assert.match(toTickets, /## Acceptance criteria/);
   assert.match(toTickets, /`implement` 已移植/);
@@ -221,6 +282,10 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /只处理一个 ticket/);
   assert.match(implement, /contact_supervisor/);
   assert.match(implement, /domain-modeling/);
+  assert.match(implement, /Status: resolved/);
+  assert.match(implement, /同一提交/);
+  assert.match(implement, /blocker.*Type: ticket.*Status: resolved/);
+  assert.match(implement, /spec-ready.*必须先进入 `to-tickets`/);
 
   const tdd = await readFile(join(ROOT, ".pi", "skills", "tdd", "SKILL.md"), "utf8");
   assert.match(tdd, /没有明确 spec\/验收行为时停止/);
@@ -230,9 +295,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(research, /research note/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /6 个交互式 parent/);
-  assert.match(readme, /交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`）/);
-  assert.match(readme, /`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets` 和 `implement` 是 `dispatch: none`/);
+  assert.match(readme, /7 个交互式 parent/);
+  assert.match(readme, /交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`）/);
+  assert.match(readme, /`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets` 和 `implement` 是 `dispatch: none`/);
+  assert.match(readme, /首次使用发布链前运行 `setup-matt-pocock-skills`/);
+  assert.match(readme, /spec-ready.*ready-for-agent.*resolved/);
   assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);
   assert.match(readme, /`implement`.*调用 `tdd` 和 `code-review`/);
 });

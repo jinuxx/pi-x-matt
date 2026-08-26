@@ -1,6 +1,6 @@
 ---
 name: to-spec
-description: 将当前已完成的设计讨论综合为规格，并在 issue tracker 已配置时发布为 ready-for-agent 的单个 issue。
+description: 将当前已完成的设计讨论综合为 parent spec，并按 tracker 配置发布为本地 spec-ready 文档或受保护的 remote issue。
 disable-model-invocation: true
 metadata:
   pi-scope: parent
@@ -19,7 +19,7 @@ metadata:
 
 1. 读取当前会话、相关代码、项目说明、`CONTEXT-MAP.md`/`CONTEXT.md`、相关 ADR，以及用户明确提供或项目内已持久化的 research note。research completion result 只在原会话中可用；跨 session 时没有可核验 note 就不得把记忆或摘要冒充研究证据。
 2. 使用项目领域词汇，尊重已接受的 ADR。若用户陈述与代码或文档冲突，停止并报告冲突，不静默选择一方。
-3. 检查 `docs/agents/issue-tracker.md` 和 triage label 配置。当前项目尚未移植 `setup-matt-pocock-skills`，也没有 tracker 配置时停止并报告“tracker 尚未配置”；不要指向不可用的项目 skill，也不要猜测 GitHub、GitLab 或 local-markdown。
+3. 检查 `docs/agents/issue-tracker.md` 和 `docs/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `setup-matt-pocock-skills`，不要自行猜测 GitHub、GitLab 或 local-markdown。
 4. `to-spec` 不负责搜索重复 issue、创建 tracker 配置、拆 tickets、实现代码或启动 subagent。
 
 ## Seam gate
@@ -82,8 +82,8 @@ metadata:
 ## 发布 gate
 
 1. 先在父会话中展示生成的 spec 摘要，尤其是 seams 和 Out of Scope，确认内容忠实于本次讨论。
-2. 用户确认后，按 `docs/agents/issue-tracker.md` 的规则创建一个 issue，使用项目配置中的 `ready-for-agent` label；无需再次 triage。若外部 runner 会轮询该 label，必须先确认其显式排除 parent spec；无法确认时停止发布，避免绕过 ticket 切片直接实现整份 spec。
-3. 发布后核对 issue URL/本地 issue 路径、标题、正文和 label，确认只有一个 spec issue 被创建。
+2. 用户确认后，按 `docs/agents/issue-tracker.md` 发布一个 parent spec。Local Markdown 必须写 `Type: spec` 与 `Status: spec-ready`，该状态只允许进入 `to-tickets`；remote tracker 才使用项目配置中的 `ready-for-agent` label，且外部 runner 必须显式排除 parent spec，无法确认时停止发布。
+3. 发布后核对 issue URL/本地 spec 路径、标题、正文以及配置要求的 Type/Status 或 label，确认只有一个 parent spec 被创建。
 4. 没有 tracker、label 配置、用户确认或可核验发布结果时，保持未发布状态并明确报告原因。
 
 发布完成后建议进入 `to-tickets`。当前 `to-tickets` 已移植；下一阶段是 `implement`，它每次只处理一个已确认 ticket，依次执行 TDD、验证、双轴 code-review，并在通过后提交当前 branch。不要在本 skill 中自行拆 ticket 或实现。
