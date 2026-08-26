@@ -9,7 +9,7 @@
       "agent": "worker",
       "skills": ["tdd-executor"],
       "timeoutMs": 600000,
-      "turnBudget": { "maxTurns": 24, "graceTurns": 4 },
+      "turnBudget": { "maxTurns": 36, "graceTurns": 4 },
       "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、固定基线和允许范围；逐个 vertical slice 取得真实 RED 后写最小 GREEN。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
       "gate": {
         "field": "status",

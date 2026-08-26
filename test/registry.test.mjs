@@ -338,6 +338,7 @@ test("workflow schemas require structured output and distinct review axes", asyn
 
   const [implement, tddStandards, tddSpec] = registry.skills.tdd.workflow.lanes;
   assert.equal(implement.outputSchema.properties.status.enum.join(","), "COMPLETE,BLOCKED");
+  assert.deepEqual(implement.turnBudget, { maxTurns: 36, graceTurns: 4 });
   assert.deepEqual(implement.gate, {
     field: "status",
     equals: "COMPLETE",
