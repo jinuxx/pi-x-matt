@@ -46,6 +46,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     "domain-modeling",
     "grill-with-docs",
     "grilling",
+    "implement",
     "research",
     "research-executor",
     "review-spec",
@@ -108,6 +109,10 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.equal(registry.skills["to-tickets"].class, "interaction");
   assert.equal(registry.skills["to-tickets"].dispatch, "none");
   assert.equal(registry.skills["to-tickets"].agent, null);
+  assert.equal(registry.skills.implement.scope, "parent");
+  assert.equal(registry.skills.implement.class, "interaction");
+  assert.equal(registry.skills.implement.dispatch, "none");
+  assert.equal(registry.skills.implement.agent, null);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -179,7 +184,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toSpec, /当前项目尚未移植 `setup-matt-pocock-skills`/);
   assert.match(toSpec, /尽可能穷举为 numbered user stories/);
   assert.match(toSpec, /`to-tickets` 已移植/);
-  assert.match(toSpec, /`implement`，当前项目尚未移植/);
+  assert.match(toSpec, /`implement`，它每次只处理一个已确认 ticket/);
 
   assert.match(toSpec, /不要为了“完整”发明用户未确认的需求/);
 
@@ -190,15 +195,27 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /ready-for-agent/);
   assert.match(toTickets, /当前项目尚未移植 `setup-matt-pocock-skills`/);
   assert.match(toTickets, /wide refactor/i);
+  assert.match(toTickets, /native relationship/);
   assert.match(toTickets, /Real tracker issue template/);
   assert.match(toTickets, /## Parent/);
   assert.match(toTickets, /## Acceptance criteria/);
-  assert.match(toTickets, /native relationship/);
+  assert.match(toTickets, /`implement` 已移植/);
+  assert.match(toTickets, /每次只处理一个 ticket/);
+
+  const implement = await readFile(join(ROOT, ".pi", "skills", "implement", "SKILL.md"), "utf8");
+  assert.match(implement, /一个 ticket/);
+  assert.match(implement, /workflow`: `tdd`/);
+  assert.match(implement, /workflow`: `code-review`/);
+  assert.match(implement, /当前 branch/);
+  assert.match(implement, /不 push/);
+  assert.match(implement, /只处理一个 ticket/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /5 个交互式 parent/);
-  assert.match(readme, /交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`）/);
-  assert.match(readme, /`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec` 和 `to-tickets` 是 `dispatch: none`/);
+  assert.match(readme, /6 个交互式 parent/);
+  assert.match(readme, /交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`）/);
+  assert.match(readme, /`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets` 和 `implement` 是 `dispatch: none`/);
+  assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);
+  assert.match(readme, /`implement`.*调用 `tdd` 和 `code-review`/);
 });
 
 test("parent workflows require structured completion results", async () => {

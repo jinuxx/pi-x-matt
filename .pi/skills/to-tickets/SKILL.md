@@ -62,7 +62,7 @@ metadata:
 2. local-markdown tracker：按 blockers-first 写入 `.scratch/<feature-slug>/issues/<NN>-<slug>.md`，每张 ticket 一个文件，`NN` 从 `01` 开始；每个文件标记 `Status: ready-for-agent`，并写明 acceptance criteria 和 Blocked by。
 3. real tracker：按配置执行 issue 创建，使用 `ready-for-agent` label；优先使用 tracker 原生 blocking/sub-issue relationship，不可用时将 blocking references 写入 body。父 spec 只作为 parent reference，不关闭、不修改。
 4. 每次创建后读取或查询结果，核对标题、正文、label、identifier 和 blocking edge。任何发布结果无法核验时停止并报告，不继续批量创建。
-5. 发布完成后报告 ticket 数量、frontier、blocking graph 和下一步 `implement`；当前项目尚未移植 `implement`，因此只报告下一阶段不可用，不自行实施。
+5. 发布完成后报告 ticket 数量、frontier、blocking graph 和下一步 `implement`；`implement` 已移植，每次只处理一个 ticket，并在 TDD、完整验证和双轴 code-review 通过后提交当前 branch。不要在 `to-tickets` 中自行实施或批量处理 tickets。
 
 ## Ticket 模板
 

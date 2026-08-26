@@ -266,6 +266,20 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "10ff989e7498b23b5acb49d5048f11dcd906757d2f79c5cdf8a00001381296f2"
     },
+    "implement": {
+      "name": "implement",
+      "description": "根据已确认的 ticket、spec 或当前计划实现一个工作切片，依次执行 TDD、验证、独立 code review，并提交当前分支。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": ".pi/skills/implement/SKILL.md",
+      "sourceDigest": "f956fb3d2402c4f91a60d90f38875211ccf15b7f84866849dbd2bd49731a39b5",
+      "upstreamPath": "skills/engineering/implement/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
+    },
     "research": {
       "name": "research",
       "description": "将需要一手外部证据的问题交给受限 researcher 子代理，并在父会话中综合结果。用于调查官方文档、规范、源代码、第一方 API 或近期生态事实。",
@@ -813,7 +827,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-spec/SKILL.md",
-      "sourceDigest": "77ffe13ee50a3584970cb6c8a8291f9ff00da95bb66248315a89c0eedaec1289",
+      "sourceDigest": "b0affa4a2d78783a32a62332d28b4223de063c92fcdc8ee4d25960a269d1a9c9",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
@@ -827,7 +841,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-tickets/SKILL.md",
-      "sourceDigest": "35daed1ef9d64a94c6c6bc7b85efc169cd9ed9950bdddd7d6106563f0106081b",
+      "sourceDigest": "ba974f053e49f82d6f0c0ad50cb3e66936effe3328ae191bc2ca6ee22bed0db3",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
