@@ -1,0 +1,15 @@
+{
+  "packages": [
+    {
+      "source": "npm:pi-subagents",
+      "extensions": ["+index.ts"],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ],
+  "subagents": {
+    "disableBuiltins": true,
+    "projectRootResolution": "nearest"
+  }
+}

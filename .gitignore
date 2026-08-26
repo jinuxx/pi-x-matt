@@ -1,0 +1,4 @@
+.DS_Store
+.pi/subagents/
+.pi/npm/
+node_modules/

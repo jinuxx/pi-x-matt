@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "upstream": {
+    "repository": "https://github.com/mattpocock/skills",
+    "sha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76"
+  },
+  "skills": {
+    "code-review": {
+      "name": "code-review",
+      "description": "沿 Standards 与 Spec 两个相互独立的轴评审固定范围内的代码变化。用于评审分支、PR、工作区变更、计划实现结果或指定文件。",
+      "scope": "parent",
+      "class": "orchestration",
+      "agent": "reviewer",
+      "dispatch": "parallel",
+      "dependsOn": [
+        "review-standards",
+        "review-spec"
+      ],
+      "sourcePath": ".pi/skills/code-review/SKILL.md",
+      "sourceDigest": "1bda32500f1ee1b83f6748cc7be444c6fbfd1bee61dbe846dc367cdf7a8ae035",
+      "workflowPath": ".pi/skills/code-review/workflow.json",
+      "workflowDigest": "cfc158dbb3e66f514c72c7571bd5c688bec62679171b85c61713a210f9aebebc",
+      "workflow": {
+        "version": 1,
+        "name": "code-review",
+        "mode": "parallel",
+        "lanes": [
+          {
+            "key": "standards",
+            "agent": "reviewer",
+            "skills": [
+              "review-standards"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 12,
+              "graceTurns": 2
+            },
+            "taskPrefix": "执行 Standards 轴评审。只读取任务列出的目标、标准及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。检查真实材料，只报告当前存在且有证据的问题。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确，证据足够后立即停止。",
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "axis": {
+                  "type": "string",
+                  "enum": [
+                    "standards"
+                  ]
+                },
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "PASS",
+                    "FAIL",
+                    "NO_EVIDENCE"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "string"
+                      },
+                      "locations": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "recommendation": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "severity",
+                      "title",
+                      "evidence",
+                      "locations",
+                      "recommendation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "axis",
+                "verdict",
+                "summary",
+                "findings",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "key": "spec",
+            "agent": "reviewer",
+            "skills": [
+              "review-spec"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 12,
+              "graceTurns": 2
+            },
+            "taskPrefix": "执行 Spec 轴评审。只读取任务列出的目标、规格及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。只依据明确规格和验收标准检查需求遗漏、范围膨胀及看似实现但行为错误的部分。不要用个人代码风格替代规格。没有 spec 时返回 NO_EVIDENCE，证据足够后立即停止。",
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "axis": {
+                  "type": "string",
+                  "enum": [
+                    "spec"
+                  ]
+                },
+                "verdict": {
+                  "type": "string",
+                  "enum": [
+                    "PASS",
+                    "FAIL",
+                    "NO_EVIDENCE"
+                  ]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "string"
+                      },
+                      "locations": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "recommendation": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "severity",
+                      "title",
+                      "evidence",
+                      "locations",
+                      "recommendation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "axis",
+                "verdict",
+                "summary",
+                "findings",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "upstreamPath": "skills/engineering/code-review/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
+    },
+    "research": {
+      "name": "research",
+      "description": "将需要一手外部证据的问题交给受限 researcher 子代理，并在父会话中综合结果。用于调查官方文档、规范、源代码、第一方 API 或近期生态事实。",
+      "scope": "parent",
+      "class": "orchestration",
+      "agent": "researcher",
+      "dispatch": "single",
+      "dependsOn": [
+        "research-executor"
+      ],
+      "sourcePath": ".pi/skills/research/SKILL.md",
+      "sourceDigest": "423131eb4f967b0d68e72dc5d8cd41adfc4de2e108712cf93ee3331079da36de",
+      "workflowPath": ".pi/skills/research/workflow.json",
+      "workflowDigest": "5757a0ed1fdd665b372d26f06511da85eb644e40ae760c7de5008acd1690d055",
+      "workflow": {
+        "version": 1,
+        "name": "research",
+        "mode": "single",
+        "lanes": [
+          {
+            "key": "research",
+            "agent": "researcher",
+            "skills": [
+              "research-executor"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 8,
+              "graceTurns": 2
+            },
+            "taskPrefix": "调查下面的问题。严格使用一手来源；每项关键结论必须由 sources 中至少一个 URL 支撑。无法确认的内容放入 gaps，不要猜测。",
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "question": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "claim": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "string"
+                      },
+                      "sourceUrls": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "minItems": 1
+                      }
+                    },
+                    "required": [
+                      "claim",
+                      "evidence",
+                      "sourceUrls"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "url",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "gaps": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "question",
+                "summary",
+                "findings",
+                "sources",
+                "gaps"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "upstreamPath": "skills/engineering/research/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
+    },
+    "research-executor": {
+      "name": "research-executor",
+      "description": "针对一个明确问题检索高可信一手资料，逐项核验结论并返回带 URL 的研究报告。仅供受限 researcher 子代理使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "researcher",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/research-executor/SKILL.md",
+      "sourceDigest": "5c1d30e4c3b5cd2bcd8d21d81c5c250cc60f1ac3d3b1abdab190907690708f19",
+      "upstreamPath": "skills/engineering/research/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
+    },
+    "review-spec": {
+      "name": "review-spec",
+      "description": "独立对照明确规格和验收标准检查需求遗漏、范围膨胀与错误实现。仅供只读 reviewer 使用。",
+      "scope": "leaf",
+      "class": "reviewer",
+      "agent": "reviewer",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
+      "sourceDigest": "fea11f97152a5871ef2cca8ac740061b0eaa8a5528149074419eedc5d47e4c17",
+      "upstreamPath": "skills/engineering/code-review/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
+    },
+    "review-standards": {
+      "name": "review-standards",
+      "description": "独立检查目标代码是否违反仓库明确标准、引入正确性或测试风险，并用代码异味启发式补充有证据的判断。仅供只读 reviewer 使用。",
+      "scope": "leaf",
+      "class": "reviewer",
+      "agent": "reviewer",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
+      "sourceDigest": "118d3b4428c5f816ea486a54daf06e4c70a7c72cf7e7f72efa177c6b56d85c1d",
+      "upstreamPath": "skills/engineering/code-review/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
+    }
+  }
+}
