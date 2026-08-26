@@ -33,4 +33,6 @@ Dispatcher 会并行启动两个 fresh-context reviewer：
 
 ## 汇总
 
-保持两个结构化结果分离呈现，不把一个轴的结论改写成另一个轴的优先级。父会话只过滤无证据或超出范围的 finding，并分别报告每轴 verdict、finding 数和最严重问题。
+1. 收到 completion result 后，只读取 `standards` 与 `spec` lane 的 `structuredOutput`；不要把普通 `output`、`outputReference` 或文件扩展名当作结构化结果。
+2. 任一 lane 失败、缺失或 `structuredOutput` 不符合对应 workflow schema 时，整个评审工作流失败；不得用自然语言输出替代该轴。
+3. 两个对象均有效时，保持结果分离呈现，不把一个轴的结论改写成另一个轴的优先级。父会话只过滤无证据或超出范围的 finding，并分别报告每轴 verdict、finding 数和最严重问题。

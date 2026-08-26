@@ -5,6 +5,7 @@
   "scripts": {
     "registry": "node scripts/generate-registry.mjs",
     "drift": "node scripts/check-upstream-drift.mjs",
-    "check": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "check": "npm run test && npm run registry -- --check && npm run drift"
   }
 }

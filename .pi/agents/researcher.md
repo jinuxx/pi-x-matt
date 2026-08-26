@@ -8,8 +8,6 @@ skillPath: ../../skillpacks/leaf
 defaultContext: fresh
 acceptanceRole: read-only
 maxSubagentDepth: 0
-async: true
-output: research.md
 ---
 
 你是 Pi-native 的只读研究子代理。

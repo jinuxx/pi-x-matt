@@ -19,7 +19,9 @@ metadata:
    - `workflow`: `research`
    - `task`: 写明问题、时间边界、必需资料类型、输出格式和停止条件
 3. 调度完成后继续处理不依赖结果的工作，或把控制权交还用户等待异步完成。
-4. 收到结果后，父会话检查来源是否为一手资料、每项关键结论是否可追溯、未知项是否明确标注，然后再回答用户。
+4. 收到 completion result 后，只读取 research lane 的 `structuredOutput`；不要把普通 `output`、`outputReference` 或文件扩展名当作结构化结果。
+5. 若 run 失败、lane 缺失或 `structuredOutput` 不是符合 workflow schema 的对象，明确报告工作流失败，不回退到自然语言报告。
+6. 结构化结果有效时，检查来源是否为一手资料、每项关键结论是否可追溯、未知项是否明确标注，然后再回答用户。
 
 ## 边界
 

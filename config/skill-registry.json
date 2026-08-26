@@ -17,7 +17,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/code-review/SKILL.md",
-      "sourceDigest": "1bda32500f1ee1b83f6748cc7be444c6fbfd1bee61dbe846dc367cdf7a8ae035",
+      "sourceDigest": "ff51fc08b4ca63ae97b00c0480e31e54b35679bb2496d864e1474b530a4031c1",
       "workflowPath": ".pi/skills/code-review/workflow.json",
       "workflowDigest": "cfc158dbb3e66f514c72c7571bd5c688bec62679171b85c61713a210f9aebebc",
       "workflow": {
@@ -218,7 +218,7 @@
         "research-executor"
       ],
       "sourcePath": ".pi/skills/research/SKILL.md",
-      "sourceDigest": "423131eb4f967b0d68e72dc5d8cd41adfc4de2e108712cf93ee3331079da36de",
+      "sourceDigest": "2f92bbec4d657b565bab6b2da40277901fef54c5a997425111f4c0b2399f03ff",
       "workflowPath": ".pi/skills/research/workflow.json",
       "workflowDigest": "5757a0ed1fdd665b372d26f06511da85eb644e40ae760c7de5008acd1690d055",
       "workflow": {

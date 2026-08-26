@@ -63,7 +63,7 @@
 每个 Pi-native `SKILL.md` 的标准 `metadata` 保存以下移植信息：
 
 - `pi-scope`：`parent` 或 `leaf`
-- `pi-class`：当前为 `orchestration` 或 `executor`
+- `pi-class`：parent 必须为 `orchestration`；leaf 必须为 `executor` 或 `reviewer`
 - `pi-agent`：唯一允许接收其 leaf 闭包的 agent
 - `pi-dispatch`：当前由父 workflow 的 `workflow.json` 定义 `single` 或 `parallel`；leaf skill 为 `none`
 - `pi-depends-on`：逗号分隔的 leaf 依赖
@@ -75,12 +75,13 @@
 npm run registry       # 生成 config/skill-registry.json
 npm run registry -- --check
 npm run drift          # 检查 vendored 上游是否影响已移植 skill
-npm run check          # 聚焦测试
+npm run test           # 聚焦测试
+npm run check          # 测试 + registry freshness + upstream drift
 ```
 
-生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope 和 SHA 漂移。parent workflow 还必须定义有效的 lane、`outputSchema`、正数 `timeoutMs` 与 `turnBudget`；registry 同时记录 port 与上游源文件的 SHA-256。
+生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch 和 SHA 漂移。parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`；registry 同时记录 port 与上游源文件的 SHA-256。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source digest，计算 leaf 闭包并校验 agent 绑定，然后通过 pi-subagents 的进程内 RPC 发起异步 run。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 都会 fail closed。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定，然后通过 pi-subagents 的进程内 RPC 发起异步 run。普通 prose output 被禁用；workflowScript 要求每个 lane 返回通过运行时 schema 捕获的 `structuredOutput`，缺失时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -102,14 +103,14 @@ npm run check          # 聚焦测试
 ```
 
 代码评审使用 `workflow: "code-review"`，task 中应包含目标、边界、fixed point/diff、标准来源、spec 来源和停止条件。
-传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。
+传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
 
 ## 已验证行为
 
 - Research 单 lane 异步冒烟：成功加载私有 `research-executor`，调用 `web_search`/`web_fetch` 并生成 artifact。
 - Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化输出 artifact，且未修改项目文件。
 
-
+## 上游与许可证
 
 上游快照位于 `vendor/mattpocock-skills/`，固定 commit 记录于 `vendor/UPSTREAM_SHA`。vendor 不在 Pi skill discovery 或 agent `skillPath` 中，但它是可追踪的项目源文件，并非路径级安全沙箱。
 
@@ -117,8 +118,4 @@ npm run check          # 聚焦测试
 
 ## 下一阶段
 
-当前刻意不实现万能 router、动态多写者、自动导入全部 skills 或跨 harness 兼容。后续顺序：
-
-1. `code-review`：父会话编排 Standards/Spec 两个独立 reviewer lane。
-2. `tdd`：展开 `codebase-design` 依赖，使用唯一 worker 执行 red-green-refactor。
-3. `tdd`：展开 `codebase-design` 依赖，使用唯一 worker 执行 red-green-refactor。
+当前刻意不实现万能 router、动态多写者、自动导入全部 skills 或跨 harness 兼容。下一阶段是 `tdd`：展开 `codebase-design` 依赖，使用唯一 worker 执行 red-green-refactor。

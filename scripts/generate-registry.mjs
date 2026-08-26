@@ -14,7 +14,7 @@ const COMMON_METADATA = [
   "pi-upstream-path",
   "pi-upstream-sha",
 ];
-const LEAF_METADATA = ["pi-agent", "pi-depends-on"];
+const LEAF_METADATA = ["pi-agent", "pi-dispatch", "pi-depends-on"];
 
 function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
@@ -142,8 +142,22 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
     if (typeof lane.taskPrefix !== "string" || !lane.taskPrefix.trim()) {
       throw new Error(`${sourcePath}: lane '${lane.key}' requires taskPrefix`);
     }
-    if (!isObject(lane.outputSchema)) {
-      throw new Error(`${sourcePath}: lane '${lane.key}' requires outputSchema`);
+    if (!isObject(lane.outputSchema) || lane.outputSchema.type !== "object") {
+      throw new Error(`${sourcePath}: lane '${lane.key}' outputSchema must have type 'object'`);
+    }
+    if (!isObject(lane.outputSchema.properties)) {
+      throw new Error(`${sourcePath}: lane '${lane.key}' outputSchema requires properties`);
+    }
+    if (
+      !Array.isArray(lane.outputSchema.required) ||
+      lane.outputSchema.required.length === 0 ||
+      lane.outputSchema.required.some((name) => typeof name !== "string" || !(name in lane.outputSchema.properties)) ||
+      new Set(lane.outputSchema.required).size !== lane.outputSchema.required.length
+    ) {
+      throw new Error(`${sourcePath}: lane '${lane.key}' outputSchema requires unique declared properties`);
+    }
+    if (lane.outputSchema.additionalProperties !== false) {
+      throw new Error(`${sourcePath}: lane '${lane.key}' outputSchema must set additionalProperties to false`);
     }
     if (!Number.isInteger(lane.timeoutMs) || lane.timeoutMs <= 0) {
       throw new Error(`${sourcePath}: lane '${lane.key}' requires a positive timeoutMs`);
@@ -244,6 +258,12 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
       if (metadata["pi-upstream-sha"] !== upstreamSha) {
         throw new Error(`${sourcePath}: pi-upstream-sha does not match vendor/UPSTREAM_SHA`);
       }
+      if (sourceRoot.scope === "parent" && metadata["pi-class"] !== "orchestration") {
+        throw new Error(`${sourcePath}: parent metadata.pi-class must be 'orchestration'`);
+      }
+      if (sourceRoot.scope === "leaf" && metadata["pi-class"] !== "executor" && metadata["pi-class"] !== "reviewer") {
+        throw new Error(`${sourcePath}: leaf metadata.pi-class must be 'executor' or 'reviewer'`);
+      }
 
       const upstreamPath = join(projectRoot, "vendor", "mattpocock-skills", metadata["pi-upstream-path"]);
       const upstreamContent = await readFile(upstreamPath, "utf8").catch(() => {
@@ -271,6 +291,9 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
         }
         if (!agentNames.has(metadata["pi-agent"])) {
           throw new Error(`${sourcePath}: unknown metadata.pi-agent '${metadata["pi-agent"]}'`);
+        }
+        if (metadata["pi-dispatch"] !== "none") {
+          throw new Error(`${sourcePath}: leaf metadata.pi-dispatch must be 'none'`);
         }
         agent = metadata["pi-agent"];
         dispatch = "none";
