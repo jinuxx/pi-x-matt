@@ -128,6 +128,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.deepEqual(settings.packages, [{
     source: "npm:pi-subagents",
+    autoload: false,
     extensions: ["+index.ts"],
     skills: [],
     prompts: [],

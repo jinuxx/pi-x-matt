@@ -28,13 +28,14 @@
 
 ## pi-subagents 最小加载
 
-`.pi/settings.json` 使用 Pi package filter，只加载 `pi-subagents` 的 extension：
+`.pi/settings.json` 使用 Pi package delta filter，只加载 `pi-subagents` 的 extension。`autoload: false` 会在用户级已安装同一 package 时复用该安装并应用项目过滤，避免用户级与项目级两个绝对路径各自注册 RPC bridge；若用户级未安装，则仍从项目安装中显式加载该 extension：
 
 ```json
 {
   "packages": [
     {
       "source": "npm:pi-subagents",
+      "autoload": false,
       "extensions": ["+index.ts"],
       "skills": [],
       "prompts": [],

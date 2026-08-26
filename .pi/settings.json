@@ -2,6 +2,7 @@
   "packages": [
     {
       "source": "npm:pi-subagents",
+      "autoload": false,
       "extensions": ["+index.ts"],
       "skills": [],
       "prompts": [],
