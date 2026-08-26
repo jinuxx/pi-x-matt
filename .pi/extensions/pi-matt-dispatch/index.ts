@@ -16,6 +16,13 @@ type RpcReply =
   | { version: number; requestId: string; success: true; data: unknown }
   | { version: number; requestId: string; success: false; error?: { code?: string; message?: string } };
 
+type PendingDispatch = {
+  workflow: string;
+  mode: string;
+  lanes: Array<{ key: string; agent: string; skills: string[] }>;
+  rpcParams: Record<string, unknown>;
+};
+
 function requestRpc(pi: ExtensionAPI, method: string, params: unknown): Promise<unknown> {
   const requestId = randomUUID();
   const replyEvent = `${RPC_REPLY_PREFIX}${requestId}`;
@@ -55,6 +62,23 @@ function requestRpc(pi: ExtensionAPI, method: string, params: unknown): Promise<
 }
 
 export default function (pi: ExtensionAPI) {
+  const pendingDispatches: PendingDispatch[] = [];
+
+  pi.on("turn_end", async () => {
+    const pending = pendingDispatches.splice(0);
+    for (const dispatch of pending) {
+      try {
+        await requestRpc(pi, "spawn", dispatch.rpcParams);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        pi.sendUserMessage(
+          `[pi_matt_dispatch] Failed to launch '${dispatch.workflow}' after validation: ${message}`,
+          { deliverAs: "followUp" },
+        );
+      }
+    }
+  });
+
   pi.registerTool({
     name: "pi_matt_dispatch",
     label: "Pi Matt Dispatch",
@@ -77,7 +101,12 @@ export default function (pi: ExtensionAPI) {
       if (!workflow) throw new Error(`Unknown Pi-native workflow '${params.workflow}'`);
 
       const plan = buildDispatchRequest(registry, workflow, params.task, projectRoot);
-      const result = await requestRpc(pi, "spawn", plan.rpcParams);
+      pendingDispatches.push({
+        workflow: workflow.name,
+        mode: workflow.workflow.mode,
+        lanes: plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })),
+        rpcParams: plan.rpcParams,
+      });
       const laneSummary = plan.lanes
         .map((lane) => `${lane.key}:${lane.agent}[${lane.skills.join(",")}]`)
         .join("; ");
@@ -85,13 +114,13 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{
           type: "text",
-          text: `Dispatched '${workflow.name}' (${workflow.workflow.mode}) via ${laneSummary}.`,
+          text: `Validated and queued '${workflow.name}' (${workflow.workflow.mode}) via ${laneSummary}; it will launch after the current turn.`,
         }],
         details: {
           workflow: workflow.name,
           mode: workflow.workflow.mode,
           lanes: plan.lanes,
-          rpc: result,
+          queued: true,
         },
       };
     },

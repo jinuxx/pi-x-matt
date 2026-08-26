@@ -135,6 +135,15 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   }]);
 });
 
+test("project dispatcher defers pi-subagents RPC until turn_end", async () => {
+  const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
+  assert.match(extension, /const pendingDispatches: PendingDispatch\[\] = \[\]/);
+  assert.match(extension, /pi\.on\("turn_end"/);
+  assert.match(extension, /pendingDispatches\.push/);
+  assert.match(extension, /await requestRpc\(pi, "spawn", dispatch\.rpcParams\)/);
+  assert.doesNotMatch(extension, /const result = await requestRpc/);
+});
+
 test("repository tracker setup is executable and discoverable by Pi", async () => {
   const agents = await readFile(join(ROOT, "AGENTS.md"), "utf8");
   assert.equal((agents.match(/^## Agent skills$/gm) ?? []).length, 1);
