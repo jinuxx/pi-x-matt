@@ -2,13 +2,13 @@
 
 `pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
 
-当前已实现交互式需求澄清链，以及 4 个交互式 parent：`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`；另有 3 个执行型 parent：`research`、双轴 `code-review` 与分阶段 `tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 才使用 pi-subagents lanes。
+当前已实现交互式需求到规格与切片链，以及 5 个交互式 parent：`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`；另有 3 个执行型 parent：`research`、双轴 `code-review` 与分阶段 `tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 才使用 pi-subagents lanes。
 
 ## 架构
 
 系统分为三个边界：
 
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`）留在当前会话中，直接使用用户问答和受限只读调查；执行型 parent（`research`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
+1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`）留在当前会话中，直接使用用户问答和受限只读调查；执行型 parent（`research`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
@@ -24,7 +24,7 @@
   → 父会话核验并综合结果
 ```
 
-`research` 使用单 lane；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`grilling`、`domain-modeling`、`grill-with-docs` 和 `to-spec` 是 `dispatch: none` 的 interaction parent：它们不定义 `workflow.json`，也不能传给 `pi_matt_dispatch`；其中前 3 个负责澄清和共享文档，`to-spec` 负责 seam 确认、规格综合和 tracker 发布 gate。
+`research` 使用单 lane；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec` 和 `to-tickets` 是 `dispatch: none` 的 interaction parent：它们不定义 `workflow.json`，也不能传给 `pi_matt_dispatch`；前 3 个负责澄清和共享文档，`to-spec` 负责 seam 确认与规格综合，`to-tickets` 负责 tracer-bullet 切分与 blocking edges。
 
 ## pi-subagents 最小加载
 
@@ -95,7 +95,7 @@ npm run check          # 测试 + registry freshness + upstream drift
 
 需求尚未明确时，使用 `grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。frontier 为空后，先确认 shared understanding，再进入 `to-spec`。
 
-需求已经在当前会话中确认且需要跨多个 session 保存时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话、代码库、`CONTEXT.md` 和 ADR 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才创建 `ready-for-agent` issue。当前 `to-tickets` 尚未移植。
+需求已经在当前会话中确认且需要跨多个 session 保存时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话、代码库、`CONTEXT.md` 和 ADR 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才创建 `ready-for-agent` issue。随后使用 `to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。当前 `implement` 尚未移植。
 
 ```json
 {

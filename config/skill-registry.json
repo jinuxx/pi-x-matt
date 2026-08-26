@@ -813,10 +813,24 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-spec/SKILL.md",
-      "sourceDigest": "380c600bd4c00ba79989a6f89ba59299a52f37a5e9e97f583b7e75fe1bf04940",
+      "sourceDigest": "77ffe13ee50a3584970cb6c8a8291f9ff00da95bb66248315a89c0eedaec1289",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
+    },
+    "to-tickets": {
+      "name": "to-tickets",
+      "description": "将已确认的 spec 或当前讨论拆成带 blocking edges 的 tracer-bullet tickets，并在用户批准后发布到已配置的 issue tracker。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": ".pi/skills/to-tickets/SKILL.md",
+      "sourceDigest": "35daed1ef9d64a94c6c6bc7b85efc169cd9ed9950bdddd7d6106563f0106081b",
+      "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
     }
   }
 }

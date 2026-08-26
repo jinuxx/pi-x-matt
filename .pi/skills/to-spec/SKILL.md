@@ -86,4 +86,4 @@ metadata:
 3. 发布后核对 issue URL/本地 issue 路径、标题、正文和 label，确认只有一个 spec issue 被创建。
 4. 没有 tracker、label 配置、用户确认或可核验发布结果时，保持未发布状态并明确报告原因。
 
-发布完成后建议进入 `to-tickets`。当前项目尚未移植 `to-tickets`，因此只能报告该下一步不可用；不要在本 skill 中自行拆 ticket 或实现。
+发布完成后建议进入 `to-tickets`。当前 `to-tickets` 已移植；下一阶段是 `implement`，当前项目尚未移植，因此只能报告该下一步不可用；不要在本 skill 中自行拆 ticket 或实现。
