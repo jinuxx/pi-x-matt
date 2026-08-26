@@ -59,7 +59,71 @@ try {
         if (type !== "ticket") result.errors.push("Type must be ticket");
         if (!parent) result.errors.push("Parent is required");
         if (status !== "ready-for-agent") result.errors.push("Status must be ready-for-agent");
-        if (blockedBy !== "None") result.errors.push("Blocked by must be None");
+        if (blockedBy === undefined) {
+          result.errors.push("Blocked by must be None");
+        } else if (blockedBy !== "None") {
+          const blockerReferences = blockedBy.split(",").map((reference) => reference.trim());
+
+          for (const blockerReference of blockerReferences) {
+            const blocker = {
+              ticket: blockerReference,
+              type: null,
+              status: null,
+              ok: false,
+            };
+            result.blockers.push(blocker);
+
+            const blockerTarget = resolve(root, blockerReference);
+            const blockerPathFromRoot = relative(root, blockerTarget);
+            const outsideBlockerRoot =
+              blockerPathFromRoot === ".." || blockerPathFromRoot.startsWith(`..${sep}`);
+            const outsideBlockerScratch = !blockerPathFromRoot.startsWith(`.scratch${sep}`);
+
+            if (
+              blockerReference === "" ||
+              isAbsolute(blockerReference) ||
+              outsideBlockerRoot ||
+              outsideBlockerScratch
+            ) {
+              result.errors.push(
+                `Blocker ${JSON.stringify(blockerReference)} must be a repository-relative path under .scratch`,
+              );
+              continue;
+            }
+
+            try {
+              const realBlockerTarget = await realpath(blockerTarget);
+              const realBlockerPathFromRoot = relative(realRoot, realBlockerTarget);
+              const outsideRealBlockerRoot =
+                realBlockerPathFromRoot === ".." ||
+                realBlockerPathFromRoot.startsWith(`..${sep}`);
+              const outsideRealBlockerScratch = !realBlockerPathFromRoot.startsWith(
+                `.scratch${sep}`,
+              );
+
+              if (outsideRealBlockerRoot || outsideRealBlockerScratch) {
+                result.errors.push(
+                  `Blocker ${JSON.stringify(blockerReference)} must be a repository-relative path under .scratch`,
+                );
+                continue;
+              }
+
+              const blockerContent = await readFile(realBlockerTarget, "utf8");
+              blocker.type = metadata(blockerContent, "Type") ?? null;
+              blocker.status = metadata(blockerContent, "Status") ?? null;
+
+              if (blocker.type !== "ticket") {
+                result.errors.push(`Blocker ${blockerReference} Type must be ticket`);
+              }
+              if (blocker.status !== "resolved") {
+                result.errors.push(`Blocker ${blockerReference} Status must be resolved`);
+              }
+              blocker.ok = blocker.type === "ticket" && blocker.status === "resolved";
+            } catch {
+              result.errors.push(`Blocker ${blockerReference} could not be read`);
+            }
+          }
+        }
       }
     }
   }

@@ -85,7 +85,7 @@ test("validates the required metadata for a ready ticket with no blockers", asyn
       [
         "07-has-blocker.md",
         `# 07: Has blocker\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: .scratch/example/issues/00-blocker.md\n`,
-        ["Blocked by must be None"],
+        ["Blocker .scratch/example/issues/00-blocker.md could not be read"],
       ],
       [
         "08-missing-parent.md",
@@ -101,6 +101,194 @@ test("validates the required metadata for a ready ticket with no blockers", asyn
       assert.equal(result.status, 1, name);
       assertEnvelope(result, ticketPath, false);
       assert.deepEqual(result.json.errors, expectedErrors, name);
+    }
+  });
+});
+
+test("accepts a ready ticket whose blocker ticket is resolved", async () => {
+  await withTempRepo(async (repo) => {
+    const blockerPath = ".scratch/example/issues/01-resolved.md";
+    const ticketPath = ".scratch/example/issues/02-ready.md";
+    await writeFixture(
+      repo,
+      blockerPath,
+      `# 01: Resolved\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: resolved\nBlocked by: None\n`,
+    );
+    await writeFixture(
+      repo,
+      ticketPath,
+      `# 02: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
+    );
+
+    const result = runChecker(repo, ticketPath);
+
+    assert.equal(result.status, 0);
+    assertEnvelope(result, ticketPath, true);
+    assert.deepEqual(result.json.blockers, [
+      { ticket: blockerPath, type: "ticket", status: "resolved", ok: true },
+    ]);
+    assert.deepEqual(result.json.errors, []);
+  });
+});
+
+test("reports missing, unresolved, and non-ticket blockers", async () => {
+  await withTempRepo(async (repo) => {
+    const fixtures = [
+      {
+        name: "missing",
+        blockerPath: ".scratch/example/issues/00-missing.md",
+        blockerContent: null,
+        blocker: { type: null, status: null },
+        error: "Blocker .scratch/example/issues/00-missing.md could not be read",
+      },
+      {
+        name: "unresolved",
+        blockerPath: ".scratch/example/issues/01-unresolved.md",
+        blockerContent: `# 01: Unresolved\n\nType: ticket\nStatus: ready-for-agent\n`,
+        blocker: { type: "ticket", status: "ready-for-agent" },
+        error: "Blocker .scratch/example/issues/01-unresolved.md Status must be resolved",
+      },
+      {
+        name: "spec",
+        blockerPath: ".scratch/example/issues/01-spec.md",
+        blockerContent: `# 01: Spec\n\nType: spec\nStatus: resolved\n`,
+        blocker: { type: "spec", status: "resolved" },
+        error: "Blocker .scratch/example/issues/01-spec.md Type must be ticket",
+      },
+    ];
+    const results = [];
+
+    for (const fixture of fixtures) {
+      if (fixture.blockerContent !== null) {
+        await writeFixture(repo, fixture.blockerPath, fixture.blockerContent);
+      }
+      const ticketPath = `.scratch/example/issues/02-${fixture.name}.md`;
+      await writeFixture(
+        repo,
+        ticketPath,
+        `# 02: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${fixture.blockerPath}\n`,
+      );
+      results.push({ fixture, ticketPath, result: runChecker(repo, ticketPath) });
+    }
+
+    assert.deepEqual(
+      results.map(({ result }) => result.status),
+      [1, 1, 1],
+    );
+    assert.deepEqual(
+      results.map(({ result }) => result.json.blockers),
+      fixtures.map(({ blockerPath, blocker }) => [
+        { ticket: blockerPath, ...blocker, ok: false },
+      ]),
+    );
+    assert.deepEqual(
+      results.map(({ result }) => result.json.errors),
+      fixtures.map(({ error }) => [error]),
+    );
+    for (const { ticketPath, result } of results) {
+      assertEnvelope(result, ticketPath, false);
+    }
+  });
+});
+
+test("accepts multiple resolved blockers in input order", async () => {
+  await withTempRepo(async (repo) => {
+    const blockerPaths = [
+      ".scratch/example/issues/01-first.md",
+      ".scratch/example/issues/02-second.md",
+    ];
+    for (const [index, blockerPath] of blockerPaths.entries()) {
+      await writeFixture(
+        repo,
+        blockerPath,
+        `# 0${index + 1}: Resolved\n\nType: ticket\nStatus: resolved\n`,
+      );
+    }
+    const ticketPath = ".scratch/example/issues/03-ready.md";
+    await writeFixture(
+      repo,
+      ticketPath,
+      `# 03: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPaths[0]},   ${blockerPaths[1]}\n`,
+    );
+
+    const result = runChecker(repo, ticketPath);
+
+    assert.equal(result.status, 0);
+    assertEnvelope(result, ticketPath, true);
+    assert.deepEqual(
+      result.json.blockers,
+      blockerPaths.map((blockerPath) => ({
+        ticket: blockerPath,
+        type: "ticket",
+        status: "resolved",
+        ok: true,
+      })),
+    );
+    assert.deepEqual(result.json.errors, []);
+  });
+});
+
+test("rejects invalid blocker references without reading outside .scratch", async () => {
+  await withTempRepo(async (repo) => {
+    const outsideRepo = await mkdtemp(join(tmpdir(), "local-ticket-blocker-outside-"));
+    const resolvedContent = `# 01: Resolved\n\nType: ticket\nStatus: resolved\n`;
+
+    try {
+      const absolutePath = await writeFixture(
+        repo,
+        ".scratch/example/issues/absolute.md",
+        resolvedContent,
+      );
+      await writeFixture(repo, "outside-scratch.md", resolvedContent);
+      const outsideFile = await writeFixture(outsideRepo, "outside-ticket.md", resolvedContent);
+      const lexicalOutside = `.scratch/${relative(join(repo, ".scratch"), outsideFile)}`;
+      const symlinkPath = ".scratch/example/issues/outside-link.md";
+      const symlinkFullPath = join(repo, symlinkPath);
+      await mkdir(dirname(symlinkFullPath), { recursive: true });
+      await symlink(outsideFile, symlinkFullPath);
+
+      const fixtures = [
+        ["bare-number", "01"],
+        ["title", "Resolved blocker"],
+        ["absolute", absolutePath],
+        ["outside-scratch", "outside-scratch.md"],
+        ["lexical-outside", lexicalOutside],
+        ["realpath-outside", symlinkPath],
+        ["empty", ""],
+      ];
+      const results = [];
+
+      for (const [name, blockerPath] of fixtures) {
+        const ticketPath = `.scratch/example/issues/03-${name}.md`;
+        await writeFixture(
+          repo,
+          ticketPath,
+          `# 03: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
+        );
+        results.push({ blockerPath, ticketPath, result: runChecker(repo, ticketPath) });
+      }
+
+      assert.deepEqual(
+        results.map(({ result }) => result.status),
+        fixtures.map(() => 1),
+      );
+      assert.deepEqual(
+        results.map(({ result }) => result.json.blockers),
+        fixtures.map(([, blockerPath]) => [
+          { ticket: blockerPath, type: null, status: null, ok: false },
+        ]),
+      );
+      assert.deepEqual(
+        results.map(({ result }) => result.json.errors),
+        fixtures.map(([, blockerPath]) => [
+          `Blocker ${JSON.stringify(blockerPath)} must be a repository-relative path under .scratch`,
+        ]),
+      );
+      for (const { ticketPath, result } of results) {
+        assertEnvelope(result, ticketPath, false);
+      }
+    } finally {
+      await rm(outsideRepo, { recursive: true, force: true });
     }
   });
 });
