@@ -23,6 +23,10 @@ metadata:
 5. 若 run 失败、lane 缺失或 `structuredOutput` 不是符合 workflow schema 的对象，明确报告工作流失败，不回退到自然语言报告。
 6. 结构化结果有效时，检查来源是否为一手资料、每项关键结论是否可追溯、未知项是否明确标注，然后再回答用户。
 
+## 跨会话证据
+
+completion result 默认只属于当前会话，不把普通 output 或临时 artifact 路径当作长期记录。工作需要跨 session 进入 `to-spec` 时，由父会话在结果核验后把 `question`、`summary`、`findings`、`sources` 与 `gaps` 写成带引用的 Markdown research note；只使用用户指定路径或仓库已有 research 文档约定，没有明确目标路径时保持未持久化并说明限制。researcher 仍不得写项目文件。后续会话必须显式提供该 note，不能依赖模型记忆重建研究结论。
+
 ## 边界
 
 - 不直接调用未经过 registry 校验的同名 leaf skill。

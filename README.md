@@ -42,7 +42,8 @@
     }
   ],
   "subagents": {
-    "disableBuiltins": true
+    "disableBuiltins": true,
+    "projectRootResolution": "nearest"
   }
 }
 ```
@@ -79,7 +80,7 @@ npm run test           # 聚焦测试
 npm run check          # 测试 + registry freshness + upstream drift
 ```
 
-生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch 和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`；interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号，lane gate 必须引用 schema 中声明的 enum 值；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
+生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`code-review` 与 `tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
 项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定，然后通过 pi-subagents 的进程内 RPC 发起异步 run。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
@@ -93,9 +94,9 @@ npm run check          # 测试 + registry freshness + upstream drift
 /reload
 ```
 
-需求尚未明确时，使用 `grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。frontier 为空后，先确认 shared understanding，再进入 `to-spec`。
+需求尚未明确时，使用 `grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。frontier 为空并确认 shared understanding 后，需要跨 session 的工作进入 `to-spec`；单个 session 可完成的小变更直接进入 `implement`。
 
-需求已经在当前会话中确认且需要跨多个 session 保存时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话、代码库、`CONTEXT.md` 和 ADR 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才创建 `ready-for-agent` issue。随后使用 `to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
+需求已经在当前会话中确认且需要跨多个 session 保存时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话、代码库、`CONTEXT.md`、ADR 和明确提供的 research note 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才创建 `ready-for-agent` issue。轮询该 label 的外部 runner 必须排除 parent spec，避免绕过 tickets 整体实现。随后使用 `to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
 
 ```json
 {
@@ -111,6 +112,8 @@ TDD 使用 `workflow: "tdd"`。调度前必须由用户确认公开 seam 与待�
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
 
 ## 已验证行为
+
+以下异步冒烟来自开发阶段的手工运行，不属于 `npm run check` 的离线测试；仓库内可复现的是 registry、dispatcher、权限与 gate 的聚焦测试。
 
 - Research 单 lane 异步冒烟：成功加载私有 `research-executor`，调用 `web_search`/`web_fetch` 并生成 artifact。
 - Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化结果，且未修改项目文件。

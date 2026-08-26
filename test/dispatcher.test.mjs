@@ -6,11 +6,25 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   buildDispatchRequest,
+  findProjectRoot,
   loadCurrentRegistry,
   resolveProjectPath,
 } from "../lib/dispatcher-core.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+async function withTempDispatcherProject(run) {
+  const temp = await mkdtemp(join(tmpdir(), "pi-x-matt-dispatcher-"));
+  try {
+    for (const source of [".pi/agents", ".pi/skills", "skillpacks", "vendor", "config"]) {
+      await cp(join(ROOT, source), join(temp, source), { recursive: true });
+    }
+    await cp(join(ROOT, ".pi", "settings.json"), join(temp, ".pi", "settings.json"));
+    await run(temp);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+}
 
 function parseWorkflowItems(workflowScript) {
   const firstLine = workflowScript.split("\n", 1)[0];
@@ -75,6 +89,22 @@ test("dispatcher builds two independent guarded review lanes", async () => {
   assert.ok(items.every((item) => item.timeoutMs === 300000));
   assert.ok(items.every((item) => item.turnBudget.maxTurns === 12 && item.turnBudget.graceTurns === 2));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
+  assert.deepEqual(plan.lanes.map((lane) => lane.gate), [
+    { field: "verdict", equals: "PASS" },
+    { field: "verdict", equals: "PASS" },
+  ]);
+  assert.match(plan.rpcParams.workflowScript, /standards\.verdict/);
+  assert.match(plan.rpcParams.workflowScript, /spec\.verdict/);
+
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  await assert.rejects(
+    () => execute({ all: async (lanes) => lanes.map((lane) => ({
+      key: lane.key,
+      structuredOutput: { axis: lane.key, verdict: lane.key === "standards" ? "FAIL" : "PASS" },
+    })) }),
+    /standards\.verdict/,
+  );
 });
 
 test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
@@ -216,28 +246,62 @@ test("dispatcher rejects interaction parents", async () => {
   );
 });
 
+test("dispatcher validates runtime gate shape for every workflow mode", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const invalid = structuredClone(registry.skills["code-review"]);
+  invalid.workflow.lanes[0].gate.equals = "NOT_DECLARED";
+  assert.throws(
+    () => buildDispatchRequest(registry, invalid, "review", ROOT),
+    /lane 'standards' has invalid gate/,
+  );
+});
+
+test("dispatcher finds the nearest project root and fails without one", async () => {
+  await withTempDispatcherProject(async (temp) => {
+    const nested = join(temp, "nested", "child");
+    await mkdir(nested, { recursive: true });
+    assert.equal(await findProjectRoot(nested), temp);
+  });
+
+  const empty = await mkdtemp(join(tmpdir(), "pi-x-matt-no-root-"));
+  try {
+    await assert.rejects(() => findProjectRoot(empty), /requires a project \.pi\/settings\.json/);
+  } finally {
+    await rm(empty, { recursive: true, force: true });
+  }
+});
+
 test("dispatcher registry paths cannot escape the project root", () => {
   assert.throws(() => resolveProjectPath(ROOT, "../outside", "Source path"), /inside the project root/);
   assert.throws(() => resolveProjectPath(ROOT, "/tmp/outside", "Source path"), /project-relative/);
   assert.equal(resolveProjectPath(ROOT, "config/skill-registry.json"), resolve(ROOT, "config/skill-registry.json"));
 });
 
-test("dispatcher rejects a tampered generated registry", async () => {
-  const temp = await mkdtemp(join(tmpdir(), "pi-x-matt-dispatcher-"));
-  try {
-    for (const source of [".pi/agents", ".pi/skills", "skillpacks", "vendor", "config"]) {
-      await cp(join(ROOT, source), join(temp, source), { recursive: true });
-    }
-    await mkdir(join(temp, ".pi"), { recursive: true });
-    await cp(join(ROOT, ".pi", "settings.json"), join(temp, ".pi", "settings.json"));
+test("dispatcher rejects malformed interaction and unsupported parent routing", async () => {
+  await withTempDispatcherProject(async (temp) => {
+    const registryPath = join(temp, "config", "skill-registry.json");
+    const registry = JSON.parse(await readFile(registryPath, "utf8"));
+    registry.skills.grilling.dispatch = "parallel";
+    await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+    await assert.rejects(() => loadCurrentRegistry(temp), /invalid interaction routing for 'grilling'/);
+  });
 
+  await withTempDispatcherProject(async (temp) => {
+    const registryPath = join(temp, "config", "skill-registry.json");
+    const registry = JSON.parse(await readFile(registryPath, "utf8"));
+    registry.skills.grilling.class = "unsupported";
+    await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+    await assert.rejects(() => loadCurrentRegistry(temp), /unsupported parent class for 'grilling'/);
+  });
+});
+
+test("dispatcher rejects a tampered generated registry", async () => {
+  await withTempDispatcherProject(async (temp) => {
     const registryPath = join(temp, "config", "skill-registry.json");
     const registry = JSON.parse(await readFile(registryPath, "utf8"));
     registry.skills.research.workflow.lanes[0].timeoutMs = 1;
     await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
 
     await assert.rejects(() => loadCurrentRegistry(temp), /not the current generated registry/);
-  } finally {
-    await rm(temp, { recursive: true, force: true });
-  }
+  });
 });

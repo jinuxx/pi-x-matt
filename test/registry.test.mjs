@@ -71,6 +71,10 @@ test("registry captures parent workflows and their private leaves", async () => 
     ],
   );
   assert.deepEqual(review.dependsOn, ["review-standards", "review-spec"]);
+  assert.deepEqual(review.workflow.lanes.map((lane) => lane.gate), [
+    { field: "verdict", equals: "PASS" },
+    { field: "verdict", equals: "PASS" },
+  ]);
 
   const tdd = registry.skills.tdd;
   assert.equal(tdd.workflow.mode, "pipeline");
@@ -113,11 +117,13 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.equal(registry.skills.implement.class, "interaction");
   assert.equal(registry.skills.implement.dispatch, "none");
   assert.equal(registry.skills.implement.agent, null);
+  assert.deepEqual(registry.skills.implement.dependsOn, ["domain-modeling"]);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
   const settings = JSON.parse(await readFile(join(ROOT, ".pi", "settings.json"), "utf8"));
   assert.equal(settings.subagents.disableBuiltins, true);
+  assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.deepEqual(settings.packages, [{
     source: "npm:pi-subagents",
     extensions: ["+index.ts"],
@@ -175,6 +181,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(combined, /Shared-understanding gate/);
   assert.match(combined, /不要在本 skill 中生成 spec、tickets 或生产实现/);
   assert.match(combined, /wayfinding.*尚未移植/);
+  assert.match(combined, /小变更直接进入 `implement`/);
 
   const toSpec = await readFile(join(ROOT, ".pi", "skills", "to-spec", "SKILL.md"), "utf8");
   assert.match(toSpec, /不重新 interview/);
@@ -185,6 +192,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toSpec, /尽可能穷举为 numbered user stories/);
   assert.match(toSpec, /`to-tickets` 已移植/);
   assert.match(toSpec, /`implement`，它每次只处理一个已确认 ticket/);
+  assert.match(toSpec, /research note/);
+  assert.match(toSpec, /外部 runner.*排除 parent spec/);
 
   assert.match(toSpec, /不要为了“完整”发明用户未确认的需求/);
 
@@ -197,6 +206,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /wide refactor/i);
   assert.match(toTickets, /native relationship/);
   assert.match(toTickets, /Real tracker issue template/);
+  assert.match(toTickets, /\*\*Parent:\*\*/);
   assert.match(toTickets, /## Parent/);
   assert.match(toTickets, /## Acceptance criteria/);
   assert.match(toTickets, /`implement` 已移植/);
@@ -209,6 +219,15 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /当前 branch/);
   assert.match(implement, /不 push/);
   assert.match(implement, /只处理一个 ticket/);
+  assert.match(implement, /contact_supervisor/);
+  assert.match(implement, /domain-modeling/);
+
+  const tdd = await readFile(join(ROOT, ".pi", "skills", "tdd", "SKILL.md"), "utf8");
+  assert.match(tdd, /没有明确 spec\/验收行为时停止/);
+
+  const research = await readFile(join(ROOT, ".pi", "skills", "research", "SKILL.md"), "utf8");
+  assert.match(research, /跨会话证据/);
+  assert.match(research, /research note/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
   assert.match(readme, /6 个交互式 parent/);
@@ -313,6 +332,31 @@ test("registry generation rejects dependency cycles and upstream SHA mismatch", 
   });
 });
 
+test("registry generation rejects upstream paths outside the vendored root", async () => {
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "research", "SKILL.md");
+    await replace(path, "pi-upstream-path: skills/engineering/research/SKILL.md", "pi-upstream-path: ../../outside.md");
+    await assert.rejects(() => buildRegistry(temp), /Upstream path for 'research'.*inside the project root/);
+  });
+});
+
+test("registry generation permits at most one declared writer lane", async () => {
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "tdd", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[1].agent = "worker";
+    workflow.lanes[1].skills = ["tdd-executor"];
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /workflow may define at most one writer lane/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "agents", "worker.md");
+    await replace(path, "acceptanceRole: writer", "acceptanceRole: unknown");
+    await assert.rejects(() => buildRegistry(temp), /acceptanceRole must be 'writer' or 'read-only'/);
+  });
+});
+
 test("registry generation rejects invalid interaction parent routing", async () => {
   await withTempProject(async (temp) => {
     const path = join(temp, ".pi", "skills", "grilling", "SKILL.md");
@@ -392,6 +436,14 @@ test("registry generation rejects malformed pipeline stages and gates", async ()
     const workflow = JSON.parse(await readFile(path, "utf8"));
     workflow.lanes[0].stage = 1;
     await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
-    await assert.rejects(() => buildRegistry(temp), /only pipeline lanes may define stage or gate/);
+    await assert.rejects(() => buildRegistry(temp), /only pipeline lanes may define stage/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "research", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[0].gate = { field: "missing", equals: "PASS" };
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /lane 'research' has an invalid gate/);
   });
 });

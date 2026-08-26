@@ -9,7 +9,8 @@
       "skills": ["review-standards"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "执行 Standards 轴评审。只读取任务列出的目标、标准及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。检查真实材料，只报告当前存在且有证据的问题。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确，证据足够后立即停止。", 
+      "taskPrefix": "执行 Standards 轴评审。只读取任务列出的目标、标准及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。检查真实材料，只报告当前存在且有证据的问题。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确，证据足够后立即停止。",
+      "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
         "properties": {
@@ -43,7 +44,8 @@
       "skills": ["review-spec"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "执行 Spec 轴评审。只读取任务列出的目标、规格及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。只依据明确规格和验收标准检查需求遗漏、范围膨胀及看似实现但行为错误的部分。不要用个人代码风格替代规格。没有 spec 时返回 NO_EVIDENCE，证据足够后立即停止。", 
+      "taskPrefix": "执行 Spec 轴评审。只读取任务列出的目标、规格及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。只依据明确规格和验收标准检查需求遗漏、范围膨胀及看似实现但行为错误的部分。不要用个人代码风格替代规格。没有 spec 时返回 NO_EVIDENCE，证据足够后立即停止。",
+      "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
         "properties": {

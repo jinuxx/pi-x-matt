@@ -55,4 +55,4 @@ Frontier 为空后，向用户呈现一份可核对的理解摘要：
 
 使用 `ask_user_question` 请求用户明确确认 shared understanding。用户选择继续澄清时，把反馈重新加入 decision tree；只有用户确认后才能结束。
 
-结束时报告实际修改的文档，并建议在同一会话中进入 `to-spec`。不要在本 skill 中生成 spec、tickets 或生产实现；除 glossary 与经同意的 ADR 外，其余决定保留在会话上下文，供后续 `to-spec` 消费。
+结束时报告实际修改的文档，并按工作大小给出下一步：需要跨多个 session 保存和切分的工作进入 `to-spec`；能在当前 session 以一个已确认 slice 完成的小变更直接进入 `implement`。不要在本 skill 中生成 spec、tickets 或生产实现；除 glossary 与经同意的 ADR 外，其余决定保留在会话上下文，供后续 `to-spec` 或 `implement` 消费。

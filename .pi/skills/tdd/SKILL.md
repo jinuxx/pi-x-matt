@@ -18,7 +18,7 @@ metadata:
 2. 写出建议测试的公开 **seam**、每个 seam 的 **interface** 与待验证行为。测试只能穿过公开 interface，不测试实现细节。
 3. 若用户尚未明确批准这些 seams，使用 `ask_user_question` 请求一次聚焦确认。确认前不得调用 TDD workflow。
 4. 记录固定基线（优先当前 `HEAD`）和调度前工作区状态，避免把既有改动错误归因给 worker。
-5. 明确规格来源、允许修改的范围、测试命令、仓库标准与停止条件。
+5. 明确可供 Spec reviewer 核验的规格来源和验收行为，以及允许修改的范围、测试命令、仓库标准与停止条件。没有明确 spec/验收行为时停止，不进入 TDD；不要依赖 reviewer 的 `NO_EVIDENCE` 代替调度前检查。
 
 ## 调度
 

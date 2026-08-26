@@ -6,7 +6,7 @@ metadata:
   pi-scope: parent
   pi-class: interaction
   pi-dispatch: none
-  pi-depends-on: ""
+  pi-depends-on: domain-modeling
   pi-upstream-path: skills/engineering/implement/SKILL.md
   pi-upstream-sha: 6654f6b60cd9d5be8b54c6fafe44346dabeb3b76
 ---
@@ -22,6 +22,7 @@ metadata:
 3. 对 ticket 核对 title、parent、blocked-by、acceptance criteria 和 scope。只实现一个 ticket；blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。
 4. 从 ticket/spec 中提取已批准 seams。若没有可执行的 seam、行为或测试命令，停止并报告缺口；不要在 implement 中重新设计。将 seam 交给 `tdd`，由其执行公开 seam 确认 gate。
 5. 固定实现前基线和调度前工作区状态，并明确允许修改的范围、测试命令、typecheck 命令（若项目提供）和停止条件。
+6. 完整读取并应用 [domain-modeling](../domain-modeling/SKILL.md) 的写入边界。worker 若在实现中发现值得持久化的新术语或 ADR 级决定，必须通过 `contact_supervisor` 报告而不是写共享文档；当前 TDD run 随即停止为 `BLOCKED`。run 退出后由父会话按 domain-modeling gate 取得用户决定并写入，再以新基线重新调度，确保父会话与 worker 不并行写同一工作区。
 
 ## 执行顺序
 

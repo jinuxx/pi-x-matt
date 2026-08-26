@@ -69,6 +69,8 @@ metadata:
 ```markdown
 # <NN>: <Ticket title>
 
+**Parent:** <父 spec 的本地路径/identifier，或 None>
+
 **What to build:** <从用户角度描述端到端行为>
 
 **Blocked by:** <编号/标题，或 None (can start immediately)>

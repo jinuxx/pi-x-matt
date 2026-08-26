@@ -98,7 +98,7 @@ function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
+async function loadWorkflow(projectRoot, skillPath, skillName, agentNames, writerAgentNames) {
   const workflowPath = join(dirname(skillPath), "workflow.json");
   const sourcePath = assertProjectPath(projectRoot, workflowPath, "Workflow path");
   const raw = await readFile(workflowPath, "utf8").catch(() => {
@@ -174,42 +174,43 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
     }
 
     let stage;
-    let gate;
     if (workflow.mode === "pipeline") {
       if (!Number.isInteger(lane.stage) || lane.stage <= 0) {
         throw new Error(`${sourcePath}: pipeline lane '${lane.key}' requires a positive stage`);
       }
       stage = lane.stage;
-      if (lane.gate !== undefined) {
-        if (
-          !isObject(lane.gate) ||
-          typeof lane.gate.field !== "string" ||
-          !lane.gate.field ||
-          !(lane.gate.field in lane.outputSchema.properties) ||
-          typeof lane.gate.equals !== "string"
-        ) {
-          throw new Error(`${sourcePath}: pipeline lane '${lane.key}' has an invalid gate`);
-        }
-        const gatedProperty = lane.outputSchema.properties[lane.gate.field];
-        if (!isObject(gatedProperty) || !Array.isArray(gatedProperty.enum) || !gatedProperty.enum.includes(lane.gate.equals)) {
-          throw new Error(`${sourcePath}: pipeline lane '${lane.key}' gate must match a declared enum value`);
-        }
-        let nonEmpty;
-        if (lane.gate.nonEmpty !== undefined) {
-          if (
-            !Array.isArray(lane.gate.nonEmpty) ||
-            lane.gate.nonEmpty.length === 0 ||
-            lane.gate.nonEmpty.some((name) => typeof name !== "string" || lane.outputSchema.properties[name]?.type !== "array") ||
-            new Set(lane.gate.nonEmpty).size !== lane.gate.nonEmpty.length
-          ) {
-            throw new Error(`${sourcePath}: pipeline lane '${lane.key}' gate.nonEmpty must name unique array properties`);
-          }
-          nonEmpty = [...lane.gate.nonEmpty];
-        }
-        gate = { field: lane.gate.field, equals: lane.gate.equals, ...(nonEmpty ? { nonEmpty } : {}) };
+    } else if (lane.stage !== undefined) {
+      throw new Error(`${sourcePath}: only pipeline lanes may define stage`);
+    }
+
+    let gate;
+    if (lane.gate !== undefined) {
+      if (
+        !isObject(lane.gate) ||
+        typeof lane.gate.field !== "string" ||
+        !lane.gate.field ||
+        !(lane.gate.field in lane.outputSchema.properties) ||
+        typeof lane.gate.equals !== "string"
+      ) {
+        throw new Error(`${sourcePath}: lane '${lane.key}' has an invalid gate`);
       }
-    } else if (lane.stage !== undefined || lane.gate !== undefined) {
-      throw new Error(`${sourcePath}: only pipeline lanes may define stage or gate`);
+      const gatedProperty = lane.outputSchema.properties[lane.gate.field];
+      if (!isObject(gatedProperty) || !Array.isArray(gatedProperty.enum) || !gatedProperty.enum.includes(lane.gate.equals)) {
+        throw new Error(`${sourcePath}: lane '${lane.key}' gate must match a declared enum value`);
+      }
+      let nonEmpty;
+      if (lane.gate.nonEmpty !== undefined) {
+        if (
+          !Array.isArray(lane.gate.nonEmpty) ||
+          lane.gate.nonEmpty.length === 0 ||
+          lane.gate.nonEmpty.some((name) => typeof name !== "string" || lane.outputSchema.properties[name]?.type !== "array") ||
+          new Set(lane.gate.nonEmpty).size !== lane.gate.nonEmpty.length
+        ) {
+          throw new Error(`${sourcePath}: lane '${lane.key}' gate.nonEmpty must name unique array properties`);
+        }
+        nonEmpty = [...lane.gate.nonEmpty];
+      }
+      gate = { field: lane.gate.field, equals: lane.gate.equals, ...(nonEmpty ? { nonEmpty } : {}) };
     }
 
     return {
@@ -233,6 +234,11 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames) {
     if (stages.length < 2 || stages.some((stage, index) => stage !== index + 1)) {
       throw new Error(`${sourcePath}: pipeline stages must be contiguous and include at least stages 1 and 2`);
     }
+  }
+
+  const writableLanes = lanes.filter((lane) => writerAgentNames.has(lane.agent));
+  if (writableLanes.length > 1) {
+    throw new Error(`${sourcePath}: workflow may define at most one writer lane`);
   }
 
   return {
@@ -267,18 +273,23 @@ function assertProjectPath(root, path, label) {
   return rel.split(sep).join("/");
 }
 
-async function loadAgentNames(root) {
+async function loadAgentRouting(root) {
   const agentDir = join(root, ".pi", "agents");
   const names = new Set();
+  const writerNames = new Set();
   const entries = await readdir(agentDir, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
     const path = join(agentDir, entry.name);
     const parsed = parseSkillFrontmatter(await readFile(path, "utf8"), assertProjectPath(root, path, "Agent path"));
     if (!parsed.name) throw new Error(`${path}: missing agent name`);
+    if (parsed.acceptanceRole !== "writer" && parsed.acceptanceRole !== "read-only") {
+      throw new Error(`${path}: acceptanceRole must be 'writer' or 'read-only'`);
+    }
     names.add(parsed.name);
+    if (parsed.acceptanceRole === "writer") writerNames.add(parsed.name);
   }
-  return names;
+  return { names, writerNames };
 }
 
 function assertNoDependencyCycles(entriesByName) {
@@ -303,7 +314,7 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
   const upstreamSha = (await readFile(join(projectRoot, "vendor", "UPSTREAM_SHA"), "utf8")).trim();
   if (!/^[0-9a-f]{40}$/.test(upstreamSha)) throw new Error("vendor/UPSTREAM_SHA must contain a full 40-character Git SHA");
 
-  const agentNames = await loadAgentNames(projectRoot);
+  const { names: agentNames, writerNames: writerAgentNames } = await loadAgentRouting(projectRoot);
   const sourceRoots = [
     { scope: "parent", dir: join(projectRoot, ".pi", "skills") },
     { scope: "leaf", dir: join(projectRoot, "skillpacks", "leaf") },
@@ -339,7 +350,9 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
         throw new Error(`${sourcePath}: leaf metadata.pi-class must be 'executor' or 'reviewer'`);
       }
 
-      const upstreamPath = join(projectRoot, "vendor", "mattpocock-skills", metadata["pi-upstream-path"]);
+      const upstreamRoot = join(projectRoot, "vendor", "mattpocock-skills");
+      const upstreamPath = resolve(upstreamRoot, metadata["pi-upstream-path"]);
+      assertProjectPath(upstreamRoot, upstreamPath, `Upstream path for '${parsed.name}'`);
       const upstreamContent = await readFile(upstreamPath, "utf8").catch(() => {
         throw new Error(`${sourcePath}: upstream path not found: ${metadata["pi-upstream-path"]}`);
       });
@@ -353,7 +366,7 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
       if (sourceRoot.scope === "parent") {
         if (metadata["pi-class"] === "orchestration") {
           assertAbsentMetadata(metadata, ["pi-agent", "pi-dispatch", "pi-depends-on"], sourcePath, "orchestration parent skills");
-          const loaded = await loadWorkflow(projectRoot, skillPath, parsed.name, agentNames);
+          const loaded = await loadWorkflow(projectRoot, skillPath, parsed.name, agentNames, writerAgentNames);
           workflow = loaded.definition;
           workflowPath = loaded.path;
           workflowDigest = loaded.digest;

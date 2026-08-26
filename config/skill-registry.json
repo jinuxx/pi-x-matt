@@ -19,7 +19,7 @@
       "sourcePath": ".pi/skills/code-review/SKILL.md",
       "sourceDigest": "ff51fc08b4ca63ae97b00c0480e31e54b35679bb2496d864e1474b530a4031c1",
       "workflowPath": ".pi/skills/code-review/workflow.json",
-      "workflowDigest": "cfc158dbb3e66f514c72c7571bd5c688bec62679171b85c61713a210f9aebebc",
+      "workflowDigest": "299e955028e6a6de01ed8f389c30a70ef6a91614d87f6d5e8fddc4eb7f0baf71",
       "workflow": {
         "version": 1,
         "name": "code-review",
@@ -37,6 +37,10 @@
               "graceTurns": 2
             },
             "taskPrefix": "执行 Standards 轴评审。只读取任务列出的目标、标准及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。检查真实材料，只报告当前存在且有证据的问题。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确，证据足够后立即停止。",
+            "gate": {
+              "field": "verdict",
+              "equals": "PASS"
+            },
             "outputSchema": {
               "type": "object",
               "properties": {
@@ -125,6 +129,10 @@
               "graceTurns": 2
             },
             "taskPrefix": "执行 Spec 轴评审。只读取任务列出的目标、规格及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。只依据明确规格和验收标准检查需求遗漏、范围膨胀及看似实现但行为错误的部分。不要用个人代码风格替代规格。没有 spec 时返回 NO_EVIDENCE，证据足够后立即停止。",
+            "gate": {
+              "field": "verdict",
+              "equals": "PASS"
+            },
             "outputSchema": {
               "type": "object",
               "properties": {
@@ -247,7 +255,7 @@
         "domain-modeling"
       ],
       "sourcePath": ".pi/skills/grill-with-docs/SKILL.md",
-      "sourceDigest": "efd520f7b93ae7fbff1894b756c508e9b85bdc707d372f622e31c716a1baccf6",
+      "sourceDigest": "ae105e77b0f9079c68db8a9f53520555f923707e6697e84fad6598de398872c0",
       "upstreamPath": "skills/engineering/grill-with-docs/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
@@ -273,9 +281,11 @@
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
-      "dependsOn": [],
+      "dependsOn": [
+        "domain-modeling"
+      ],
       "sourcePath": ".pi/skills/implement/SKILL.md",
-      "sourceDigest": "f956fb3d2402c4f91a60d90f38875211ccf15b7f84866849dbd2bd49731a39b5",
+      "sourceDigest": "894e347f37feddd08c283cc5de84b7dd53e0f9a06e5778e5f55e5071d2dcf503",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -291,7 +301,7 @@
         "research-executor"
       ],
       "sourcePath": ".pi/skills/research/SKILL.md",
-      "sourceDigest": "2f92bbec4d657b565bab6b2da40277901fef54c5a997425111f4c0b2399f03ff",
+      "sourceDigest": "db20dc0b5a8d7687c4c4cfa065cda2b9bb5081c3322d281cd2b478c13b43c384",
       "workflowPath": ".pi/skills/research/workflow.json",
       "workflowDigest": "5757a0ed1fdd665b372d26f06511da85eb644e40ae760c7de5008acd1690d055",
       "workflow": {
@@ -449,7 +459,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/tdd/SKILL.md",
-      "sourceDigest": "5a574ddf7d0086c81dac8f931260ee9ffdc0bc0ff27ed341cff083ad176053c5",
+      "sourceDigest": "f5d85ca26b9a8e59102e04c7a80ef1bf883e1bbfa20a6549fd29bc41c1461927",
       "workflowPath": ".pi/skills/tdd/workflow.json",
       "workflowDigest": "6bb97cfc20e9fe5ea3645dbd62222c275f357f14136f9069c0e9b4f2e1ef241c",
       "workflow": {
@@ -827,7 +837,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-spec/SKILL.md",
-      "sourceDigest": "b0affa4a2d78783a32a62332d28b4223de063c92fcdc8ee4d25960a269d1a9c9",
+      "sourceDigest": "31fc422ccc148246ee56475da5ad490352903299b5d3a97777deeb8d925cd8df",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
@@ -841,7 +851,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-tickets/SKILL.md",
-      "sourceDigest": "ba974f053e49f82d6f0c0ad50cb3e66936effe3328ae191bc2ca6ee22bed0db3",
+      "sourceDigest": "3055384db391591b0104df6ac885992aa86a041be5f8124277a450d4ef65be19",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
