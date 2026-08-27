@@ -10,7 +10,7 @@
 
 ```bash
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.1
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.2
 ```
 
 然后重启或 reload Pi：
@@ -37,7 +37,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.1
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.1
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.2
 ```
 
 ## 架构

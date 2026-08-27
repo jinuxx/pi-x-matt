@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.1");
+  assert.equal(manifest.version, "0.2.2");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -289,6 +289,8 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(tracker, /decisions\/<NN>-<slug>\.md/);
   assert.match(tracker, /Type: wayfinder-map/);
   assert.match(tracker, /Status: active/);
+  assert.match(tracker, /<长期约束；不得包含 agent 自行授予的 execution override>/);
+  assert.match(tracker, /Type: <research\|prototype\|grilling\|task>/);
   assert.match(tracker, /Claimed by:/);
   assert.match(tracker, /pi:<PI_SESSION_ID>/);
   assert.match(tracker, /PI_SESSION_ID.*必须非空/);
@@ -357,9 +359,30 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(setup, /Pi-only/);
   assert.match(setup, /`spec-ready`、`ready-for-agent` 与 `resolved`/);
   assert.match(setup, /`ready-for-agent` 是 canonical triage role/);
+  assert.match(setup, /使用 Pi 为已加载 `matt-setup` 提供的绝对 skill `location`/);
+  assert.match(setup, /从该 `SKILL\.md` 所在目录逐级向上/);
+  assert.match(setup, /第一个同时包含 `package\.json` 与 `config\/skill-registry\.json`/);
+  assert.match(setup, /不得从目标项目 cwd 或目标项目的 `\.pi\/` 猜测 package 内容/);
+  assert.match(setup, /`config\/skill-registry\.json` 为 skill 存在性和 `scope` \/ `class` \/ `dispatch` metadata 的权威来源/);
+  assert.match(setup, /`package\.json#pi\.skills` 只交叉核验对应 skill 路径已作为 package resource 暴露/);
+  assert.match(setup, /不能用它推导 metadata/);
+  assert.match(setup, /本版本 invariant 是 `triage` 未登记、`matt-wayfinder` 已登记为 `parent` \/ `interaction` \/ `dispatch: none`/);
   assert.match(setup, /Wayfinding operations/);
   assert.match(setup, /claim、release、resolve、out-of-scope、fog graduation/);
-  assert.match(setup, /Wayfinding artifacts.*独立/);
+  assert.match(setup, /\.x-matt\/work\/<effort>\/map\.md/);
+  assert.match(setup, /\.x-matt\/work\/<effort>\/decisions\/<NN>-<slug>\.md/);
+  assert.match(setup, /Type: wayfinder-map/);
+  assert.match(setup, /Status: active/);
+  assert.match(setup, /<长期约束；不得包含 agent 自行授予的 execution override>/);
+  assert.match(setup, /Type: <research\|prototype\|grilling\|task>/);
+  assert.match(setup, /Parent: <仓库相对 map 路径>/);
+  assert.match(setup, /Status: open/);
+  assert.match(setup, /Claimed by: None/);
+  assert.match(setup, /Blocked by: <仓库相对 decision ticket 路径，或 None>/);
+  assert.match(setup, /pi:<PI_SESSION_ID>/);
+  assert.match(setup, /不得使用 metadata 字段 `Claim:`/);
+  assert.match(setup, /发现 metadata 行 `Claim:`.*核验失败并停止/);
+  assert.doesNotMatch(setup, /^Claim:/m);
   assert.doesNotMatch(setup, /尚未移植的 wayfinder/);
   assert.match(setup, /setup 所需的 tracker、label、domain 和 Wayfinding 行为契约内置/);
   assert.doesNotMatch(setup, /vendor\/mattpocock-skills/);
@@ -493,7 +516,10 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(wayfinder, /一个 session 最多 resolve 一个 decision ticket/);
   assert.match(wayfinder, /先 claim，再工作/);
   assert.match(wayfinder, /pi:<PI_SESSION_ID>/);
-  assert.match(wayfinder, /每个初始 `matt-research` ticket.*先按 tracker claim 协议/);
+  assert.match(wayfinder, /metadata `Type:` 只能是 `research`、`prototype`、`grilling`、`task`/);
+  assert.match(wayfinder, /`matt-research`、`matt-prototype` 与 `matt-grilling` 是 resolver skill\/workflow 名，不是 `Type:` 值/);
+  assert.doesNotMatch(wayfinder, /每个 decision ticket 只能是 `matt-research`/);
+  assert.match(wayfinder, /每个初始 `Type: research` ticket.*先按 tracker claim 协议/);
   assert.match(wayfinder, /tracker release 协议.*open\/unclaimed/);
   assert.match(wayfinder, /Decisions so far/);
   assert.match(wayfinder, /Not yet specified/);
@@ -546,8 +572,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.1/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.1/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.2/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.2/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 

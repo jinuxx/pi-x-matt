@@ -33,14 +33,14 @@ metadata:
 
 人类可见叙述和 map 的 `Decisions so far` 始终使用 ticket **标题链接**，不得用裸编号、slug 或路径代替名称。完整答案只存在一个 ticket 中；map 仅保存一行 gist 和链接，不复制详情。open tickets 由 frontier query 得到，不列进 map body。
 
-每个 decision ticket 只能是 `matt-research`、`matt-prototype`、`matt-grilling`、`task`：
+每个 decision ticket 的 metadata `Type:` 只能是 `research`、`prototype`、`grilling`、`task`。`matt-research`、`matt-prototype` 与 `matt-grilling` 是 resolver skill/workflow 名，不是 `Type:` 值：
 
-- `matt-research`（AFK）：外部一手事实阻塞决定；调用已注册 `matt-research` workflow，只消费 completion result 的 `structuredOutput`。
-- `matt-prototype`（HITL）：完整读取并应用已登记的 `matt-prototype` parent，用具体 artifact 提高讨论 fidelity；先让用户确认唯一 design question 与 logic/UI branch，再调用其 workflow。用户本人必须查看并选择/评价，agent 不得代答；workflow、artifact、verdict 或 context pointer 缺失时按 tracker release 协议恢复 open/unclaimed。
-- `matt-grilling`（HITL）：默认类型；同时应用 `matt-grilling` 与 `matt-domain-modeling`，用户必须为自己一侧的决定发声。
+- `research`（AFK）：外部一手事实阻塞决定；调用已注册 `matt-research` workflow，只消费 completion result 的 `structuredOutput`。
+- `prototype`（HITL）：完整读取并应用已登记的 `matt-prototype` parent，用具体 artifact 提高讨论 fidelity；先让用户确认唯一 design question 与 logic/UI branch，再调用其 workflow。用户本人必须查看并选择/评价，agent 不得代答；workflow、artifact、verdict 或 context pointer 缺失时按 tracker release 协议恢复 open/unclaimed。
+- `grilling`（HITL）：默认类型；同时应用 `matt-grilling` 与 `matt-domain-modeling`，用户必须为自己一侧的决定发声。
 - `task`（HITL/AFK）：只做阻塞某个决定的前置工作。若内容已经在交付 destination 或生产实现，说明 ticket 错型并停止。
 
-除相互独立的 `matt-research` tickets 外，一个 session 最多 resolve 一个 decision ticket。chart session 可以创建 map 和 tickets，但不得顺手解决 HITL ticket。
+除相互独立的 `Type: research` tickets 外，一个 session 最多 resolve 一个 decision ticket。chart session 可以创建 map 和 tickets，但不得顺手解决 HITL ticket。
 
 ## Mode A：Chart the map
 
@@ -64,7 +64,7 @@ metadata:
 2. 第一遍创建所有当前可精确表述的 child tickets，取得真实 identity；
 3. 第二遍写 blocking edges；
 4. 重新读取 map、tickets、parent/child、types、statuses 和 edges，计算并展示 frontier；
-5. 对每个初始 `matt-research` ticket，先按 tracker claim 协议读取非空 `PI_SESSION_ID`、写入 `pi:<PI_SESSION_ID>` 并核验，再分别调用 `pi_matt_dispatch` 的 `matt-research` workflow。缺失 identity 时不得 claim；lane 缺失、失败或无效 `structuredOutput` 时按 tracker release 协议恢复 open/unclaimed；有效结果由父会话按 resolve 协议写入。普通 prose output 不能作为答案。
+5. 对每个初始 `Type: research` ticket，先按 tracker claim 协议读取非空 `PI_SESSION_ID`、写入 `pi:<PI_SESSION_ID>` 并核验，再分别调用 `pi_matt_dispatch` 的 `matt-research` workflow。缺失 identity 时不得 claim；lane 缺失、失败或无效 `structuredOutput` 时按 tracker release 协议恢复 open/unclaimed；有效结果由父会话按 resolve 协议写入。普通 prose output 不能作为答案。
 
 charting 完成后停止，不进入第一个 HITL ticket。
 
@@ -76,10 +76,10 @@ charting 完成后停止，不进入第一个 HITL ticket。
 2. 若用户指定 ticket，确认它属于该 map、仍 open、unblocked、unclaimed；否则按 tracker 的 frontier 顺序选第一张。没有 frontier 但仍有 open/claimed/fog 时报告具体阻塞，不猜下一步。
 3. **先 claim，再工作**。按 tracker 操作读取非空 `PI_SESSION_ID`，只使用 `pi:<PI_SESSION_ID>` 作为稳定 claim identity；缺失时 fail closed。写前与写后都重新读取。若期间状态、claim 或 blockers 改变，停止并报告并发冲突，不覆盖其他 session。
 4. 只读取当前 ticket 的完整 Question，以及证明相关性所需的 linked decisions。不要把整张历史重新灌入上下文。
-5. 按 ticket type 解决：
-   - `matt-grilling`：执行 live `matt-grilling` + `matt-domain-modeling`，用户确认答案前不得代答或 resolve；
-   - `matt-research`：调用 `matt-research` workflow，只接受结构化来源与 gaps；多个 research 可并行，但分别 claim、核验和记录；
-   - `matt-prototype`：按 `matt-prototype` parent 的 question/workspace/HITL/capture gates 调度唯一 worker；取得本地 prototype branch context pointer 与用户 verdict 后才可形成 Answer，失败时 release；
+5. 按 `Type:` 值选择 resolver：
+   - `grilling`：执行 live `matt-grilling` + `matt-domain-modeling`，用户确认答案前不得代答或 resolve；
+   - `research`：调用 `matt-research` workflow，只接受结构化来源与 gaps；多个 research 可并行，但分别 claim、核验和记录；
+   - `prototype`：按 `matt-prototype` parent 的 question/workspace/HITL/capture gates 调度唯一 worker；取得本地 prototype branch context pointer 与用户 verdict 后才可形成 Answer，失败时 release；
    - `task`：执行不交付 destination 的最小前置动作；需要用户动作时给精确 checklist，外部写入、购买、生产控制或敏感数据操作仍需明确确认。
 6. 形成 Answer draft，包含决定/事实、理由、被拒绝方案、artifact/source pointers 与剩余未知。HITL ticket 使用 `ask_user_question` 请求用户确认 resolution；AFK ticket 由父会话核验一手证据和未知项。resolver 不可用、用户选择延期、证据无效或本 session 无法完成时，不得遗留自己的 claimed ticket：按 tracker release 协议恢复 open/unclaimed 并核验，然后停止。
 

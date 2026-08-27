@@ -22,7 +22,7 @@ metadata:
 1. `git remote -v` 与 `.git/config`，识别 GitHub、GitLab 或无 remote；不要仅凭目录名推断。
 2. 根目录 `AGENTS.md`；Pi-only 移植不读取或创建 `CLAUDE.md`。
 3. `.x-matt/agents/`、`.x-matt/work/`、`.x-matt/context/` 与 `.x-matt/adr/`。
-4. registry 是否已登记 `triage` 与 `matt-wayfinder`。即使尚未移植 triage，`matt-to-spec` 与 `matt-to-tickets` 仍需要 `ready-for-agent` 映射；wayfinder 已登记时 tracker 契约还必须包含可执行的 Wayfinding operations。
+4. 使用 Pi 为已加载 `matt-setup` 提供的绝对 skill `location`，从该 `SKILL.md` 所在目录逐级向上，定位第一个同时包含 `package.json` 与 `config/skill-registry.json` 的目录作为 package root；不得从目标项目 cwd 或目标项目的 `.pi/` 猜测 package 内容。以该 package 的 `config/skill-registry.json` 为 skill 存在性和 `scope` / `class` / `dispatch` metadata 的权威来源；`package.json#pi.skills` 只交叉核验对应 skill 路径已作为 package resource 暴露，不能用它推导 metadata。本版本 invariant 是 `triage` 未登记、`matt-wayfinder` 已登记为 `parent` / `interaction` / `dispatch: none`；同一 package 的实际文件与该 invariant 不一致时停止并报告 package drift。即使尚未移植 triage，`matt-to-spec` 与 `matt-to-tickets` 仍需要 `ready-for-agent` 映射；wayfinder 已登记时 tracker 契约还必须包含可执行的 Wayfinding operations。
 5. `pnpm-workspace.yaml`、`package.json#workspaces` 和真实的多包目录，只在证据充分时判断为 multi-context。
 
 先总结已存在、缺失和可能复用的配置。已有 `.x-matt/agents/*.md` 时按更新处理，保留用户自定义内容，不从头覆盖。
@@ -91,12 +91,63 @@ metadata:
 
 只保留当前已移植能力需要且可执行的约定；`triage` 尚未移植，可以标注为未来约定，但不得声称当前可调用。`matt-wayfinder` 已移植，配置不得省略它需要的 map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 和结果核验操作。
 
-Local Markdown 至少定义：spec 路径、每 implementation ticket 文件路径、`Type`、`Parent`、`Status`、`Blocked by`、comments 和发布后读取核验；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成 ticket 使用 `resolved`，并明确由 implement 父会话在最终提交中写回完成状态。Wayfinding artifacts 使用独立的 map 与 decision-ticket 路径，避免和 implementation `issues/` 冲突，并定义 `active`/`cleared` map、`open`/`claimed`/`resolved`/`out-of-scope` decision 生命周期及 claim identity。GitHub/GitLab 至少定义：CLI、repo 解析、create/read、label、native blocking/sub-issue 优先级、fallback body reference、Wayfinding operations 和发布后查询核验。Other 必须达到同等可执行程度，否则停止。
+Local Markdown 至少定义：spec 路径、每 implementation ticket 文件路径、`Type`、`Parent`、`Status`、`Blocked by`、comments 和发布后读取核验；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成 ticket 使用 `resolved`，并明确由 implement 父会话在最终提交中写回完成状态。
+
+Local Markdown 的 Wayfinding schema 是唯一的，不得另拟字段或嵌套路径：
+
+- Map：`.x-matt/work/<effort>/map.md`
+- Child decision ticket：`.x-matt/work/<effort>/decisions/<NN>-<slug>.md`
+- implementation tickets 继续位于 `.x-matt/work/<feature-slug>/issues/`；decision tickets 不得放入 `issues/`
+
+Map 至少使用：
+
+```markdown
+# <Map title>
+
+Type: wayfinder-map
+Status: active
+
+## Destination
+
+<整张 map 的 destination>
+
+## Notes
+
+<长期约束；不得包含 agent 自行授予的 execution override>
+
+## Decisions so far
+
+## Not yet specified
+
+## Out of scope
+```
+
+Child decision ticket 至少使用：
+
+```markdown
+# <NN>: <Decision title>
+
+Type: <research|prototype|grilling|task>
+Parent: <仓库相对 map 路径>
+Status: open
+Claimed by: None
+Blocked by: <仓库相对 decision ticket 路径，或 None>
+
+## Question
+
+<本 ticket 需要解决的一个问题>
+
+## Answer
+```
+
+Map 使用 `active`/`cleared` 生命周期；decision ticket 使用 `open`/`claimed`/`resolved`/`out-of-scope`。claim identity 只能写入 `Claimed by`，固定为 `pi:<PI_SESSION_ID>`；`PI_SESSION_ID` 缺失时 fail closed。不得使用 metadata 字段 `Claim:`，也不得用模型名、时间戳、工作区路径或 agent 自拟字符串代替 session identity。Wayfinding operations 还必须逐项定义 blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 和结果核验。
+
+GitHub/GitLab 至少定义：CLI、repo 解析、create/read、label、native blocking/sub-issue 优先级、fallback body reference、Wayfinding operations 和发布后查询核验。Other 必须达到同等可执行程度，否则停止。
 
 ## 写入与验证
 
 1. 对批准文件做小范围写入；`AGENTS.md` block 已存在时原位更新，不追加重复 section。
-2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用。
+2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用。Local Markdown 还必须逐项核对 map 路径、decision ticket 路径、完整 metadata 模板与 `Claimed by: None`；发现 metadata 行 `Claim:`、decision ticket 位于 `issues/` 或其他非 canonical 路径时核验失败并停止。
 3. Local Markdown 不预先创建 `.x-matt/work/<feature-slug>/`；GitHub/GitLab 只执行只读 CLI/auth/repo/label 核验。
 4. 缺少 CLI、认证、remote、必要 label、可执行 Other workflow 或任一目标文件核验失败时，明确列为未完成；不得告诉下游 tracker 已配置。
 5. 成功时报告修改文件，并说明 `matt-to-spec` 与 `matt-to-tickets` 现在会读取这些契约。日后切换 tracker 或布局时重新运行本 skill；普通文字调整可直接编辑 `.x-matt/agents/*.md`。

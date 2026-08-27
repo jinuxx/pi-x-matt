@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- 在 `matt-setup` 中内置 canonical Local Markdown Wayfinding 路径、字段和模板，并在写后拒绝不兼容的 `Claim:` 与 decision ticket 路径。
+- 从 Pi 提供的 skill location 定位 package registry，区分 registry metadata 与 package resource 暴露。
+- 统一 Wayfinder decision ticket 的 `Type:` 短名称与 `matt-*` resolver 名称。
+
 ## 0.2.1
 
 - 取消 `pi-subagents` 的版本绑定，由目标项目安装当前可用版本。

@@ -1389,7 +1389,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-setup/SKILL.md",
-      "sourceDigest": "387fed20beb8df6ca7d9eb7b7fb420dda3014f5a4acdefced8b75cb888d5dcad",
+      "sourceDigest": "f2df139e5514f9412bdc2d75ed364b7090a5039cfb27dc4c0eb781779e83a9e4",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
@@ -1801,7 +1801,7 @@
         "matt-to-spec"
       ],
       "sourcePath": ".pi/skills/matt-wayfinder/SKILL.md",
-      "sourceDigest": "b2d134be5da795b929d8b4d27eafe6211cdfdf1cf43f568353168ab271b44985",
+      "sourceDigest": "a7603a082562b504207ef9a3eaf7796c2f1a630aae511d3a9c1934a4ad4f53bb",
       "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"
