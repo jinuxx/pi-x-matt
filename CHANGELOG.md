@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- 取消 `pi-subagents` 的版本绑定，由目标项目安装当前可用版本。
+
 ## 0.2.0
 
 - 将 tracker、领域上下文、ADR、spec、tickets 与 Wayfinder 文档统一收口到 `.x-matt/`。

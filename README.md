@@ -9,8 +9,8 @@
 要求已安装 Pi 与 Node.js 20 或更高版本。在目标代码库中先安装与项目绑定的 `pi-subagents`，再安装本 package：
 
 ```bash
-pi install -l npm:pi-subagents@0.57.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.0
+pi install -l npm:pi-subagents
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.1
 ```
 
 然后重启或 reload Pi：
@@ -19,11 +19,11 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.0
 /reload
 ```
 
-首次使用时手动运行 `matt-setup`，在父会话中选择 issue tracker（Local Markdown、GitHub 或 GitLab）并确认项目文档契约。package manifest 会自动加载 dispatcher、`matt-*` skills 和 `matt-*` agents；`pi-subagents` 作为 project-local 前置 package 加载。若目标项目已有 `pi-subagents`，确认它至少为 `0.57.0`，不要再添加第二个 `pi-subagents` extension 路径，以免重复注册工具。若要保持最小加载，可把 `.pi/settings.json` 中的 `npm:pi-subagents@0.57.0` 字符串改为：
+首次使用时手动运行 `matt-setup`，在父会话中选择 issue tracker（Local Markdown、GitHub 或 GitLab）并确认项目文档契约。package manifest 会自动加载 dispatcher、`matt-*` skills 和 `matt-*` agents；`pi-subagents` 作为 project-local 前置 package 加载。若目标项目已有 `pi-subagents`，不要再添加第二个 `pi-subagents` extension 路径，以免重复注册工具。若要保持最小加载，可把 `.pi/settings.json` 中的 `npm:pi-subagents` 字符串改为：
 
 ```json
 {
-  "source": "npm:pi-subagents@0.57.0",
+  "source": "npm:pi-subagents",
   "autoload": false,
   "extensions": ["+index.ts"],
   "skills": [],
@@ -37,7 +37,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.0
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.0
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.1
 ```
 
 ## 架构
@@ -72,7 +72,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.0
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.57.0",
+      "source": "npm:pi-subagents",
       "autoload": false,
       "extensions": ["+index.ts"],
       "skills": [],

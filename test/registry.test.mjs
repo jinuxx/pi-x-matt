@@ -203,7 +203,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.equal(settings.subagents.agentOverrides, undefined);
   assert.deepEqual(settings.packages, [{
-    source: "npm:pi-subagents@0.57.0",
+    source: "npm:pi-subagents",
     autoload: false,
     extensions: ["+index.ts"],
     skills: [],
@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.2.1");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -546,8 +546,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.0/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.0/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.1/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.1/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
