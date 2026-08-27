@@ -10,13 +10,13 @@
       "description": "为只读 interface 方案提供 dependency category、adapter 与 interface test surface 约束。",
       "scope": "leaf",
       "class": "executor",
-      "agent": "reader",
+      "agent": "matt-reader",
       "dispatch": "none",
       "dependsOn": [
         "architecture-vocabulary-reader"
       ],
       "sourcePath": "skillpacks/leaf/architecture-deepening-reader/SKILL.md",
-      "sourceDigest": "92df196682575a0e5e9b32ffc73dd83c41a6e52d8084fec33d2b063485472992",
+      "sourceDigest": "dc6ec0f14f8bef5d20cda4ca63c7b216c1c197e7d119bdefc8f0832d903ae81c",
       "upstreamPath": "skills/engineering/codebase-design/DEEPENING.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1"
@@ -26,15 +26,15 @@
       "description": "内部 orchestration：为一个用户已选择的 deepening candidate 并行生成 minimal、flexible 与 common-caller 三种不同 interface 方案。",
       "scope": "parent",
       "class": "orchestration",
-      "agent": "reader",
+      "agent": "matt-reader",
       "dispatch": "parallel",
       "dependsOn": [
         "architecture-interface-design"
       ],
       "sourcePath": ".pi/skills/architecture-design/SKILL.md",
-      "sourceDigest": "7ac9223ba9c3c34638c3970c72461a8b4e6a894f21d87aa3988c94c997acb25c",
+      "sourceDigest": "e7f3952fec0a2de5d640320385d496423296581718219f41b6fb6d2dc1e0b6c2",
       "workflowPath": ".pi/skills/architecture-design/workflow.json",
-      "workflowDigest": "3c1bfef78ffd85bd4a2f6578bf91d5efb78495105c285f7a0fd3bf2d603eb690",
+      "workflowDigest": "82e546cef416edee1aebbd65e1ce946c2d42cb4da3e5f4dc7e79511ed9605772",
       "workflow": {
         "version": 1,
         "name": "architecture-design",
@@ -42,7 +42,7 @@
         "lanes": [
           {
             "key": "minimal",
-            "agent": "reader",
+            "agent": "matt-reader",
             "skills": [
               "architecture-interface-design"
             ],
@@ -190,7 +190,7 @@
           },
           {
             "key": "flexible",
-            "agent": "reader",
+            "agent": "matt-reader",
             "skills": [
               "architecture-interface-design"
             ],
@@ -338,7 +338,7 @@
           },
           {
             "key": "common-caller",
-            "agent": "reader",
+            "agent": "matt-reader",
             "skills": [
               "architecture-interface-design"
             ],
@@ -495,11 +495,11 @@
       "description": "把经过 deletion test 的 deepening candidates 渲染为 OS temp 中的可视化 HTML 报告。仅供 architecture scan worker 使用。",
       "scope": "leaf",
       "class": "executor",
-      "agent": "worker",
+      "agent": "matt-worker",
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/architecture-html-report/SKILL.md",
-      "sourceDigest": "1c10bbccfe2d3b5e556daf349654bd56d7aa2a00716eb6dbf7d41730659a97e2",
+      "sourceDigest": "475673a08ca51ff2acf7b7357348785f4d4ca877c1891e336ba7c7c383ee4107",
       "upstreamPath": "skills/engineering/improve-codebase-architecture/HTML-REPORT.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "581e8bb5a521e46bbda8ca7e19b15948bed882187108092ebb90c62513b77528"
@@ -509,14 +509,14 @@
       "description": "对一个已选择且已确认约束的 deepening candidate，按指定策略产出一个只读 interface 方案及权衡。",
       "scope": "leaf",
       "class": "executor",
-      "agent": "reader",
+      "agent": "matt-reader",
       "dispatch": "none",
       "dependsOn": [
         "architecture-vocabulary-reader",
         "architecture-deepening-reader"
       ],
       "sourcePath": "skillpacks/leaf/architecture-interface-design/SKILL.md",
-      "sourceDigest": "f838a0b1eb921433a38bc1bbbd37e892df280ec969f9587496c88ae60b7c8f85",
+      "sourceDigest": "87e1ce0e0fb0c6225e64e63ab2879faeb5cfb989cbe3a3688cf9e5482b9e3912",
       "upstreamPath": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "8e740bf98446dbd4dfdc132ac4346d9a7eedaf93de6a495889171cf7f99f16bd"
@@ -526,15 +526,15 @@
       "description": "内部 orchestration：在父会话固定的代码库范围内只读扫描 deepening opportunities，并由唯一 worker 把可视化报告写到 OS temp。",
       "scope": "parent",
       "class": "orchestration",
-      "agent": "worker",
+      "agent": "matt-worker",
       "dispatch": "single",
       "dependsOn": [
         "architecture-scan-executor"
       ],
       "sourcePath": ".pi/skills/architecture-scan/SKILL.md",
-      "sourceDigest": "3908003962d9617265e35e5e14d14a25758fd0b92f24ebdfc876a13708583024",
+      "sourceDigest": "39e3d9bf4e25230163d14d5dc2cf68139151d326acc67d2002bd3f191e174049",
       "workflowPath": ".pi/skills/architecture-scan/workflow.json",
-      "workflowDigest": "d84bc0c3da8608750ed91071d858c0451b63887eded54030e071cb8863c84aae",
+      "workflowDigest": "88d7252b68098252cb738774e2926ffe4212e3c56c3d20652ec68ce9c88798dc",
       "workflow": {
         "version": 1,
         "name": "architecture-scan",
@@ -542,7 +542,7 @@
         "lanes": [
           {
             "key": "scan",
-            "agent": "worker",
+            "agent": "matt-worker",
             "skills": [
               "architecture-scan-executor"
             ],
@@ -744,14 +744,14 @@
       "description": "在固定 scope 内只读探索代码库，寻找通过 deletion test 的 deepening candidates，并把报告写到 OS temp。",
       "scope": "leaf",
       "class": "executor",
-      "agent": "worker",
+      "agent": "matt-worker",
       "dispatch": "none",
       "dependsOn": [
         "codebase-design",
         "architecture-html-report"
       ],
       "sourcePath": "skillpacks/leaf/architecture-scan-executor/SKILL.md",
-      "sourceDigest": "8963e6cc92c3db683e6334f20c702fbf7eed21cbdb231e56223386f40d6abcae",
+      "sourceDigest": "7613ae9149a4a0b08d5a5f2b7dc4f06d768f50ca25bf3c36f26678f083dea098",
       "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
@@ -761,42 +761,56 @@
       "description": "为只读 architecture interface 设计提供 module、interface、depth、seam、adapter、leverage 与 locality 词汇。",
       "scope": "leaf",
       "class": "executor",
-      "agent": "reader",
+      "agent": "matt-reader",
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/architecture-vocabulary-reader/SKILL.md",
-      "sourceDigest": "c93f3018157cac5bb4b27793b312d132801a347b8fe6fbd8d6b78a5d425234a4",
+      "sourceDigest": "32124561626d1149e1668d70b1a2f9b911e215ece2666de58b238e1d490a2910",
       "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
-    "code-review": {
-      "name": "code-review",
+    "codebase-design": {
+      "name": "codebase-design",
+      "description": "为 TDD worker 提供 deep module、interface、seam、adapter、leverage 与 locality 的统一设计词汇。仅供受限 worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "matt-worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/codebase-design/SKILL.md",
+      "sourceDigest": "6e8a92e81ae62cc219c79c7067e7f6abe4859d0f54ddc5986b5365ebb5c51f1a",
+      "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
+    },
+    "matt-code-review": {
+      "name": "matt-code-review",
       "description": "沿 Standards 与 Spec 两个相互独立的轴评审固定范围内的代码变化。用于评审分支、PR、工作区变更、计划实现结果或指定文件。",
       "scope": "parent",
       "class": "orchestration",
-      "agent": "reviewer",
+      "agent": "matt-reviewer",
       "dispatch": "parallel",
       "dependsOn": [
         "review-standards",
         "review-spec"
       ],
-      "sourcePath": ".pi/skills/code-review/SKILL.md",
-      "sourceDigest": "ff51fc08b4ca63ae97b00c0480e31e54b35679bb2496d864e1474b530a4031c1",
-      "workflowPath": ".pi/skills/code-review/workflow.json",
-      "workflowDigest": "299e955028e6a6de01ed8f389c30a70ef6a91614d87f6d5e8fddc4eb7f0baf71",
+      "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
+      "sourceDigest": "a0464b05c031e9d76328410675225444aeb7e99f5b55094e3187ea1ec3791697",
+      "workflowPath": ".pi/skills/matt-code-review/workflow.json",
+      "workflowDigest": "e37d9345e11f98d68d350c1b2e66a7307a0153b18c607c5cd5a1d05280cd89a0",
       "workflow": {
         "version": 1,
-        "name": "code-review",
+        "name": "matt-code-review",
         "mode": "parallel",
         "lanes": [
           {
             "key": "standards",
-            "agent": "reviewer",
+            "agent": "matt-reviewer",
             "skills": [
               "review-standards"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 600000,
             "turnBudget": {
               "maxTurns": 12,
               "graceTurns": 2
@@ -884,11 +898,11 @@
           },
           {
             "key": "spec",
-            "agent": "reviewer",
+            "agent": "matt-reviewer",
             "skills": [
               "review-spec"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 600000,
             "turnBudget": {
               "maxTurns": 12,
               "graceTurns": 2
@@ -980,136 +994,122 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
     },
-    "codebase-design": {
-      "name": "codebase-design",
-      "description": "为 TDD worker 提供 deep module、interface、seam、adapter、leverage 与 locality 的统一设计词汇。仅供受限 worker 使用。",
-      "scope": "leaf",
-      "class": "executor",
-      "agent": "worker",
-      "dispatch": "none",
-      "dependsOn": [],
-      "sourcePath": "skillpacks/leaf/codebase-design/SKILL.md",
-      "sourceDigest": "c48b77081198b6ca4aa28957f54fd671e27b0ebf2e0daac3c52277c533af1aa0",
-      "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
-    },
-    "diagnosing-bugs": {
-      "name": "diagnosing-bugs",
+    "matt-diagnosing-bugs": {
+      "name": "matt-diagnosing-bugs",
       "description": "对难复现 bug、间歇性失败和性能回归执行反馈循环→最小复现→假设→探针的受控诊断，并把已确认根因顺序交给 implement。用于用户明确要求 diagnose/debug，或报告具体 broken/throwing/failing/slow 症状且不能直接定位时。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [
-        "implement"
+        "matt-implement"
       ],
-      "sourcePath": ".pi/skills/diagnosing-bugs/SKILL.md",
-      "sourceDigest": "455f0d4d8ef16a1065d1d85b25963e21829f0a87327891c8b54be342dc1b4d25",
+      "sourcePath": ".pi/skills/matt-diagnosing-bugs/SKILL.md",
+      "sourceDigest": "cf7bc36cb434d4cd852d09fc5ba6244d69b5712c0e2e20b569db16d2b6d24c33",
       "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "77f3cf31bc99b2f49af943222526531fcc9fc41d047626d3640e875e85af3e84"
     },
-    "domain-modeling": {
-      "name": "domain-modeling",
+    "matt-domain-modeling": {
+      "name": "matt-domain-modeling",
       "description": "在设计讨论中澄清项目术语、维护 CONTEXT.md，并只为难逆转且存在真实权衡的决定记录 ADR。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [],
-      "sourcePath": ".pi/skills/domain-modeling/SKILL.md",
-      "sourceDigest": "93028acf769c813fb64ee6886b15fe8eaa2fb19632f7ba2d6b79afd942bca414",
+      "sourcePath": ".pi/skills/matt-domain-modeling/SKILL.md",
+      "sourceDigest": "c8d11de50b7d0ca49d3414248bfefd2355f8f54a00da8be6f4cd08c97b79cb5a",
       "upstreamPath": "skills/engineering/domain-modeling/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "327a2b50620e2fd70abc6893cd6965e76b20f8d0adb0dc2c8d5eb3845efb643e"
     },
-    "grill-with-docs": {
-      "name": "grill-with-docs",
+    "matt-grill-with-docs": {
+      "name": "matt-grill-with-docs",
       "description": "在代码库中分轮澄清计划或设计，并在术语与重大决定形成时更新 CONTEXT.md 和 ADR。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [
-        "grilling",
-        "domain-modeling"
+        "matt-grilling",
+        "matt-domain-modeling"
       ],
-      "sourcePath": ".pi/skills/grill-with-docs/SKILL.md",
-      "sourceDigest": "90b0797cea5e619823cddca08460c144053b938b8ec6bef75fce87b74b45f6f6",
+      "sourcePath": ".pi/skills/matt-grill-with-docs/SKILL.md",
+      "sourceDigest": "46f866819e9296fbb37119676b519d2e18cab2b6fe17ab9aaf4143d7b5eb59f7",
       "upstreamPath": "skills/engineering/grill-with-docs/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
     },
-    "grilling": {
-      "name": "grilling",
+    "matt-grilling": {
+      "name": "matt-grilling",
       "description": "通过分轮 decision tree 追问计划、决定或想法，直到用户确认 shared understanding。用于压力测试思路或任何 grill 类请求。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [],
-      "sourcePath": ".pi/skills/grilling/SKILL.md",
-      "sourceDigest": "5ea2aac92c05f9c22948882bdf0208f5a5c3a3e4cb307cdb6be1d5d3e61ab8ff",
+      "sourcePath": ".pi/skills/matt-grilling/SKILL.md",
+      "sourceDigest": "03f31e747787a87774ebc3c22eea6cfe8c00d2d9607c578c13c006e675f86644",
       "upstreamPath": "skills/productivity/grilling/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "10ff989e7498b23b5acb49d5048f11dcd906757d2f79c5cdf8a00001381296f2"
     },
-    "implement": {
-      "name": "implement",
+    "matt-implement": {
+      "name": "matt-implement",
       "description": "根据已确认的 ticket 或当前会话单 slice 计划实现一个工作切片，依次执行 TDD、验证、独立 code review，并提交当前分支。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [
-        "domain-modeling"
+        "matt-domain-modeling"
       ],
-      "sourcePath": ".pi/skills/implement/SKILL.md",
-      "sourceDigest": "b26873428bbd2ab983de9dbf05edcfee70d3f51da4dde4a3af94e2778904d18d",
+      "sourcePath": ".pi/skills/matt-implement/SKILL.md",
+      "sourceDigest": "4737cf41b51fe7bcb451d2f4052dc7ca2d02062f826d8f2a205baab455b13883",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
     },
-    "improve-codebase-architecture": {
-      "name": "improve-codebase-architecture",
+    "matt-improve-codebase-architecture": {
+      "name": "matt-improve-codebase-architecture",
       "description": "只读扫描近期或用户指定范围中的 shallow modules，生成 OS temp 可视化 deepening report，并在用户选择后通过 grilling 形成可进入 to-spec 的架构决定。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [
-        "grilling",
-        "domain-modeling"
+        "matt-grilling",
+        "matt-domain-modeling"
       ],
-      "sourcePath": ".pi/skills/improve-codebase-architecture/SKILL.md",
-      "sourceDigest": "172970f1d52b115014b8b174020c25f8048935ff8f288123da594ff412b32174",
+      "sourcePath": ".pi/skills/matt-improve-codebase-architecture/SKILL.md",
+      "sourceDigest": "15b99e269f1d85d73c78c8f02348b26deeb1ef29f6d4976560eeae052e0f4765",
       "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
     },
-    "prototype": {
-      "name": "prototype",
+    "matt-prototype": {
+      "name": "matt-prototype",
       "description": "为一个无法仅靠讨论解决的设计问题构建 throwaway prototype：逻辑/状态使用单文件 HTML，UI 使用真实页面上下文中的多方案切换。用于探索要构建什么，不用于修 bug 或实现已确定需求。",
       "scope": "parent",
       "class": "orchestration",
-      "agent": "worker",
+      "agent": "matt-worker",
       "dispatch": "single",
       "dependsOn": [
         "prototype-executor"
       ],
-      "sourcePath": ".pi/skills/prototype/SKILL.md",
-      "sourceDigest": "da5547bc7496c97b26fbc3b11b2b315729fe69a2960e3cebbbebd2e01d4b1054",
-      "workflowPath": ".pi/skills/prototype/workflow.json",
-      "workflowDigest": "d1b9f351a0820299134ee67c7fa8df090b7b69cb0d63e6093727160c6c2ac5d4",
+      "sourcePath": ".pi/skills/matt-prototype/SKILL.md",
+      "sourceDigest": "fde71883aa4d55934ed39bdf4fb685ee5a3e5c4012c41022102f3121dcd9a23b",
+      "workflowPath": ".pi/skills/matt-prototype/workflow.json",
+      "workflowDigest": "77c8d5ff232eab3989e7f67e9ff613d791cfd3a4cdcd504559c567a44c26fc0a",
       "workflow": {
         "version": 1,
-        "name": "prototype",
+        "name": "matt-prototype",
         "mode": "single",
         "lanes": [
           {
             "key": "prototype",
-            "agent": "worker",
+            "agent": "matt-worker",
             "skills": [
               "prototype-executor"
             ],
@@ -1266,73 +1266,28 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
     },
-    "prototype-executor": {
-      "name": "prototype-executor",
-      "description": "在父会话已确认的问题、branch 与文件范围内，作为唯一写者构建一次 throwaway prototype 并返回可评审证据。",
-      "scope": "leaf",
-      "class": "executor",
-      "agent": "worker",
-      "dispatch": "none",
-      "dependsOn": [
-        "prototype-logic",
-        "prototype-ui"
-      ],
-      "sourcePath": "skillpacks/leaf/prototype-executor/SKILL.md",
-      "sourceDigest": "536641ea422f222c7f5566f4eae612ea37f237a2a960048369a6ca25fd51aab7",
-      "upstreamPath": "skills/engineering/prototype/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
-    },
-    "prototype-logic": {
-      "name": "prototype-logic",
-      "description": "构建一个可双击运行的单文件逻辑原型，用领域语言展示状态、自由操作和可重复 walkthrough。仅供 prototype worker 使用。",
-      "scope": "leaf",
-      "class": "executor",
-      "agent": "worker",
-      "dispatch": "none",
-      "dependsOn": [],
-      "sourcePath": "skillpacks/leaf/prototype-logic/SKILL.md",
-      "sourceDigest": "ea2cc706d2520231a61556f8013a2bbfb6b50853a57ea70c74587fcd12b82cfa",
-      "upstreamPath": "skills/engineering/prototype/LOGIC.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9"
-    },
-    "prototype-ui": {
-      "name": "prototype-ui",
-      "description": "在真实页面上下文中构建 3–5 个结构显著不同、可通过 URL 参数切换的 UI 原型方案。仅供 prototype worker 使用。",
-      "scope": "leaf",
-      "class": "executor",
-      "agent": "worker",
-      "dispatch": "none",
-      "dependsOn": [],
-      "sourcePath": "skillpacks/leaf/prototype-ui/SKILL.md",
-      "sourceDigest": "9cd1aed05403807a654f9f987eb8ad499de90e4420b2075c3552dcda0be83028",
-      "upstreamPath": "skills/engineering/prototype/UI.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3"
-    },
-    "research": {
-      "name": "research",
+    "matt-research": {
+      "name": "matt-research",
       "description": "将需要一手外部证据的问题交给受限 researcher 子代理，并在父会话中综合结果。用于调查官方文档、规范、源代码、第一方 API 或近期生态事实。",
       "scope": "parent",
       "class": "orchestration",
-      "agent": "researcher",
+      "agent": "matt-researcher",
       "dispatch": "single",
       "dependsOn": [
         "research-executor"
       ],
-      "sourcePath": ".pi/skills/research/SKILL.md",
-      "sourceDigest": "db20dc0b5a8d7687c4c4cfa065cda2b9bb5081c3322d281cd2b478c13b43c384",
-      "workflowPath": ".pi/skills/research/workflow.json",
-      "workflowDigest": "5757a0ed1fdd665b372d26f06511da85eb644e40ae760c7de5008acd1690d055",
+      "sourcePath": ".pi/skills/matt-research/SKILL.md",
+      "sourceDigest": "1584a59acdd304c4145ef8b82aaa3aa78b2f09cc4c6721e1bfb9b652818c0f51",
+      "workflowPath": ".pi/skills/matt-research/workflow.json",
+      "workflowDigest": "f3520cfb34f0b18a17f1fabd3762b4654739f9747483c3318f4dd7a27d190687",
       "workflow": {
         "version": 1,
-        "name": "research",
+        "name": "matt-research",
         "mode": "single",
         "lanes": [
           {
             "key": "research",
-            "agent": "researcher",
+            "agent": "matt-researcher",
             "skills": [
               "research-executor"
             ],
@@ -1425,64 +1380,22 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
     },
-    "research-executor": {
-      "name": "research-executor",
-      "description": "针对一个明确问题检索高可信一手资料，逐项核验结论并返回带 URL 的研究报告。仅供受限 researcher 子代理使用。",
-      "scope": "leaf",
-      "class": "executor",
-      "agent": "researcher",
-      "dispatch": "none",
-      "dependsOn": [],
-      "sourcePath": "skillpacks/leaf/research-executor/SKILL.md",
-      "sourceDigest": "5c1d30e4c3b5cd2bcd8d21d81c5c250cc60f1ac3d3b1abdab190907690708f19",
-      "upstreamPath": "skills/engineering/research/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
-    },
-    "review-spec": {
-      "name": "review-spec",
-      "description": "独立对照明确规格和验收标准检查需求遗漏、范围膨胀与错误实现。仅供只读 reviewer 使用。",
-      "scope": "leaf",
-      "class": "reviewer",
-      "agent": "reviewer",
-      "dispatch": "none",
-      "dependsOn": [],
-      "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "fea11f97152a5871ef2cca8ac740061b0eaa8a5528149074419eedc5d47e4c17",
-      "upstreamPath": "skills/engineering/code-review/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
-    },
-    "review-standards": {
-      "name": "review-standards",
-      "description": "独立检查目标代码是否违反仓库明确标准、引入正确性或测试风险，并用代码异味启发式补充有证据的判断。仅供只读 reviewer 使用。",
-      "scope": "leaf",
-      "class": "reviewer",
-      "agent": "reviewer",
-      "dispatch": "none",
-      "dependsOn": [],
-      "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "118d3b4428c5f816ea486a54daf06e4c70a7c72cf7e7f72efa177c6b56d85c1d",
-      "upstreamPath": "skills/engineering/code-review/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
-    },
-    "setup-matt-pocock-skills": {
-      "name": "setup-matt-pocock-skills",
+    "matt-setup": {
+      "name": "matt-setup",
       "description": "为当前仓库配置 issue tracker、ready-for-agent 标签词汇和领域文档布局，使规格与 tickets 发布链可执行。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [],
-      "sourcePath": ".pi/skills/setup-matt-pocock-skills/SKILL.md",
-      "sourceDigest": "a6f39de474e2af3628cb051f552629a64e4580a9fb583f53e11aa9797b7584bf",
+      "sourcePath": ".pi/skills/matt-setup/SKILL.md",
+      "sourceDigest": "c50faa4577acd8176b175cbf9cc34c63f9f5c479a6e9c8c15e580f1f8c486101",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
     },
-    "tdd": {
-      "name": "tdd",
+    "matt-tdd": {
+      "name": "matt-tdd",
       "description": "在用户确认测试 seam 后，以唯一 worker 执行逐片 red→green，并由 fresh Standards/Spec reviewer 复核结果。用于测试驱动实现功能或修复缺陷。",
       "scope": "parent",
       "class": "orchestration",
@@ -1493,19 +1406,19 @@
         "review-standards",
         "review-spec"
       ],
-      "sourcePath": ".pi/skills/tdd/SKILL.md",
-      "sourceDigest": "f5d85ca26b9a8e59102e04c7a80ef1bf883e1bbfa20a6549fd29bc41c1461927",
-      "workflowPath": ".pi/skills/tdd/workflow.json",
-      "workflowDigest": "4a69eec8e4c9d8193785d035bc751487223784093a63c886768fad6fc0e54adb",
+      "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
+      "sourceDigest": "cb74759efe24fd709028faf7d54ef9a211173309b9a8a4051a4dfb982e32edbc",
+      "workflowPath": ".pi/skills/matt-tdd/workflow.json",
+      "workflowDigest": "f896b5c7feb56019619a3f6356f879ef94733ee3be27301f8b5538b566c5ec09",
       "workflow": {
         "version": 1,
-        "name": "tdd",
+        "name": "matt-tdd",
         "mode": "pipeline",
         "lanes": [
           {
             "key": "implement",
             "stage": 1,
-            "agent": "worker",
+            "agent": "matt-worker",
             "skills": [
               "tdd-executor"
             ],
@@ -1658,7 +1571,7 @@
           {
             "key": "standards",
             "stage": 2,
-            "agent": "reviewer",
+            "agent": "matt-reviewer",
             "skills": [
               "review-standards"
             ],
@@ -1751,7 +1664,7 @@
           {
             "key": "spec",
             "stage": 2,
-            "agent": "reviewer",
+            "agent": "matt-reviewer",
             "skills": [
               "review-spec"
             ],
@@ -1847,67 +1760,154 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
     },
-    "tdd-executor": {
-      "name": "tdd-executor",
-      "description": "在已确认 seam 与固定范围内，以唯一写者逐片执行真实 red→green，并返回可审计证据。仅供受限 worker 使用。",
-      "scope": "leaf",
-      "class": "executor",
-      "agent": "worker",
-      "dispatch": "none",
-      "dependsOn": [
-        "codebase-design"
-      ],
-      "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "0d505dfea265f500faf6c7c378a4cb6df81993587792aac7f4cef178ffcb35e8",
-      "upstreamPath": "skills/engineering/tdd/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
-      "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
-    },
-    "to-spec": {
-      "name": "to-spec",
+    "matt-to-spec": {
+      "name": "matt-to-spec",
       "description": "将当前已完成的设计讨论综合为 parent spec，并按 tracker 配置发布为本地 spec-ready 文档或受保护的 remote issue。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [],
-      "sourcePath": ".pi/skills/to-spec/SKILL.md",
-      "sourceDigest": "1f549b0ce50e069dc6ba8abd69a7205f5bdcf41d8f98d9806e600454400bb77f",
+      "sourcePath": ".pi/skills/matt-to-spec/SKILL.md",
+      "sourceDigest": "fb01540c169214c242798fa63654dabd0ea258c78b050e3739b3f9c70f54637e",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
     },
-    "to-tickets": {
-      "name": "to-tickets",
+    "matt-to-tickets": {
+      "name": "matt-to-tickets",
       "description": "将已确认的 spec 或当前讨论拆成带 blocking edges 的 tracer-bullet tickets，并在用户批准后发布到已配置的 issue tracker。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [],
-      "sourcePath": ".pi/skills/to-tickets/SKILL.md",
-      "sourceDigest": "9e1d8ac610a2f15c633a1ab40b130f1580ffbd5548eac938a8077f2914068d26",
+      "sourcePath": ".pi/skills/matt-to-tickets/SKILL.md",
+      "sourceDigest": "98026970858d895bce6e20fdc6f2b2b2f34c6a08c91a98cc606382156e712c20",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
     },
-    "wayfinder": {
-      "name": "wayfinder",
+    "matt-wayfinder": {
+      "name": "matt-wayfinder",
       "description": "把单个会话容纳不下且路线仍模糊的大型工作，规划为 tracker 上的共享决策地图，并每个会话最多解决一个 frontier ticket，直到可以交给 to-spec。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [
-        "grilling",
-        "domain-modeling",
-        "to-spec"
+        "matt-grilling",
+        "matt-domain-modeling",
+        "matt-to-spec"
       ],
-      "sourcePath": ".pi/skills/wayfinder/SKILL.md",
-      "sourceDigest": "e1ae7b5086569ffc0d5c0a561b48aa1ed30e10ef860a93b5af15fce0d1a36f65",
+      "sourcePath": ".pi/skills/matt-wayfinder/SKILL.md",
+      "sourceDigest": "6e38a4e01436c9dbc80ae5ca7eefa5d661c616bf3cbb59c5a7fa2ca4a6bd98ab",
       "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"
+    },
+    "prototype-executor": {
+      "name": "prototype-executor",
+      "description": "在父会话已确认的问题、branch 与文件范围内，作为唯一写者构建一次 throwaway prototype 并返回可评审证据。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "matt-worker",
+      "dispatch": "none",
+      "dependsOn": [
+        "prototype-logic",
+        "prototype-ui"
+      ],
+      "sourcePath": "skillpacks/leaf/prototype-executor/SKILL.md",
+      "sourceDigest": "d73113a301c9f20c2cee56b4389675b20434b2b62ac517e4430113805b83ddf1",
+      "upstreamPath": "skills/engineering/prototype/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
+    },
+    "prototype-logic": {
+      "name": "prototype-logic",
+      "description": "构建一个可双击运行的单文件逻辑原型，用领域语言展示状态、自由操作和可重复 walkthrough。仅供 prototype worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "matt-worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/prototype-logic/SKILL.md",
+      "sourceDigest": "0b65ddaac7f4ade3f6d5aaa16778e3b19a468aa6705cf75b2a7ff5cb2f940f4b",
+      "upstreamPath": "skills/engineering/prototype/LOGIC.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9"
+    },
+    "prototype-ui": {
+      "name": "prototype-ui",
+      "description": "在真实页面上下文中构建 3–5 个结构显著不同、可通过 URL 参数切换的 UI 原型方案。仅供 prototype worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "matt-worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/prototype-ui/SKILL.md",
+      "sourceDigest": "6578123ef93b96d729b35e33a647ceafc14a470913c881cb15dff5473928c9de",
+      "upstreamPath": "skills/engineering/prototype/UI.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3"
+    },
+    "research-executor": {
+      "name": "research-executor",
+      "description": "针对一个明确问题检索高可信一手资料，逐项核验结论并返回带 URL 的研究报告。仅供受限 researcher 子代理使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "matt-researcher",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/research-executor/SKILL.md",
+      "sourceDigest": "3c04ee69c1f2938865e2d8a441ecb4bc1989d018cf4a3b4eebbc20e93112b061",
+      "upstreamPath": "skills/engineering/research/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
+    },
+    "review-spec": {
+      "name": "review-spec",
+      "description": "独立对照明确规格和验收标准检查需求遗漏、范围膨胀与错误实现。仅供只读 reviewer 使用。",
+      "scope": "leaf",
+      "class": "reviewer",
+      "agent": "matt-reviewer",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
+      "sourceDigest": "ade89b3f4856e1305a582eaed8d80b31885d2a01b5d6babe2c11557a67d06bc3",
+      "upstreamPath": "skills/engineering/code-review/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
+    },
+    "review-standards": {
+      "name": "review-standards",
+      "description": "独立检查目标代码是否违反仓库明确标准、引入正确性或测试风险，并用代码异味启发式补充有证据的判断。仅供只读 reviewer 使用。",
+      "scope": "leaf",
+      "class": "reviewer",
+      "agent": "matt-reviewer",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
+      "sourceDigest": "ebbd79c62a558200294ab327e5b6729db26a34260d80f71b30a6249caeb74b92",
+      "upstreamPath": "skills/engineering/code-review/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
+    },
+    "tdd-executor": {
+      "name": "tdd-executor",
+      "description": "在已确认 seam 与固定范围内，以唯一写者逐片执行真实 red→green，并返回可审计证据。仅供受限 worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "matt-worker",
+      "dispatch": "none",
+      "dependsOn": [
+        "codebase-design"
+      ],
+      "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
+      "sourceDigest": "b20815f5d0b5189380c1740c5d6fbef1753c9c4f2debfce9408db391d39d18dd",
+      "upstreamPath": "skills/engineering/tdd/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
     }
   }
 }

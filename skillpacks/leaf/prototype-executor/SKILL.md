@@ -5,7 +5,7 @@ compatibility: Pi Agent with repository write and local validation tools.
 metadata:
   pi-scope: leaf
   pi-class: executor
-  pi-agent: worker
+  pi-agent: matt-worker
   pi-dispatch: none
   pi-depends-on: prototype-logic, prototype-ui
   pi-upstream-path: skills/engineering/prototype/SKILL.md

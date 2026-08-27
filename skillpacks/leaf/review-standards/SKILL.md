@@ -5,7 +5,7 @@ compatibility: Pi Agent with pi-subagents and read-only repository tools.
 metadata:
   pi-scope: leaf
   pi-class: reviewer
-  pi-agent: reviewer
+  pi-agent: matt-reviewer
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/code-review/SKILL.md

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
@@ -11,6 +13,7 @@ const RPC_REQUEST_EVENT = "subagents:rpc:v1:request";
 const RPC_REPLY_PREFIX = "subagents:rpc:v1:reply:";
 const RPC_VERSION = 1;
 const RPC_TIMEOUT_MS = 10_000;
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 type RpcReply =
   | { version: number; requestId: string; success: true; data: unknown }
@@ -96,7 +99,7 @@ export default function (pi: ExtensionAPI) {
       if (!ctx.isProjectTrusted()) throw new Error("pi-matt-dispatch refuses untrusted project configuration");
 
       const projectRoot = await findProjectRoot(ctx.cwd);
-      const registry = await loadCurrentRegistry(projectRoot);
+      const registry = await loadCurrentRegistry(PACKAGE_ROOT);
       const workflow = registry.skills[params.workflow];
       if (!workflow) throw new Error(`Unknown Pi-native workflow '${params.workflow}'`);
 

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "name": "matt-research",
+  "mode": "single",
+  "lanes": [
+    {
+      "key": "research",
+      "agent": "matt-researcher",
+      "skills": ["research-executor"],
+      "timeoutMs": 300000,
+      "turnBudget": { "maxTurns": 8, "graceTurns": 2 },
+      "taskPrefix": "调查下面的问题。严格使用一手来源；每项关键结论必须由 sources 中至少一个 URL 支撑。无法确认的内容放入 gaps，不要猜测。",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "summary": { "type": "string" },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claim": { "type": "string" },
+                "evidence": { "type": "string" },
+                "sourceUrls": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "minItems": 1
+                }
+              },
+              "required": ["claim", "evidence", "sourceUrls"],
+              "additionalProperties": false
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "url": { "type": "string" },
+                "kind": { "type": "string" }
+              },
+              "required": ["title", "url", "kind"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "gaps": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["question", "summary", "findings", "sources", "gaps"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

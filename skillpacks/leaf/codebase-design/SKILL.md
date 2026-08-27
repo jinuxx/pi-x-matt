@@ -5,7 +5,7 @@ compatibility: Pi Agent with pi-subagents and repository tools.
 metadata:
   pi-scope: leaf
   pi-class: executor
-  pi-agent: worker
+  pi-agent: matt-worker
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/codebase-design/SKILL.md

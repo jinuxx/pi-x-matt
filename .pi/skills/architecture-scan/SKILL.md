@@ -11,7 +11,7 @@ metadata:
 
 # Architecture Scan
 
-仅供 `improve-codebase-architecture` 父会话在 scope、fixed HEAD、初始 status、hot-spot evidence、领域文档与 ADR 已固定后调用。不要直接把本 skill 当作用户流程；它没有 candidate selection 或 grilling。
+仅供 `matt-improve-codebase-architecture` 父会话在 scope、fixed HEAD、初始 status、hot-spot evidence、领域文档与 ADR 已固定后调用。不要直接把本 skill 当作用户流程；它没有 candidate selection 或 grilling。
 
 调用 `pi_matt_dispatch` 的 `architecture-scan` workflow。唯一 worker 只能读取 repository，并在 OS temp 写一个 HTML；repository diff/staged/untracked 必须与调度前完全一致。父会话只消费 `scan` lane 的 `structuredOutput`；缺失 lane、无效 schema、status 非 `REPORTED`、reportPath/scopeEvidence/commands 为空或报告位于 repository 内时 fail closed。
 

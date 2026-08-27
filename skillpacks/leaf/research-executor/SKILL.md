@@ -5,7 +5,7 @@ compatibility: Pi Agent with pi-subagents and web_search/web_fetch tools.
 metadata:
   pi-scope: leaf
   pi-class: executor
-  pi-agent: researcher
+  pi-agent: matt-researcher
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/research/SKILL.md

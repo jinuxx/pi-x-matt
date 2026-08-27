@@ -1,7 +1,7 @@
 {
   "packages": [
     {
-      "source": "npm:pi-subagents",
+      "source": "npm:pi-subagents@0.57.0",
       "autoload": false,
       "extensions": ["+index.ts"],
       "skills": [],
@@ -11,12 +11,6 @@
   ],
   "subagents": {
     "disableBuiltins": true,
-    "projectRootResolution": "nearest",
-    "agentOverrides": {
-      "reviewer": {
-        "model": "deepseek/deepseek-v4-pro",
-        "thinking": "high"
-      }
-    }
+    "projectRootResolution": "nearest"
   }
 }

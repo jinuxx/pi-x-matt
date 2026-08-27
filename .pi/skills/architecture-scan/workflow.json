@@ -5,7 +5,7 @@
   "lanes": [
     {
       "key": "scan",
-      "agent": "worker",
+      "agent": "matt-worker",
       "skills": ["architecture-scan-executor"],
       "timeoutMs": 600000,
       "turnBudget": { "maxTurns": 24, "graceTurns": 4 },

@@ -5,7 +5,7 @@
   "lanes": [
     {
       "key": "minimal",
-      "agent": "reader",
+      "agent": "matt-reader",
       "skills": ["architecture-interface-design"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 10, "graceTurns": 2 },
@@ -49,7 +49,7 @@
     },
     {
       "key": "flexible",
-      "agent": "reader",
+      "agent": "matt-reader",
       "skills": ["architecture-interface-design"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 10, "graceTurns": 2 },
@@ -93,7 +93,7 @@
     },
     {
       "key": "common-caller",
-      "agent": "reader",
+      "agent": "matt-reader",
       "skills": ["architecture-interface-design"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 10, "graceTurns": 2 },

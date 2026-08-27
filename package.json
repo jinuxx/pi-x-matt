@@ -1,11 +1,69 @@
 {
   "name": "pi-x-matt",
+  "version": "0.1.0",
   "private": true,
+  "description": "Pi-native Matt Pocock engineering workflows with guarded subagents",
   "type": "module",
+  "license": "MIT",
+  "keywords": ["pi-package", "pi", "pi-subagents", "agent-skills"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinuxx/pi-x-matt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jinuxx/pi-x-matt/issues"
+  },
+  "homepage": "https://github.com/jinuxx/pi-x-matt#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    ".pi/agents",
+    ".pi/extensions",
+    ".pi/skills",
+    "child-tools",
+    "config",
+    "lib",
+    "scripts",
+    "skillpacks",
+    "vendor",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE.md",
+    "package.json"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": ["./.pi/extensions/pi-matt-dispatch/index.ts"],
+    "skills": [
+      "./.pi/skills/matt-code-review",
+      "./.pi/skills/matt-diagnosing-bugs",
+      "./.pi/skills/matt-domain-modeling",
+      "./.pi/skills/matt-grill-with-docs",
+      "./.pi/skills/matt-grilling",
+      "./.pi/skills/matt-implement",
+      "./.pi/skills/matt-improve-codebase-architecture",
+      "./.pi/skills/matt-prototype",
+      "./.pi/skills/matt-research",
+      "./.pi/skills/matt-setup",
+      "./.pi/skills/matt-tdd",
+      "./.pi/skills/matt-to-spec",
+      "./.pi/skills/matt-to-tickets",
+      "./.pi/skills/matt-wayfinder"
+    ],
+    "subagents": {
+      "agents": ["./.pi/agents"]
+    }
+  },
   "scripts": {
     "registry": "node scripts/generate-registry.mjs",
     "drift": "node scripts/check-upstream-drift.mjs",
     "test": "node --test test/*.test.mjs",
-    "check": "npm run test && npm run registry -- --check && npm run drift"
+    "check": "npm run test && npm run registry -- --check && npm run drift",
+    "pack:check": "npm pack --dry-run"
   }
 }

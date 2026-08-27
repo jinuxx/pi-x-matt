@@ -5,7 +5,7 @@ compatibility: Pi Agent with repository read tools.
 metadata:
   pi-scope: leaf
   pi-class: executor
-  pi-agent: reader
+  pi-agent: matt-reader
   pi-dispatch: none
   pi-depends-on: architecture-vocabulary-reader
   pi-upstream-path: skills/engineering/codebase-design/DEEPENING.md

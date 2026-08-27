@@ -1,4 +1,5 @@
 .DS_Store
 .pi/subagents/
 .pi/npm/
+.pi/git/
 node_modules/

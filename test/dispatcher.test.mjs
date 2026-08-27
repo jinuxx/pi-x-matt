@@ -54,16 +54,35 @@ function completeWorkerOutput() {
   };
 }
 
+test("dispatcher verifies package resources separately from the target project", async () => {
+  const packageRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-package-"));
+  const targetRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-target-"));
+  try {
+    for (const source of [".pi/agents", ".pi/skills", "skillpacks", "vendor", "config"]) {
+      await cp(join(ROOT, source), join(packageRoot, source), { recursive: true });
+    }
+    const registry = await loadCurrentRegistry(packageRoot);
+    const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "调查一个明确问题", targetRoot);
+
+    assert.equal(plan.rpcParams.cwd, targetRoot);
+    assert.deepEqual(plan.lanes.map(({ key, agent }) => ({ key, agent })), [{ key: "research", agent: "matt-researcher" }]);
+    assert.match(plan.rpcParams.workflowScript, /research-executor/);
+  } finally {
+    await rm(packageRoot, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
+  }
+});
+
 test("dispatcher builds one guarded fresh child for research", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills.research;
+  const workflow = registry.skills["matt-research"];
   const plan = buildDispatchRequest(registry, workflow, "调查一个明确问题", ROOT);
   const items = parseWorkflowItems(plan.rpcParams.workflowScript);
 
   assert.equal(plan.lanes.length, 1);
   assert.equal(items.length, 1);
   assert.equal(items[0].key, "research");
-  assert.equal(items[0].agent, "researcher");
+  assert.equal(items[0].agent, "matt-researcher");
   assert.equal(items[0].context, "fresh");
   assert.deepEqual(items[0].skill, ["research-executor"]);
   assert.equal(items[0].output, false);
@@ -78,7 +97,7 @@ test("dispatcher builds one guarded fresh child for research", async () => {
 
 test("dispatcher builds one guarded prototype writer with private branch skills", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills.prototype;
+  const workflow = registry.skills["matt-prototype"];
   const plan = buildDispatchRequest(registry, workflow, "构建一个已确认问题的 logic prototype", ROOT);
   const items = parseWorkflowItems(plan.rpcParams.workflowScript);
 
@@ -88,7 +107,7 @@ test("dispatcher builds one guarded prototype writer with private branch skills"
     items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })),
     [{
       key: "prototype",
-      agent: "worker",
+      agent: "matt-worker",
       context: "fresh",
       skill: ["prototype-logic", "prototype-ui", "prototype-executor"],
       output: false,
@@ -110,7 +129,7 @@ test("dispatcher builds a temp-only architecture scan writer", async () => {
 
   assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [{
     key: "scan",
-    agent: "worker",
+    agent: "matt-worker",
     skills: ["codebase-design", "architecture-html-report", "architecture-scan-executor"],
   }]);
   assert.deepEqual(items[0].skill, ["codebase-design", "architecture-html-report", "architecture-scan-executor"]);
@@ -130,12 +149,12 @@ test("dispatcher builds three guarded read-only architecture design lanes", asyn
   const closure = ["architecture-vocabulary-reader", "architecture-deepening-reader", "architecture-interface-design"];
 
   assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [
-    { key: "minimal", agent: "reader", skills: closure },
-    { key: "flexible", agent: "reader", skills: closure },
-    { key: "common-caller", agent: "reader", skills: closure },
+    { key: "minimal", agent: "matt-reader", skills: closure },
+    { key: "flexible", agent: "matt-reader", skills: closure },
+    { key: "common-caller", agent: "matt-reader", skills: closure },
   ]);
   assert.deepEqual(items.map((item) => item.context), ["fresh", "fresh", "fresh"]);
-  assert.ok(items.every((item) => item.agent === "reader" && item.output === false));
+  assert.ok(items.every((item) => item.agent === "matt-reader" && item.output === false));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.strategy.enum[0]), ["minimal", "flexible", "common-caller"]);
   assert.match(plan.rpcParams.workflowScript, /minimal\.status/);
   assert.match(plan.rpcParams.workflowScript, /flexible\.status/);
@@ -144,15 +163,15 @@ test("dispatcher builds three guarded read-only architecture design lanes", asyn
 
 test("dispatcher builds two independent guarded review lanes", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["code-review"];
+  const workflow = registry.skills["matt-code-review"];
   const plan = buildDispatchRequest(registry, workflow, "评审固定范围", ROOT);
   const items = parseWorkflowItems(plan.rpcParams.workflowScript);
 
   assert.deepEqual(items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
-    { key: "standards", agent: "reviewer", context: "fresh", skill: ["review-standards"], output: false },
-    { key: "spec", agent: "reviewer", context: "fresh", skill: ["review-spec"], output: false },
+    { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
+    { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
   ]);
-  assert.ok(items.every((item) => item.timeoutMs === 300000));
+  assert.ok(items.every((item) => item.timeoutMs === 600000));
   assert.ok(items.every((item) => item.turnBudget.maxTurns === 12 && item.turnBudget.graceTurns === 2));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
   assert.deepEqual(plan.lanes.map((lane) => lane.gate), [
@@ -175,21 +194,21 @@ test("dispatcher builds two independent guarded review lanes", async () => {
 
 test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills.tdd, "已确认 seams 的实现任务", ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "已确认 seams 的实现任务", ROOT);
   const stages = parsePipelineStages(plan.rpcParams.workflowScript);
 
   assert.deepEqual(plan.lanes.map(({ key, stage, agent, skills }) => ({ key, stage, agent, skills })), [
-    { key: "implement", stage: 1, agent: "worker", skills: ["codebase-design", "tdd-executor"] },
-    { key: "standards", stage: 2, agent: "reviewer", skills: ["review-standards"] },
-    { key: "spec", stage: 2, agent: "reviewer", skills: ["review-spec"] },
+    { key: "implement", stage: 1, agent: "matt-worker", skills: ["codebase-design", "tdd-executor"] },
+    { key: "standards", stage: 2, agent: "matt-reviewer", skills: ["review-standards"] },
+    { key: "spec", stage: 2, agent: "matt-reviewer", skills: ["review-spec"] },
   ]);
   assert.equal(stages.length, 2);
   assert.deepEqual(stages[0].map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
-    { key: "implement", agent: "worker", context: "fresh", skill: ["codebase-design", "tdd-executor"], output: false },
+    { key: "implement", agent: "matt-worker", context: "fresh", skill: ["codebase-design", "tdd-executor"], output: false },
   ]);
   assert.deepEqual(stages[1].map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
-    { key: "standards", agent: "reviewer", context: "fresh", skill: ["review-standards"], output: false },
-    { key: "spec", agent: "reviewer", context: "fresh", skill: ["review-spec"], output: false },
+    { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
+    { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
   ]);
   assert.match(plan.rpcParams.workflowScript, /Workflow gate 'implement\.status' did not equal 'COMPLETE'/);
   assert.match(plan.rpcParams.workflowScript, /Workflow gate 'standards\.verdict' did not equal 'PASS'/);
@@ -272,7 +291,7 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
 
 test("dispatcher workflow guard rejects missing structured output", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills.research, "research", ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
 
@@ -291,21 +310,21 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
 
 test("dispatcher fails closed on malformed lanes and cross-agent grants", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const duplicate = structuredClone(registry.skills["code-review"]);
+  const duplicate = structuredClone(registry.skills["matt-code-review"]);
   duplicate.workflow.lanes[1].key = duplicate.workflow.lanes[0].key;
   assert.throws(() => buildDispatchRequest(registry, duplicate, "review", ROOT), /duplicate lane/);
 
   const crossAgentRegistry = structuredClone(registry);
-  crossAgentRegistry.skills["review-spec"].agent = "worker";
+  crossAgentRegistry.skills["review-spec"].agent = "matt-worker";
   assert.throws(
-    () => buildDispatchRequest(crossAgentRegistry, crossAgentRegistry.skills["code-review"], "review", ROOT),
-    /cannot grant 'review-spec' to agent 'reviewer'/,
+    () => buildDispatchRequest(crossAgentRegistry, crossAgentRegistry.skills["matt-code-review"], "review", ROOT),
+    /cannot grant 'review-spec' to agent 'matt-reviewer'/,
   );
 });
 
 test("dispatcher rejects interaction parents", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const interaction = registry.skills["grill-with-docs"];
+  const interaction = registry.skills["matt-grill-with-docs"];
   assert.throws(
     () => buildDispatchRequest(registry, interaction, "不要委派 HITL 访谈", ROOT),
     /not a parent orchestration workflow/,
@@ -314,7 +333,7 @@ test("dispatcher rejects interaction parents", async () => {
 
 test("dispatcher validates runtime gate shape for every workflow mode", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const invalid = structuredClone(registry.skills["code-review"]);
+  const invalid = structuredClone(registry.skills["matt-code-review"]);
   invalid.workflow.lanes[0].gate.equals = "NOT_DECLARED";
   assert.throws(
     () => buildDispatchRequest(registry, invalid, "review", ROOT),
@@ -347,17 +366,17 @@ test("dispatcher rejects malformed interaction and unsupported parent routing", 
   await withTempDispatcherProject(async (temp) => {
     const registryPath = join(temp, "config", "skill-registry.json");
     const registry = JSON.parse(await readFile(registryPath, "utf8"));
-    registry.skills.grilling.dispatch = "parallel";
+    registry.skills["matt-grilling"].dispatch = "parallel";
     await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
-    await assert.rejects(() => loadCurrentRegistry(temp), /invalid interaction routing for 'grilling'/);
+    await assert.rejects(() => loadCurrentRegistry(temp), /invalid interaction routing for 'matt-grilling'/);
   });
 
   await withTempDispatcherProject(async (temp) => {
     const registryPath = join(temp, "config", "skill-registry.json");
     const registry = JSON.parse(await readFile(registryPath, "utf8"));
-    registry.skills.grilling.class = "unsupported";
+    registry.skills["matt-grilling"].class = "unsupported";
     await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
-    await assert.rejects(() => loadCurrentRegistry(temp), /unsupported parent class for 'grilling'/);
+    await assert.rejects(() => loadCurrentRegistry(temp), /unsupported parent class for 'matt-grilling'/);
   });
 });
 
@@ -365,7 +384,7 @@ test("dispatcher rejects a tampered generated registry", async () => {
   await withTempDispatcherProject(async (temp) => {
     const registryPath = join(temp, "config", "skill-registry.json");
     const registry = JSON.parse(await readFile(registryPath, "utf8"));
-    registry.skills.research.workflow.lanes[0].timeoutMs = 1;
+    registry.skills["matt-research"].workflow.lanes[0].timeoutMs = 1;
     await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
 
     await assert.rejects(() => loadCurrentRegistry(temp), /not the current generated registry/);

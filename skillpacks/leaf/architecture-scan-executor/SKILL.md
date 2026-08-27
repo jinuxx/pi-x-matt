@@ -5,7 +5,7 @@ compatibility: Pi Agent with repository read tools and OS temp write access.
 metadata:
   pi-scope: leaf
   pi-class: executor
-  pi-agent: worker
+  pi-agent: matt-worker
   pi-dispatch: none
   pi-depends-on: codebase-design, architecture-html-report
   pi-upstream-path: skills/engineering/improve-codebase-architecture/SKILL.md
