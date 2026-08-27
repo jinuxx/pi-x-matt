@@ -18,9 +18,10 @@ metadata:
 ## 前置条件
 
 1. 读取当前会话、相关代码、项目说明、`CONTEXT-MAP.md`/`CONTEXT.md`、相关 ADR，以及用户明确提供或项目内已持久化的 research note。research completion result 只在原会话中可用；跨 session 时没有可核验 note 就不得把记忆或摘要冒充研究证据。
-2. 使用项目领域词汇，尊重已接受的 ADR。若用户陈述与代码或文档冲突，停止并报告冲突，不静默选择一方。
-3. 检查 `docs/agents/issue-tracker.md` 和 `docs/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `setup-matt-pocock-skills`，不要自行猜测 GitHub、GitLab 或 local-markdown。
-4. `to-spec` 不负责搜索重复 issue、创建 tracker 配置、拆 tickets、实现代码或启动 subagent。
+2. 用户提供 Wayfinder map 时，只接受可核验的准确 reference。要求 `Type: wayfinder-map`、`Status: cleared`、`Not yet specified` 无范围内 fog、没有 open/claimed child；先读取 map 的 `Decisions so far` 标题链接，再按需读取每个 linked resolved ticket 的唯一 Answer。broken link、重复答案、out-of-scope 被列为决定或 active map 都必须停止，不能用会话记忆补洞。
+3. 使用项目领域词汇，尊重已接受的 ADR。若用户陈述与代码或文档冲突，停止并报告冲突，不静默选择一方。
+4. 检查 `docs/agents/issue-tracker.md` 和 `docs/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `setup-matt-pocock-skills`，不要自行猜测 GitHub、GitLab 或 local-markdown。
+5. `to-spec` 不负责搜索重复 issue、创建 tracker 配置、拆 tickets、实现代码或启动 subagent。
 
 ## Seam gate
 
@@ -36,7 +37,7 @@ metadata:
 ## 综合规则
 
 1. 从当前会话提取已确认的目标、用户故事、实现决定、测试决定、非目标和进一步注意事项。
-2. 区分来源：用户决定、代码库事实、ADR 约束、研究证据和 agent 建议。只有前四类可以进入 spec；未被确认的建议放入待决事项并停止，不把它伪装成决定。
+2. 区分来源：用户决定、Wayfinder resolved ticket、代码库事实、ADR 约束、研究证据和 agent 建议。前五类中只有已确认且可追溯的内容可以进入 spec；未被确认的建议放入待决事项并停止，不把它伪装成决定。
 3. 不把 glossary 变成 spec：`CONTEXT.md` 提供术语，spec 保存本次工作的行为和决定。
 4. 对已确认范围内的用户可观察行为，尽可能穷举为 numbered user stories；不要为了“完整”发明用户未确认的需求。架构或重构工作可以减少 user stories，但必须把重点和理由放入 implementation/testing decisions。
 5. 规格应覆盖已确认的公开行为和拒绝的范围；不要加入当前讨论没有依据的兼容性、性能、错误处理或未来扩展承诺。

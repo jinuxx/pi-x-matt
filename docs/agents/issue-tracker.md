@@ -56,6 +56,66 @@ Blocked by: <ticket 路径/编号，或 None>
 - `implement` 完成 TDD、完整验证和双轴 review 后，由父会话把当前 Local Markdown ticket 改为 `Status: resolved`，追加完成说明，并把该 ticket 文件包含在同一个最终提交中。提交失败时撤销本次状态/comment 写入，保持 ticket 未完成。
 - 每次写入后重新读取目标文件，核对 Type、Parent、Status、Blocked by、正文和验收标准；核验失败时停止后续批量写入。
 
+## Wayfinding operations
+
+Wayfinder artifacts 与后续 implementation tickets 分目录保存，避免 decision ticket 编号和 `to-tickets` 的 `issues/` 冲突：
+
+- Map：`.scratch/<effort>/map.md`
+- Child decision ticket：`.scratch/<effort>/decisions/<NN>-<slug>.md`
+- `<NN>` 从 `01` 开始；frontier 稳定顺序按编号升序
+
+Map 至少使用：
+
+```markdown
+# <Map title>
+
+Type: wayfinder-map
+Status: active
+
+## Destination
+
+<整张 map 的 destination>
+
+## Notes
+
+<长期约束；不得包含 agent 自行授予的 execution override>
+
+## Decisions so far
+
+## Not yet specified
+
+## Out of scope
+```
+
+清空 gate 全部满足后才把 map 改为 `Status: cleared`。Child decision ticket 至少使用：
+
+```markdown
+# <NN>: <Decision title>
+
+Type: <research|prototype|grilling|task>
+Parent: <仓库相对 map 路径>
+Status: open
+Claimed by: None
+Blocked by: <仓库相对 decision ticket 路径，或 None>
+
+## Question
+
+<本 ticket 需要解决的一个问题>
+
+## Answer
+```
+
+- **Blocking**：逐个读取 `Blocked by` 引用；只有所有引用 ticket 都是同一 map 的 child 且 `Status: resolved` 才算 unblocked。路径缺失、跨 map、`out-of-scope` 或其他状态均保持 blocked。
+- **Frontier**：扫描该 map 的 `decisions/`，选择 `Status: open`、全部 blockers resolved、`Claimed by: None` 的 tickets，按 `<NN>` 升序排列。
+- **Claim**：稳定 identity 固定写为 `pi:<PI_SESSION_ID>`，其中 `PI_SESSION_ID` 来自当前 Pi 进程环境且必须非空；例如 `pi:01abc...`。不得改用模型名、时间戳、工作区路径或 agent 自拟字符串；环境变量缺失时 fail closed。写入前重新读取；将 `Status: claimed` 和该 `Claimed by` 一起保存，再重新读取核验。状态、claim 或 blockers 在写入期间变化时停止，不覆盖并发 session。
+- **Release**：session 无法 resolve 时，先重读并确认 claim 仍为自己的 `pi:<PI_SESSION_ID>`，再同时恢复 `Status: open` 与 `Claimed by: None` 并重读核验；不得释放其他 session 的 claim。
+- **Resolve**：确认 claim 仍属于当前 session；把完整答案追加到 `## Answer`，设 `Status: resolved`，再只把标题链接与一行 gist 追加到 map 的 `Decisions so far`。完整答案不复制到 map。
+- **Out of scope**：设 `Status: out-of-scope`，在 map 的 `Out of scope` 追加标题链接、gist 和原因，不写入 `Decisions so far`。
+- **Fog graduation**：先创建新 decision tickets，再写 blocking；核验成功后从 `Not yet specified` 删除已毕业的同一 patch，禁止两处重复。
+- **结果核验**：每次写入后重读 map、变更 tickets 和引用 blockers，核对 Type、Parent、Status、Claimed by、Blocked by、Answer、title link 与当前 frontier。
+
+Wayfinder decision tickets 不是 implementation tickets，不能进入 `implement`；cleared map 必须先进入 `to-spec`，再由 `to-tickets` 生成 `issues/` 下的 `Type: ticket` 文件。
+
 ## 当前能力边界
 
-`to-spec` 与 `to-tickets` 已支持本契约。`triage` 与 `wayfinder` 尚未移植；本文件不代表它们当前可调用，也不应触发相应自动化。
+`to-spec`、`to-tickets` 与 `wayfinder` 已支持本契约。`triage` 尚未移植；本文件不代表 triage 当前可调用，也不应触发相应自动化。

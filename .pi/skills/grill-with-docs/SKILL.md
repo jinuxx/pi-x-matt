@@ -15,7 +15,7 @@ metadata:
 
 本 skill 必须留在当前父会话中执行。开始前完整读取并同时应用 [grilling](../grilling/SKILL.md) 与 [domain-modeling](../domain-modeling/SKILL.md)；缺少任一依赖时停止，不退化为普通问题列表。
 
-适用于可在一个 session 内澄清的代码库变更。明显超过一个 session 的大型工作应转入 wayfinding；`wayfinding` 当前尚未移植，现阶段只应记录为后续规划边界，而不要假定可以直接调用。
+适用于可在一个 session 内澄清的代码库变更。目标可以命名、但路线仍有 fog 且明显超过一个 session 的大型工作，应转入已移植的手动 `wayfinder`；决定已经完成的多 session 工作直接进入 `to-spec`，不要为了规模而强行创建 map。
 
 ## 初始化
 

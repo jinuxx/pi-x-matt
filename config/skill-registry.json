@@ -271,7 +271,7 @@
         "domain-modeling"
       ],
       "sourcePath": ".pi/skills/grill-with-docs/SKILL.md",
-      "sourceDigest": "ae105e77b0f9079c68db8a9f53520555f923707e6697e84fad6598de398872c0",
+      "sourceDigest": "90b0797cea5e619823cddca08460c144053b938b8ec6bef75fce87b74b45f6f6",
       "upstreamPath": "skills/engineering/grill-with-docs/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
@@ -471,7 +471,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/setup-matt-pocock-skills/SKILL.md",
-      "sourceDigest": "bd594eefc9c7f4f19e2b7770cc6c8a63100dc8141c84575066a1601f135f71d8",
+      "sourceDigest": "a6f39de474e2af3628cb051f552629a64e4580a9fb583f53e11aa9797b7584bf",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
@@ -867,7 +867,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-spec/SKILL.md",
-      "sourceDigest": "9fa7a9663338e5dad0ff6ee3370231fe66e8fdb4f365e0b47882ba6c6b9e46e5",
+      "sourceDigest": "1f549b0ce50e069dc6ba8abd69a7205f5bdcf41d8f98d9806e600454400bb77f",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
@@ -885,6 +885,24 @@
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
+    },
+    "wayfinder": {
+      "name": "wayfinder",
+      "description": "把单个会话容纳不下且路线仍模糊的大型工作，规划为 tracker 上的共享决策地图，并每个会话最多解决一个 frontier ticket，直到可以交给 to-spec。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [
+        "grilling",
+        "domain-modeling",
+        "to-spec"
+      ],
+      "sourcePath": ".pi/skills/wayfinder/SKILL.md",
+      "sourceDigest": "276bb7f8a13ebe8d0305540b41f8f0e594eec5ad963d1ca18bee0cbd53688d72",
+      "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"
     }
   }
 }

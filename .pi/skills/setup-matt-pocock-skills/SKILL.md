@@ -22,7 +22,7 @@ metadata:
 1. `git remote -v` 与 `.git/config`，识别 GitHub、GitLab 或无 remote；不要仅凭目录名推断。
 2. 根目录 `AGENTS.md`；Pi-only 移植不读取或创建 `CLAUDE.md`。
 3. `docs/agents/`、`.scratch/`、`CONTEXT.md`、`CONTEXT-MAP.md`、`docs/adr/` 与 context-scoped ADR 目录。
-4. registry 是否已登记 `triage`。即使尚未移植 triage，`to-spec` 与 `to-tickets` 仍需要 `ready-for-agent` 映射。
+4. registry 是否已登记 `triage` 与 `wayfinder`。即使尚未移植 triage，`to-spec` 与 `to-tickets` 仍需要 `ready-for-agent` 映射；wayfinder 已登记时 tracker 契约还必须包含可执行的 Wayfinding operations。
 5. `pnpm-workspace.yaml`、`package.json#workspaces` 和真实的多包目录，只在证据充分时判断为 multi-context。
 
 先总结已存在、缺失和可能复用的配置。已有 `docs/agents/*.md` 时按更新处理，保留用户自定义内容，不从头覆盖。
@@ -94,9 +94,9 @@ issue tracker 文档以 vendored seed 为行为基准：
 - Local Markdown：`vendor/mattpocock-skills/skills/engineering/setup-matt-pocock-skills/issue-tracker-local.md`
 - Domain：`vendor/mattpocock-skills/skills/engineering/setup-matt-pocock-skills/domain.md`
 
-读取选中的完整 seed 后再生成目标文件，不凭记忆缩写。只保留当前已移植能力需要且可执行的约定；尚未移植的 wayfinder/triage 操作可以标注为保留的未来约定，但不得声称当前可调用。
+读取选中的完整 seed 后再生成目标文件，不凭记忆缩写。只保留当前已移植能力需要且可执行的约定；`triage` 尚未移植，可以标注为未来约定，但不得声称当前可调用。`wayfinder` 已移植，配置不得省略它需要的 map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 和结果核验操作。
 
-Local Markdown 至少定义：spec 路径、每 ticket 文件路径、`Type`、`Parent`、`Status`、`Blocked by`、comments 和发布后读取核验；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成 ticket 使用 `resolved`，并明确由 implement 父会话在最终提交中写回完成状态。GitHub/GitLab 至少定义：CLI、repo 解析、create/read、label、native blocking/sub-issue 优先级、fallback body reference 和发布后查询核验。Other 必须达到同等可执行程度，否则停止。
+Local Markdown 至少定义：spec 路径、每 implementation ticket 文件路径、`Type`、`Parent`、`Status`、`Blocked by`、comments 和发布后读取核验；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成 ticket 使用 `resolved`，并明确由 implement 父会话在最终提交中写回完成状态。Wayfinding artifacts 使用独立的 map 与 decision-ticket 路径，避免和 implementation `issues/` 冲突，并定义 `active`/`cleared` map、`open`/`claimed`/`resolved`/`out-of-scope` decision 生命周期及 claim identity。GitHub/GitLab 至少定义：CLI、repo 解析、create/read、label、native blocking/sub-issue 优先级、fallback body reference、Wayfinding operations 和发布后查询核验。Other 必须达到同等可执行程度，否则停止。
 
 ## 写入与验证
 

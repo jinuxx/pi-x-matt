@@ -18,3 +18,4 @@
 
 - `spec-ready`：parent spec 已确认，只能进入 `to-tickets`，不能直接进入 `implement`。
 - `resolved`：单个 implementation ticket 已通过 TDD、验证和双轴 review，并与实现一起提交；其他 ticket 可以据此解除 `Blocked by`。
+- Wayfinder map 使用 `active` / `cleared`；decision ticket 使用 `open` / `claimed` / `resolved` / `out-of-scope`。这些状态只属于 decision map，不授权 `implement`；只有 `Type: ticket` 且 `Status: ready-for-agent` 才是实现入口。

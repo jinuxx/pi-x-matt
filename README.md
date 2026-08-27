@@ -2,13 +2,13 @@
 
 `pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
 
-当前已实现 tracker 配置、交互式需求到实现链与 hard-bug 诊断入口，以及 8 个交互式 parent：`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`；另有 3 个执行型 parent：`research`、双轴 `code-review` 与分阶段 `tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 才使用 pi-subagents lanes。
+当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding 与 hard-bug 诊断入口，以及 9 个交互式 parent：`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`；另有 3 个执行型 parent：`research`、双轴 `code-review` 与分阶段 `tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 才使用 pi-subagents lanes。
 
 ## 架构
 
 系统分为三个边界：
 
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`research`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
+1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`research`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
@@ -24,7 +24,7 @@
   → 父会话核验并综合结果
 ```
 
-`research` 使用单 lane；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement` 和 `diagnosing-bugs` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，也不能作为 lane 直接传给 `pi_matt_dispatch`；它们可以在父会话中调用执行型 parent workflow。`setup-matt-pocock-skills` 负责项目级 tracker 与文档契约，`grilling`、`domain-modeling` 和 `grill-with-docs` 负责澄清与共享文档，`to-spec` 负责 seam 确认与规格综合，`to-tickets` 负责 tracer-bullet 切分与 blocking edges，`implement` 在父会话中调用 `tdd` 和 `code-review`，负责单 ticket 的 TDD、验证、review 和当前分支提交；model-invoked 的 `diagnosing-bugs` 先在父会话中建立 red-capable loop、最小复现并验证根因，再把一个已确认 slice 顺序交给 `implement`。
+`research` 使用单 lane；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement` 和 `diagnosing-bugs` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，也不能作为 lane 直接传给 `pi_matt_dispatch`；它们可以在父会话中调用执行型 parent workflow。`setup-matt-pocock-skills` 负责项目级 tracker 与文档契约，`grilling`、`domain-modeling` 和 `grill-with-docs` 负责单会话澄清与共享文档，`wayfinder` 负责跨会话 decision map、fog 与 frontier，`to-spec` 负责 seam 确认与规格综合，`to-tickets` 负责 tracer-bullet 切分与 blocking edges，`implement` 在父会话中调用 `tdd` 和 `code-review`，负责单 ticket 的 TDD、验证、review 和当前分支提交；model-invoked 的 `diagnosing-bugs` 先在父会话中建立 red-capable loop、最小复现并验证根因，再把一个已确认 slice 顺序交给 `implement`。
 
 ## pi-subagents 最小加载
 
@@ -103,9 +103,11 @@ npm run check          # 测试 + registry freshness + upstream drift
 
 首次使用发布链前运行 `setup-matt-pocock-skills`，由用户确认 tracker、label mapping 和领域文档布局；它只在用户批准 draft 后写入 `docs/agents/*.md` 与可选的项目级 `AGENTS.md`，不会创建远端 issue 或 label。未完成 setup 时，`to-spec` 与 `to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，spec 与 tickets 写入 `.scratch/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成后由 `implement` 在最终提交中写为 `resolved`。
 
-需求尚未明确时，使用 `grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。frontier 为空并确认 shared understanding 后，需要跨 session 的工作进入 `to-spec`；单个 session 可完成的小变更直接进入 `implement`。
+需求尚未明确时，使用 `grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。单个 session 能澄清的工作在 shared understanding 后进入 `to-spec` 或一个 `implement` slice；目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `wayfinder`。
 
-需求已经在当前会话中确认且需要跨多个 session 保存时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话、代码库、`CONTEXT.md`、ADR 和明确提供的 research note 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
+`wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。Local Markdown 的 map 位于 `.scratch/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `to-spec`；不得从 decision map 直接进入实现。
+
+需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`CONTEXT.md`、ADR 和明确提供的 research note 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
 
 具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `implement`；没有正确 seam 时停止并报告架构缺口，不写浅层测试或直接修生产代码。
 
