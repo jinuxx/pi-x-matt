@@ -301,7 +301,7 @@
         "domain-modeling"
       ],
       "sourcePath": ".pi/skills/implement/SKILL.md",
-      "sourceDigest": "79cc8679b1c88caa59b24f2f7d9676c514d40fc4a4cc789d93be5d70d938e02d",
+      "sourceDigest": "b26873428bbd2ab983de9dbf05edcfee70d3f51da4dde4a3af94e2778904d18d",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -881,7 +881,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/to-tickets/SKILL.md",
-      "sourceDigest": "6b4a95f115d72b30b5b4804c3c4d69844aab1704feca7e4721091e9ebcd77dc3",
+      "sourceDigest": "9e1d8ac610a2f15c633a1ab40b130f1580ffbd5548eac938a8077f2914068d26",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"

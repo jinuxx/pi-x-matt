@@ -32,7 +32,7 @@ Status: spec-ready
 Type: ticket
 Parent: <相对 spec 路径，或 None>
 Status: ready-for-agent
-Blocked by: <ticket 路径/编号，或 None>
+Blocked by: <仓库相对 ticket 路径，或 None>
 
 ## What to build
 
@@ -45,7 +45,9 @@ Blocked by: <ticket 路径/编号，或 None>
 ## Comments
 ```
 
-`Blocked by` 是当前 tracker 的可核验 blocking relationship。无 blocker 时写 `None`；有 blocker 时逐个读取引用文件，只有每个 blocker 都是 `Type: ticket` 且 `Status: resolved` 时，当前 ticket 才可开始。路径缺失、状态缺失或其他状态都按未完成处理。
+`Parent` metadata 必须存在且非空。没有 parent spec 的当前会话单 slice 可以写 `None`；否则只接受 ticket 中声明的仓库相对 spec 路径，并逐个读取核对 `Type: spec` 与 `Status: spec-ready`，不得凭编号、标题或 feature 名猜测。`scripts/check-local-ticket.mjs` 只负责 Parent 字段的存在性 preflight，不解析或读取 parent；`implement` 父会话仍必须按本段验证真实 relationship。
+
+`Blocked by` 是当前 tracker 的可核验 blocking relationship。无 blocker 时写 `None`；有 blocker 时只接受逗号分隔的仓库相对 ticket 路径，不接受裸编号、标题或绝对路径。逐个读取引用文件，只有每个 blocker 都是 `Type: ticket` 且 `Status: resolved` 时，当前 ticket 才可开始；路径缺失、状态缺失或其他状态都按未完成处理。
 
 ## 发布与读取
 

@@ -177,6 +177,10 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(tracker, /Parent:/);
   assert.match(tracker, /Status: ready-for-agent/);
   assert.match(tracker, /Blocked by:/);
+  assert.match(tracker, /不接受裸编号、标题或绝对路径/);
+  assert.match(tracker, /Parent.*存在性 preflight/);
+  assert.match(tracker, /当前会话单 slice.*`None`/);
+  assert.match(tracker, /Type: spec.*Status: spec-ready/);
   assert.match(tracker, /Status: resolved/);
   assert.match(tracker, /## Comments/);
   assert.match(tracker, /同一个最终提交/);
@@ -314,7 +318,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /Type: ticket/);
   assert.match(toTickets, /^Parent:/m);
   assert.match(toTickets, /## Comments/);
-  assert.match(toTickets, /Blocked by: <ticket 路径\/编号/);
+  assert.match(toTickets, /Blocked by: <Local Markdown 使用仓库相对 ticket 路径/);
   assert.match(toTickets, /## Parent/);
   assert.match(toTickets, /## Acceptance criteria/);
   assert.match(toTickets, /`implement` 已移植/);
@@ -333,6 +337,9 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /同一提交/);
   assert.match(implement, /blocker.*Type: ticket.*Status: resolved/);
   assert.match(implement, /spec-ready.*必须先进入 `to-tickets`/);
+  assert.match(implement, /Parent: None.*当前会话单 slice/);
+  assert.match(implement, /Parent.*Type: spec.*Status: spec-ready/);
+  assert.match(implement, /只做 Parent 字段存在性 preflight/);
 
   const diagnosing = await readFile(join(ROOT, ".pi", "skills", "diagnosing-bugs", "SKILL.md"), "utf8");
   assert.doesNotMatch(diagnosing, /disable-model-invocation:\s*true/);

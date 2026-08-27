@@ -72,7 +72,7 @@ metadata:
 Type: ticket
 Parent: <父 spec 的本地路径/identifier，或 None>
 Status: ready-for-agent
-Blocked by: <ticket 路径/编号，或 None (can start immediately)>
+Blocked by: <Local Markdown 使用仓库相对 ticket 路径，或 None (can start immediately)>
 
 ## What to build
 

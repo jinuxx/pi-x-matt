@@ -105,6 +105,24 @@ test("validates the required metadata for a ready ticket with no blockers", asyn
   });
 });
 
+test("treats Parent as a non-empty preflight field without dereferencing it", async () => {
+  await withTempRepo(async (repo) => {
+    const ticketPath = ".scratch/example/issues/01-parent-reference.md";
+    const missingParentPath = ".scratch/example/missing-spec.md";
+    await writeFixture(
+      repo,
+      ticketPath,
+      `# 01: Parent preflight\n\nType: ticket\nParent: ${missingParentPath}\nStatus: ready-for-agent\nBlocked by: None\n`,
+    );
+
+    const result = runChecker(repo, ticketPath);
+
+    assert.equal(result.status, 0);
+    assertEnvelope(result, ticketPath, true);
+    assert.deepEqual(result.json.errors, []);
+  });
+});
+
 test("accepts a ready ticket whose blocker ticket is resolved", async () => {
   await withTempRepo(async (repo) => {
     const blockerPath = ".scratch/example/issues/01-resolved.md";
