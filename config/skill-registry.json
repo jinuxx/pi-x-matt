@@ -229,6 +229,22 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
+    "diagnosing-bugs": {
+      "name": "diagnosing-bugs",
+      "description": "对难复现 bug、间歇性失败和性能回归执行反馈循环→最小复现→假设→探针的受控诊断，并把已确认根因顺序交给 implement。用于用户明确要求 diagnose/debug，或报告具体 broken/throwing/failing/slow 症状且不能直接定位时。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [
+        "implement"
+      ],
+      "sourcePath": ".pi/skills/diagnosing-bugs/SKILL.md",
+      "sourceDigest": "6edc11854e79008867db5a5145d5f3d1a52bbedc056927ed4583d397e80a4857",
+      "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "77f3cf31bc99b2f49af943222526531fcc9fc41d047626d3640e875e85af3e84"
+    },
     "domain-modeling": {
       "name": "domain-modeling",
       "description": "在设计讨论中澄清项目术语、维护 CONTEXT.md，并只为难逆转且存在真实权衡的决定记录 ADR。",

@@ -43,6 +43,7 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.deepEqual(Object.keys(registry.skills), [
     "code-review",
     "codebase-design",
+    "diagnosing-bugs",
     "domain-modeling",
     "grill-with-docs",
     "grilling",
@@ -120,6 +121,11 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.equal(registry.skills.implement.dispatch, "none");
   assert.equal(registry.skills.implement.agent, null);
   assert.deepEqual(registry.skills.implement.dependsOn, ["domain-modeling"]);
+  assert.equal(registry.skills["diagnosing-bugs"].scope, "parent");
+  assert.equal(registry.skills["diagnosing-bugs"].class, "interaction");
+  assert.equal(registry.skills["diagnosing-bugs"].dispatch, "none");
+  assert.equal(registry.skills["diagnosing-bugs"].agent, null);
+  assert.deepEqual(registry.skills["diagnosing-bugs"].dependsOn, ["implement"]);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -300,6 +306,22 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /blocker.*Type: ticket.*Status: resolved/);
   assert.match(implement, /spec-ready.*必须先进入 `to-tickets`/);
 
+  const diagnosing = await readFile(join(ROOT, ".pi", "skills", "diagnosing-bugs", "SKILL.md"), "utf8");
+  assert.doesNotMatch(diagnosing, /disable-model-invocation:\s*true/);
+  assert.match(diagnosing, /pi-class:\s*interaction/);
+  assert.match(diagnosing, /pi-dispatch:\s*none/);
+  assert.match(diagnosing, /pi-depends-on:\s*implement/);
+  assert.match(diagnosing, /Redact gate/);
+  assert.match(diagnosing, /no red-capable command, no hypothesis/i);
+  assert.match(diagnosing, /Phase 3：Hypothesis checkpoint/);
+  assert.match(diagnosing, /ask_user_question/);
+  assert.match(diagnosing, /Root-cause gate/);
+  assert.match(diagnosing, /\[DEBUG-<id>\]/);
+  assert.match(diagnosing, /交给 Implement/);
+  assert.match(diagnosing, /一个且仅一个当前会话 slice/);
+  assert.match(diagnosing, /没有正确 regression seam.*停止/);
+  assert.doesNotMatch(diagnosing, /workflow\.json/);
+
   const tdd = await readFile(join(ROOT, ".pi", "skills", "tdd", "SKILL.md"), "utf8");
   assert.match(tdd, /没有明确 spec\/验收行为时停止/);
 
@@ -308,13 +330,16 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(research, /research note/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /7 个交互式 parent/);
-  assert.match(readme, /交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`）/);
-  assert.match(readme, /`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets` 和 `implement` 是 `dispatch: none`/);
+  assert.match(readme, /8 个交互式 parent/);
+  assert.match(readme, /交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`）/);
+  assert.match(readme, /`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`to-spec`、`to-tickets`、`implement` 和 `diagnosing-bugs` 是 `dispatch: none`/);
   assert.match(readme, /首次使用发布链前运行 `setup-matt-pocock-skills`/);
   assert.match(readme, /spec-ready.*ready-for-agent.*resolved/);
   assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);
   assert.match(readme, /`implement`.*调用 `tdd` 和 `code-review`/);
+  assert.match(readme, /model-invoked 的 `diagnosing-bugs`/);
+  assert.match(readme, /red-capable command/);
+  assert.match(readme, /交给 `implement`/);
 });
 
 test("parent workflows require structured completion results", async () => {
