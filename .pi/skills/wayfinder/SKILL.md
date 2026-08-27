@@ -36,7 +36,7 @@ metadata:
 每个 decision ticket 只能是 `research`、`prototype`、`grilling`、`task`：
 
 - `research`（AFK）：外部一手事实阻塞决定；调用已注册 `research` workflow，只消费 completion result 的 `structuredOutput`。
-- `prototype`（HITL）：必须用具体 artifact 提高讨论 fidelity，并由用户本人选择或评价。若 registry 尚未登记 `prototype`，未 claim 的 ticket 保持 open；已 claim 的 ticket 按 tracker release 协议恢复 open/unclaimed 并核验，然后报告缺失。不得由 agent 自选方案或假装已调用。
+- `prototype`（HITL）：完整读取并应用已登记的 `prototype` parent，用具体 artifact 提高讨论 fidelity；先让用户确认唯一 design question 与 logic/UI branch，再调用其 workflow。用户本人必须查看并选择/评价，agent 不得代答；workflow、artifact、verdict 或 context pointer 缺失时按 tracker release 协议恢复 open/unclaimed。
 - `grilling`（HITL）：默认类型；同时应用 `grilling` 与 `domain-modeling`，用户必须为自己一侧的决定发声。
 - `task`（HITL/AFK）：只做阻塞某个决定的前置工作。若内容已经在交付 destination 或生产实现，说明 ticket 错型并停止。
 
@@ -79,7 +79,7 @@ charting 完成后停止，不进入第一个 HITL ticket。
 5. 按 ticket type 解决：
    - `grilling`：执行 live `grilling` + `domain-modeling`，用户确认答案前不得代答或 resolve；
    - `research`：调用 `research` workflow，只接受结构化来源与 gaps；多个 research 可并行，但分别 claim、核验和记录；
-   - `prototype`：调用已登记的 `prototype`，或让用户提供并评价明确 artifact；resolver 不可用时按 tracker release 协议恢复 open/unclaimed 并核验；
+   - `prototype`：按 `prototype` parent 的 question/workspace/HITL/capture gates 调度唯一 worker；取得本地 prototype branch context pointer 与用户 verdict 后才可形成 Answer，失败时 release；
    - `task`：执行不交付 destination 的最小前置动作；需要用户动作时给精确 checklist，外部写入、购买、生产控制或敏感数据操作仍需明确确认。
 6. 形成 Answer draft，包含决定/事实、理由、被拒绝方案、artifact/source pointers 与剩余未知。HITL ticket 使用 `ask_user_question` 请求用户确认 resolution；AFK ticket 由父会话核验一手证据和未知项。resolver 不可用、用户选择延期、证据无效或本 session 无法完成时，不得遗留自己的 claimed ticket：按 tracker release 协议恢复 open/unclaimed 并核验，然后停止。
 
@@ -110,4 +110,4 @@ resolution 采用单一真相来源：
 
 ## Fail-closed conditions
 
-以下任一情况都保持 map/ticket 未完成：tracker operations 不完整；destination 未确认；无法取得或核验 claim；frontier 计算不唯一；research 无有效 `structuredOutput`；HITL 用户未确认；prototype resolver/asset 不可用；blocking、parent 或 title link 损坏；需要扩大权限；存在未持久化跨会话证据；或 map clear gate 未满足。不得以自然语言总结代替 tracker 状态。
+以下任一情况都保持 map/ticket 未完成：tracker operations 不完整；destination 未确认；无法取得或核验 claim；frontier 计算不唯一；research 无有效 `structuredOutput`；HITL 用户未确认；prototype workflow/artifact/verdict/context pointer 不可用；blocking、parent 或 title link 损坏；需要扩大权限；存在未持久化跨会话证据；或 map clear gate 未满足。不得以自然语言总结代替 tracker 状态。

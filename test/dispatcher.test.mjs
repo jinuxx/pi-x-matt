@@ -76,6 +76,33 @@ test("dispatcher builds one guarded fresh child for research", async () => {
   );
 });
 
+test("dispatcher builds one guarded prototype writer with private branch skills", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills.prototype;
+  const plan = buildDispatchRequest(registry, workflow, "构建一个已确认问题的 logic prototype", ROOT);
+  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+
+  assert.equal(plan.lanes.length, 1);
+  assert.deepEqual(plan.lanes[0].skills, ["prototype-logic", "prototype-ui", "prototype-executor"]);
+  assert.deepEqual(
+    items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })),
+    [{
+      key: "prototype",
+      agent: "worker",
+      context: "fresh",
+      skill: ["prototype-logic", "prototype-ui", "prototype-executor"],
+      output: false,
+    }],
+  );
+  assert.deepEqual(plan.lanes[0].gate, {
+    field: "status",
+    equals: "BUILT",
+    nonEmpty: ["artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan"],
+  });
+  assert.match(plan.rpcParams.workflowScript, /prototype\.status/);
+  assert.match(plan.rpcParams.workflowScript, /completed without valid structuredOutput/);
+});
+
 test("dispatcher builds two independent guarded review lanes", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills["code-review"];

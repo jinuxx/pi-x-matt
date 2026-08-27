@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "name": "prototype",
+  "mode": "single",
+  "lanes": [
+    {
+      "key": "prototype",
+      "agent": "worker",
+      "skills": ["prototype-executor"],
+      "timeoutMs": 600000,
+      "turnBudget": { "maxTurns": 24, "graceTurns": 4 },
+      "taskPrefix": "作为唯一写者，只构建父任务已确认的一个 throwaway prototype。严格选择 logic 或 ui 其中一支；不要创建 branch，不要 stage、commit、push、stash 或改 caller-owned 文件；不写 tests、不接真实 mutation。完成最小 runnable check 后返回结构化证据。",
+      "gate": {
+        "field": "status",
+        "equals": "BUILT",
+        "nonEmpty": ["artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["BUILT", "BLOCKED"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "question": { "type": "string", "minLength": 1 },
+          "branch": { "type": "string", "enum": ["logic", "ui"] },
+          "artifactPaths": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "runInstructions": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "reviewTargets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string", "minLength": 1 },
+                "label": { "type": "string", "minLength": 1 },
+                "howToReview": { "type": "string", "minLength": 1 }
+              },
+              "required": ["key", "label", "howToReview"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "changedFiles": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": { "type": "string", "minLength": 1 },
+                "outcome": { "type": "string", "minLength": 1 }
+              },
+              "required": ["command", "outcome"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "cleanupPlan": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "residualRisks": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["status", "summary", "question", "branch", "artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan", "residualRisks"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

@@ -306,6 +306,229 @@
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
     },
+    "prototype": {
+      "name": "prototype",
+      "description": "为一个无法仅靠讨论解决的设计问题构建 throwaway prototype：逻辑/状态使用单文件 HTML，UI 使用真实页面上下文中的多方案切换。用于探索要构建什么，不用于修 bug 或实现已确定需求。",
+      "scope": "parent",
+      "class": "orchestration",
+      "agent": "worker",
+      "dispatch": "single",
+      "dependsOn": [
+        "prototype-executor"
+      ],
+      "sourcePath": ".pi/skills/prototype/SKILL.md",
+      "sourceDigest": "da5547bc7496c97b26fbc3b11b2b315729fe69a2960e3cebbbebd2e01d4b1054",
+      "workflowPath": ".pi/skills/prototype/workflow.json",
+      "workflowDigest": "d1b9f351a0820299134ee67c7fa8df090b7b69cb0d63e6093727160c6c2ac5d4",
+      "workflow": {
+        "version": 1,
+        "name": "prototype",
+        "mode": "single",
+        "lanes": [
+          {
+            "key": "prototype",
+            "agent": "worker",
+            "skills": [
+              "prototype-executor"
+            ],
+            "timeoutMs": 600000,
+            "turnBudget": {
+              "maxTurns": 24,
+              "graceTurns": 4
+            },
+            "taskPrefix": "作为唯一写者，只构建父任务已确认的一个 throwaway prototype。严格选择 logic 或 ui 其中一支；不要创建 branch，不要 stage、commit、push、stash 或改 caller-owned 文件；不写 tests、不接真实 mutation。完成最小 runnable check 后返回结构化证据。",
+            "gate": {
+              "field": "status",
+              "equals": "BUILT",
+              "nonEmpty": [
+                "artifactPaths",
+                "runInstructions",
+                "reviewTargets",
+                "changedFiles",
+                "commands",
+                "cleanupPlan"
+              ]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "BUILT",
+                    "BLOCKED"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "question": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "branch": {
+                  "type": "string",
+                  "enum": [
+                    "logic",
+                    "ui"
+                  ]
+                },
+                "artifactPaths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "runInstructions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "reviewTargets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "howToReview": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "howToReview"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "changedFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "commands": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "command",
+                      "outcome"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "cleanupPlan": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "residualRisks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "summary",
+                "question",
+                "branch",
+                "artifactPaths",
+                "runInstructions",
+                "reviewTargets",
+                "changedFiles",
+                "commands",
+                "cleanupPlan",
+                "residualRisks"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "upstreamPath": "skills/engineering/prototype/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
+    },
+    "prototype-executor": {
+      "name": "prototype-executor",
+      "description": "在父会话已确认的问题、branch 与文件范围内，作为唯一写者构建一次 throwaway prototype 并返回可评审证据。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [
+        "prototype-logic",
+        "prototype-ui"
+      ],
+      "sourcePath": "skillpacks/leaf/prototype-executor/SKILL.md",
+      "sourceDigest": "536641ea422f222c7f5566f4eae612ea37f237a2a960048369a6ca25fd51aab7",
+      "upstreamPath": "skills/engineering/prototype/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
+    },
+    "prototype-logic": {
+      "name": "prototype-logic",
+      "description": "构建一个可双击运行的单文件逻辑原型，用领域语言展示状态、自由操作和可重复 walkthrough。仅供 prototype worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/prototype-logic/SKILL.md",
+      "sourceDigest": "ea2cc706d2520231a61556f8013a2bbfb6b50853a57ea70c74587fcd12b82cfa",
+      "upstreamPath": "skills/engineering/prototype/LOGIC.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9"
+    },
+    "prototype-ui": {
+      "name": "prototype-ui",
+      "description": "在真实页面上下文中构建 3–5 个结构显著不同、可通过 URL 参数切换的 UI 原型方案。仅供 prototype worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/prototype-ui/SKILL.md",
+      "sourceDigest": "9cd1aed05403807a654f9f987eb8ad499de90e4420b2075c3552dcda0be83028",
+      "upstreamPath": "skills/engineering/prototype/UI.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3"
+    },
     "research": {
       "name": "research",
       "description": "将需要一手外部证据的问题交给受限 researcher 子代理，并在父会话中综合结果。用于调查官方文档、规范、源代码、第一方 API 或近期生态事实。",
@@ -899,7 +1122,7 @@
         "to-spec"
       ],
       "sourcePath": ".pi/skills/wayfinder/SKILL.md",
-      "sourceDigest": "276bb7f8a13ebe8d0305540b41f8f0e594eec5ad963d1ca18bee0cbd53688d72",
+      "sourceDigest": "e1ae7b5086569ffc0d5c0a561b48aa1ed30e10ef860a93b5af15fce0d1a36f65",
       "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"

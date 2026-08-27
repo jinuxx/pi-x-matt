@@ -48,6 +48,10 @@ test("registry captures parent workflows and their private leaves", async () => 
     "grill-with-docs",
     "grilling",
     "implement",
+    "prototype",
+    "prototype-executor",
+    "prototype-logic",
+    "prototype-ui",
     "research",
     "research-executor",
     "review-spec",
@@ -97,6 +101,23 @@ test("registry captures parent workflows and their private leaves", async () => 
   );
   assert.deepEqual(registry.skills["tdd-executor"].dependsOn, ["codebase-design"]);
   assert.equal(registry.skills["codebase-design"].agent, "worker");
+
+  const prototype = registry.skills.prototype;
+  assert.equal(prototype.scope, "parent");
+  assert.equal(prototype.class, "orchestration");
+  assert.equal(prototype.agent, "worker");
+  assert.equal(prototype.dispatch, "single");
+  assert.deepEqual(prototype.dependsOn, ["prototype-executor"]);
+  assert.equal(prototype.workflow.lanes[0].key, "prototype");
+  assert.equal(prototype.workflow.lanes[0].agent, "worker");
+  assert.match(prototype.workflow.lanes[0].taskPrefix, /不要 stage、commit、push/);
+  assert.deepEqual(prototype.workflow.lanes[0].skills, ["prototype-executor"]);
+  assert.deepEqual(registry.skills["prototype-executor"].dependsOn, ["prototype-logic", "prototype-ui"]);
+  for (const name of ["prototype-executor", "prototype-logic", "prototype-ui"]) {
+    assert.equal(registry.skills[name].scope, "leaf");
+    assert.equal(registry.skills[name].class, "executor");
+    assert.equal(registry.skills[name].agent, "worker");
+  }
 
   for (const name of ["setup-matt-pocock-skills", "grilling", "domain-modeling", "grill-with-docs"]) {
     const interaction = registry.skills[name];
@@ -375,10 +396,28 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(wayfinder, /Decisions so far/);
   assert.match(wayfinder, /Not yet specified/);
   assert.match(wayfinder, /普通 prose output 不能作为答案/);
-  assert.match(wayfinder, /prototype.*release 协议.*open\/unclaimed/);
+  assert.match(wayfinder, /完整读取并应用已登记的 `prototype` parent/);
+  assert.match(wayfinder, /prototype.*workflow.*artifact.*verdict.*context pointer/);
   assert.match(wayfinder, /Cleared-map gate/);
   assert.match(wayfinder, /不要直接进入 `to-tickets` 或 `implement`/);
   assert.doesNotMatch(wayfinder, /workflow\.json/);
+
+  const prototype = await readFile(join(ROOT, ".pi", "skills", "prototype", "SKILL.md"), "utf8");
+  assert.doesNotMatch(prototype, /disable-model-invocation:\s*true/);
+  assert.match(prototype, /pi-class:\s*orchestration/);
+  assert.match(prototype, /Question gate/);
+  assert.match(prototype, /Workspace gate/);
+  assert.match(prototype, /workflow`: `prototype`/);
+  assert.match(prototype, /structuredOutput/);
+  assert.match(prototype, /不写 tests/);
+  assert.match(prototype, /Logic 必须是一个自包含 HTML 文件/);
+  assert.match(prototype, /UI.*3.*5 个/i);
+  assert.match(prototype, /HITL verdict/);
+  assert.match(prototype, /prototype\/<slug>/);
+  assert.match(prototype, /不创建 branch、不 commit、不 stage、不 push/);
+  assert.match(prototype, /不 push/);
+  assert.match(prototype, /原 branch 无 prototype 残留/);
+  assert.match(prototype, /生产实现.*implement.*tdd.*code-review/);
 
   const tdd = await readFile(join(ROOT, ".pi", "skills", "tdd", "SKILL.md"), "utf8");
   assert.match(tdd, /没有明确 spec\/验收行为时停止/);
@@ -389,6 +428,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
   assert.match(readme, /9 个交互式 parent/);
+  assert.match(readme, /4 个执行型 parent.*`prototype`/);
   assert.match(readme, /交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`）/);
   assert.match(readme, /`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement` 和 `diagnosing-bugs` 是 `dispatch: none`/);
   assert.match(readme, /首次使用发布链前运行 `setup-matt-pocock-skills`/);
@@ -401,10 +441,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /`wayfinder`.*Destination/);
   assert.match(readme, /decision tickets.*`decisions\/`/);
   assert.match(readme, /cleared.*`to-spec`/);
+  assert.match(readme, /model-invoked `prototype`/);
+  assert.match(readme, /prototype\/<slug>/);
 });
 
 test("parent workflows require structured completion results", async () => {
-  for (const name of ["research", "code-review", "tdd"]) {
+  for (const name of ["research", "prototype", "code-review", "tdd"]) {
     const content = await readFile(join(ROOT, ".pi", "skills", name, "SKILL.md"), "utf8");
     assert.match(content, /structuredOutput/);
     assert.match(content, /fail|失败/);
@@ -415,6 +457,18 @@ test("workflow schemas require structured output and distinct review axes", asyn
   const registry = await buildRegistry(ROOT);
   const researchLane = registry.skills.research.workflow.lanes[0];
   assert.deepEqual(researchLane.outputSchema.required, ["question", "summary", "findings", "sources", "gaps"]);
+
+  const prototypeLane = registry.skills.prototype.workflow.lanes[0];
+  assert.equal(prototypeLane.outputSchema.properties.status.enum.join(","), "BUILT,BLOCKED");
+  assert.deepEqual(prototypeLane.turnBudget, { maxTurns: 24, graceTurns: 4 });
+  assert.deepEqual(prototypeLane.gate, {
+    field: "status",
+    equals: "BUILT",
+    nonEmpty: ["artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan"],
+  });
+  assert.deepEqual(prototypeLane.outputSchema.required, [
+    "status", "summary", "question", "branch", "artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan", "residualRisks",
+  ]);
 
   const [standards, spec] = registry.skills["code-review"].workflow.lanes;
   assert.deepEqual(standards.outputSchema.properties.axis.enum, ["standards"]);
