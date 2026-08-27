@@ -41,6 +41,13 @@ test("checked-in registry is deterministic and current", async () => {
 test("registry captures parent workflows and their private leaves", async () => {
   const registry = await buildRegistry(ROOT);
   assert.deepEqual(Object.keys(registry.skills), [
+    "architecture-deepening-reader",
+    "architecture-design",
+    "architecture-html-report",
+    "architecture-interface-design",
+    "architecture-scan",
+    "architecture-scan-executor",
+    "architecture-vocabulary-reader",
     "code-review",
     "codebase-design",
     "diagnosing-bugs",
@@ -48,6 +55,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     "grill-with-docs",
     "grilling",
     "implement",
+    "improve-codebase-architecture",
     "prototype",
     "prototype-executor",
     "prototype-logic",
@@ -119,6 +127,35 @@ test("registry captures parent workflows and their private leaves", async () => 
     assert.equal(registry.skills[name].agent, "worker");
   }
 
+  const architectureScan = registry.skills["architecture-scan"];
+  assert.equal(architectureScan.class, "orchestration");
+  assert.equal(architectureScan.dispatch, "single");
+  assert.equal(architectureScan.agent, "worker");
+  assert.deepEqual(architectureScan.dependsOn, ["architecture-scan-executor"]);
+  assert.deepEqual(architectureScan.workflow.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [
+    { key: "scan", agent: "worker", skills: ["architecture-scan-executor"] },
+  ]);
+  assert.deepEqual(registry.skills["architecture-scan-executor"].dependsOn, ["codebase-design", "architecture-html-report"]);
+  for (const name of ["architecture-scan-executor", "architecture-html-report"]) {
+    assert.equal(registry.skills[name].agent, "worker");
+  }
+
+  const architectureDesign = registry.skills["architecture-design"];
+  assert.equal(architectureDesign.class, "orchestration");
+  assert.equal(architectureDesign.dispatch, "parallel");
+  assert.equal(architectureDesign.agent, "reader");
+  assert.deepEqual(architectureDesign.workflow.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [
+    { key: "minimal", agent: "reader", skills: ["architecture-interface-design"] },
+    { key: "flexible", agent: "reader", skills: ["architecture-interface-design"] },
+    { key: "common-caller", agent: "reader", skills: ["architecture-interface-design"] },
+  ]);
+  assert.deepEqual(registry.skills["architecture-interface-design"].dependsOn, ["architecture-vocabulary-reader", "architecture-deepening-reader"]);
+  for (const name of ["architecture-interface-design", "architecture-vocabulary-reader", "architecture-deepening-reader"]) {
+    assert.equal(registry.skills[name].scope, "leaf");
+    assert.equal(registry.skills[name].class, "executor");
+    assert.equal(registry.skills[name].agent, "reader");
+  }
+
   for (const name of ["setup-matt-pocock-skills", "grilling", "domain-modeling", "grill-with-docs"]) {
     const interaction = registry.skills[name];
     assert.equal(interaction.scope, "parent");
@@ -153,6 +190,11 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.equal(registry.skills.wayfinder.dispatch, "none");
   assert.equal(registry.skills.wayfinder.agent, null);
   assert.deepEqual(registry.skills.wayfinder.dependsOn, ["grilling", "domain-modeling", "to-spec"]);
+  assert.equal(registry.skills["improve-codebase-architecture"].scope, "parent");
+  assert.equal(registry.skills["improve-codebase-architecture"].class, "interaction");
+  assert.equal(registry.skills["improve-codebase-architecture"].dispatch, "none");
+  assert.equal(registry.skills["improve-codebase-architecture"].agent, null);
+  assert.deepEqual(registry.skills["improve-codebase-architecture"].dependsOn, ["grilling", "domain-modeling"]);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -376,7 +418,28 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(diagnosing, /交给 Implement/);
   assert.match(diagnosing, /一个且仅一个当前会话 slice/);
   assert.match(diagnosing, /没有正确 regression seam.*停止/);
+  assert.match(diagnosing, /已移植的 `improve-codebase-architecture`/);
+  assert.match(diagnosing, /不得在诊断阶段自动开始 refactor/);
   assert.doesNotMatch(diagnosing, /workflow\.json/);
+
+  const improve = await readFile(join(ROOT, ".pi", "skills", "improve-codebase-architecture", "SKILL.md"), "utf8");
+  assert.match(improve, /disable-model-invocation:\s*true/);
+  assert.match(improve, /pi-class:\s*interaction/);
+  assert.match(improve, /pi-dispatch:\s*none/);
+  assert.match(improve, /pi-depends-on:\s*grilling, domain-modeling/);
+  assert.match(improve, /deletion test/);
+  assert.match(improve, /workflow`: `architecture-scan`/);
+  assert.match(improve, /OS temp/);
+  assert.match(improve, /没有 candidate 是合法结果/);
+  assert.match(improve, /只保留报告，暂不探索/);
+  assert.match(improve, /一个且仅一个/);
+  assert.match(improve, /Design it twice/);
+  assert.match(improve, /workflow`: `architecture-design`/);
+  assert.match(improve, /minimal.*flexible.*common-caller/);
+  assert.match(improve, /三个 readers 永远只读/);
+  assert.match(improve, /不修改生产代码/);
+  assert.match(improve, /进入 `to-spec`/);
+  assert.doesNotMatch(improve, /workflow\.json/);
 
   const wayfinder = await readFile(join(ROOT, ".pi", "skills", "wayfinder", "SKILL.md"), "utf8");
   assert.match(wayfinder, /disable-model-invocation:\s*true/);
@@ -427,10 +490,10 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(research, /research note/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /9 个交互式 parent/);
-  assert.match(readme, /4 个执行型 parent.*`prototype`/);
-  assert.match(readme, /交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`）/);
-  assert.match(readme, /`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement` 和 `diagnosing-bugs` 是 `dispatch: none`/);
+  assert.match(readme, /10 个交互式 parent/);
+  assert.match(readme, /6 个执行型 parent.*`architecture-scan`.*`architecture-design`/);
+  assert.match(readme, /交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`、`improve-codebase-architecture`）/);
+  assert.match(readme, /`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs` 和 `improve-codebase-architecture` 是 `dispatch: none`/);
   assert.match(readme, /首次使用发布链前运行 `setup-matt-pocock-skills`/);
   assert.match(readme, /spec-ready.*ready-for-agent.*resolved/);
   assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);
@@ -443,10 +506,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /cleared.*`to-spec`/);
   assert.match(readme, /model-invoked `prototype`/);
   assert.match(readme, /prototype\/<slug>/);
+  assert.match(readme, /`improve-codebase-architecture`.*deletion-test report/);
+  assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
 test("parent workflows require structured completion results", async () => {
-  for (const name of ["research", "prototype", "code-review", "tdd"]) {
+  for (const name of ["research", "prototype", "architecture-scan", "architecture-design", "code-review", "tdd"]) {
     const content = await readFile(join(ROOT, ".pi", "skills", name, "SKILL.md"), "utf8");
     assert.match(content, /structuredOutput/);
     assert.match(content, /fail|失败/);
@@ -469,6 +534,18 @@ test("workflow schemas require structured output and distinct review axes", asyn
   assert.deepEqual(prototypeLane.outputSchema.required, [
     "status", "summary", "question", "branch", "artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan", "residualRisks",
   ]);
+
+  const scanLane = registry.skills["architecture-scan"].workflow.lanes[0];
+  assert.equal(scanLane.outputSchema.properties.status.enum.join(","), "REPORTED,BLOCKED");
+  assert.deepEqual(scanLane.gate, { field: "status", equals: "REPORTED", nonEmpty: ["scopeEvidence", "commands"] });
+  assert.equal(scanLane.outputSchema.properties.candidates.maxItems, 6);
+
+  const designLanes = registry.skills["architecture-design"].workflow.lanes;
+  assert.deepEqual(designLanes.map((lane) => lane.key), ["minimal", "flexible", "common-caller"]);
+  assert.deepEqual(designLanes.map((lane) => lane.outputSchema.properties.strategy.enum[0]), ["minimal", "flexible", "common-caller"]);
+  assert.ok(designLanes.every((lane) => lane.agent === "reader"));
+  assert.ok(designLanes.every((lane) => lane.gate.field === "status" && lane.gate.equals === "COMPLETE"));
+  assert.ok(designLanes.every((lane) => lane.gate.nonEmpty.join(",") === "entries,tradeoffs"));
 
   const [standards, spec] = registry.skills["code-review"].workflow.lanes;
   assert.deepEqual(standards.outputSchema.properties.axis.enum, ["standards"]);

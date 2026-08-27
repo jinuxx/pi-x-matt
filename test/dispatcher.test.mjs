@@ -103,6 +103,45 @@ test("dispatcher builds one guarded prototype writer with private branch skills"
   assert.match(plan.rpcParams.workflowScript, /completed without valid structuredOutput/);
 });
 
+test("dispatcher builds a temp-only architecture scan writer", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["architecture-scan"], "扫描固定 scope", ROOT);
+  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+
+  assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [{
+    key: "scan",
+    agent: "worker",
+    skills: ["codebase-design", "architecture-html-report", "architecture-scan-executor"],
+  }]);
+  assert.deepEqual(items[0].skill, ["codebase-design", "architecture-html-report", "architecture-scan-executor"]);
+  assert.equal(items[0].output, false);
+  assert.deepEqual(plan.lanes[0].gate, {
+    field: "status",
+    equals: "REPORTED",
+    nonEmpty: ["scopeEvidence", "commands"],
+  });
+  assert.match(plan.rpcParams.workflowScript, /scan\.status/);
+});
+
+test("dispatcher builds three guarded read-only architecture design lanes", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["architecture-design"], "为固定 candidate 设计 interfaces", ROOT);
+  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+  const closure = ["architecture-vocabulary-reader", "architecture-deepening-reader", "architecture-interface-design"];
+
+  assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [
+    { key: "minimal", agent: "reader", skills: closure },
+    { key: "flexible", agent: "reader", skills: closure },
+    { key: "common-caller", agent: "reader", skills: closure },
+  ]);
+  assert.deepEqual(items.map((item) => item.context), ["fresh", "fresh", "fresh"]);
+  assert.ok(items.every((item) => item.agent === "reader" && item.output === false));
+  assert.deepEqual(items.map((item) => item.outputSchema.properties.strategy.enum[0]), ["minimal", "flexible", "common-caller"]);
+  assert.match(plan.rpcParams.workflowScript, /minimal\.status/);
+  assert.match(plan.rpcParams.workflowScript, /flexible\.status/);
+  assert.match(plan.rpcParams.workflowScript, /common-caller\.status/);
+});
+
 test("dispatcher builds two independent guarded review lanes", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills["code-review"];

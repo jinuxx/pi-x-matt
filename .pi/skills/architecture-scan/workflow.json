@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "name": "architecture-scan",
+  "mode": "single",
+  "lanes": [
+    {
+      "key": "scan",
+      "agent": "worker",
+      "skills": ["architecture-scan-executor"],
+      "timeoutMs": 600000,
+      "turnBudget": { "maxTurns": 24, "graceTurns": 4 },
+      "taskPrefix": "只在父任务固定 scope 内扫描 architecture friction。repository 全程只读；唯一允许的写入是 OS temp 中的新 HTML report。每个 candidate 必须有真实文件证据、dependency category 与 deletion test；不要设计具体 interface，不要强行制造 candidate。",
+      "gate": {
+        "field": "status",
+        "equals": "REPORTED",
+        "nonEmpty": ["scopeEvidence", "commands"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["REPORTED", "BLOCKED"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "scope": { "type": "string", "minLength": 1 },
+          "scopeEvidence": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "reportPath": { "type": "string", "minLength": 1 },
+          "candidates": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "title": { "type": "string", "minLength": 1 },
+                "strength": { "type": "string", "enum": ["Strong", "Worth exploring", "Speculative"] },
+                "dependencyCategory": { "type": "string", "enum": ["in-process", "local-substitutable", "ports-adapters", "mock"] },
+                "files": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+                "problem": { "type": "string", "minLength": 1 },
+                "solution": { "type": "string", "minLength": 1 },
+                "benefits": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+                "deletionTest": { "type": "string", "minLength": 1 },
+                "before": { "type": "string", "minLength": 1 },
+                "after": { "type": "string", "minLength": 1 },
+                "adrConflict": { "type": "string" },
+                "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+              },
+              "required": ["id", "title", "strength", "dependencyCategory", "files", "problem", "solution", "benefits", "deletionTest", "before", "after", "adrConflict", "evidence"],
+              "additionalProperties": false
+            }
+          },
+          "topRecommendation": { "type": "string" },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": { "type": "string", "minLength": 1 },
+                "outcome": { "type": "string", "minLength": 1 }
+              },
+              "required": ["command", "outcome"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "warnings": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["status", "summary", "scope", "scopeEvidence", "reportPath", "candidates", "topRecommendation", "commands", "warnings"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

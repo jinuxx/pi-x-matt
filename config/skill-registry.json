@@ -5,6 +5,771 @@
     "sha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76"
   },
   "skills": {
+    "architecture-deepening-reader": {
+      "name": "architecture-deepening-reader",
+      "description": "为只读 interface 方案提供 dependency category、adapter 与 interface test surface 约束。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "reader",
+      "dispatch": "none",
+      "dependsOn": [
+        "architecture-vocabulary-reader"
+      ],
+      "sourcePath": "skillpacks/leaf/architecture-deepening-reader/SKILL.md",
+      "sourceDigest": "92df196682575a0e5e9b32ffc73dd83c41a6e52d8084fec33d2b063485472992",
+      "upstreamPath": "skills/engineering/codebase-design/DEEPENING.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1"
+    },
+    "architecture-design": {
+      "name": "architecture-design",
+      "description": "内部 orchestration：为一个用户已选择的 deepening candidate 并行生成 minimal、flexible 与 common-caller 三种不同 interface 方案。",
+      "scope": "parent",
+      "class": "orchestration",
+      "agent": "reader",
+      "dispatch": "parallel",
+      "dependsOn": [
+        "architecture-interface-design"
+      ],
+      "sourcePath": ".pi/skills/architecture-design/SKILL.md",
+      "sourceDigest": "7ac9223ba9c3c34638c3970c72461a8b4e6a894f21d87aa3988c94c997acb25c",
+      "workflowPath": ".pi/skills/architecture-design/workflow.json",
+      "workflowDigest": "3c1bfef78ffd85bd4a2f6578bf91d5efb78495105c285f7a0fd3bf2d603eb690",
+      "workflow": {
+        "version": 1,
+        "name": "architecture-design",
+        "mode": "parallel",
+        "lanes": [
+          {
+            "key": "minimal",
+            "agent": "reader",
+            "skills": [
+              "architecture-interface-design"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 10,
+              "graceTurns": 2
+            },
+            "taskPrefix": "为已选择 candidate 设计结构显著不同的 minimal interface：限制为 1–3 个 entry points，最大化每个入口的 leverage。只读，不重新扫描或修改文件。",
+            "gate": {
+              "field": "status",
+              "equals": "COMPLETE",
+              "nonEmpty": [
+                "entries",
+                "tradeoffs"
+              ]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "COMPLETE",
+                    "BLOCKED"
+                  ]
+                },
+                "strategy": {
+                  "type": "string",
+                  "enum": [
+                    "minimal"
+                  ]
+                },
+                "interfaceName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "inputs": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "result": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "invariants": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "ordering": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "inputs",
+                      "result",
+                      "invariants",
+                      "ordering",
+                      "errors"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "usageExample": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "hiddenImplementation": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "dependencyStrategy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "adapters": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "depthAssessment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "localityAssessment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tradeoffs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "status",
+                "strategy",
+                "interfaceName",
+                "summary",
+                "entries",
+                "usageExample",
+                "hiddenImplementation",
+                "dependencyStrategy",
+                "adapters",
+                "depthAssessment",
+                "localityAssessment",
+                "tradeoffs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "key": "flexible",
+            "agent": "reader",
+            "skills": [
+              "architecture-interface-design"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 10,
+              "graceTurns": 2
+            },
+            "taskPrefix": "为已选择 candidate 设计结构显著不同的 flexible interface：覆盖全部已确认 use cases 与 extension，同时禁止假想需求。只读，不重新扫描或修改文件。",
+            "gate": {
+              "field": "status",
+              "equals": "COMPLETE",
+              "nonEmpty": [
+                "entries",
+                "tradeoffs"
+              ]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "COMPLETE",
+                    "BLOCKED"
+                  ]
+                },
+                "strategy": {
+                  "type": "string",
+                  "enum": [
+                    "flexible"
+                  ]
+                },
+                "interfaceName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "inputs": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "result": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "invariants": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "ordering": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "inputs",
+                      "result",
+                      "invariants",
+                      "ordering",
+                      "errors"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "usageExample": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "hiddenImplementation": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "dependencyStrategy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "adapters": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "depthAssessment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "localityAssessment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tradeoffs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "status",
+                "strategy",
+                "interfaceName",
+                "summary",
+                "entries",
+                "usageExample",
+                "hiddenImplementation",
+                "dependencyStrategy",
+                "adapters",
+                "depthAssessment",
+                "localityAssessment",
+                "tradeoffs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "key": "common-caller",
+            "agent": "reader",
+            "skills": [
+              "architecture-interface-design"
+            ],
+            "timeoutMs": 300000,
+            "turnBudget": {
+              "maxTurns": 10,
+              "graceTurns": 2
+            },
+            "taskPrefix": "为已选择 candidate 设计结构显著不同的 common-caller interface：让最常见 caller 的默认路径最简单，并明确少见路径成本。只读，不重新扫描或修改文件。",
+            "gate": {
+              "field": "status",
+              "equals": "COMPLETE",
+              "nonEmpty": [
+                "entries",
+                "tradeoffs"
+              ]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "COMPLETE",
+                    "BLOCKED"
+                  ]
+                },
+                "strategy": {
+                  "type": "string",
+                  "enum": [
+                    "common-caller"
+                  ]
+                },
+                "interfaceName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "inputs": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "result": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "invariants": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "ordering": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "inputs",
+                      "result",
+                      "invariants",
+                      "ordering",
+                      "errors"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "usageExample": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "hiddenImplementation": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "dependencyStrategy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "adapters": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "depthAssessment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "localityAssessment": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tradeoffs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "status",
+                "strategy",
+                "interfaceName",
+                "summary",
+                "entries",
+                "usageExample",
+                "hiddenImplementation",
+                "dependencyStrategy",
+                "adapters",
+                "depthAssessment",
+                "localityAssessment",
+                "tradeoffs"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "upstreamPath": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "8e740bf98446dbd4dfdc132ac4346d9a7eedaf93de6a495889171cf7f99f16bd"
+    },
+    "architecture-html-report": {
+      "name": "architecture-html-report",
+      "description": "把经过 deletion test 的 deepening candidates 渲染为 OS temp 中的可视化 HTML 报告。仅供 architecture scan worker 使用。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/architecture-html-report/SKILL.md",
+      "sourceDigest": "1c10bbccfe2d3b5e556daf349654bd56d7aa2a00716eb6dbf7d41730659a97e2",
+      "upstreamPath": "skills/engineering/improve-codebase-architecture/HTML-REPORT.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "581e8bb5a521e46bbda8ca7e19b15948bed882187108092ebb90c62513b77528"
+    },
+    "architecture-interface-design": {
+      "name": "architecture-interface-design",
+      "description": "对一个已选择且已确认约束的 deepening candidate，按指定策略产出一个只读 interface 方案及权衡。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "reader",
+      "dispatch": "none",
+      "dependsOn": [
+        "architecture-vocabulary-reader",
+        "architecture-deepening-reader"
+      ],
+      "sourcePath": "skillpacks/leaf/architecture-interface-design/SKILL.md",
+      "sourceDigest": "f838a0b1eb921433a38bc1bbbd37e892df280ec969f9587496c88ae60b7c8f85",
+      "upstreamPath": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "8e740bf98446dbd4dfdc132ac4346d9a7eedaf93de6a495889171cf7f99f16bd"
+    },
+    "architecture-scan": {
+      "name": "architecture-scan",
+      "description": "内部 orchestration：在父会话固定的代码库范围内只读扫描 deepening opportunities，并由唯一 worker 把可视化报告写到 OS temp。",
+      "scope": "parent",
+      "class": "orchestration",
+      "agent": "worker",
+      "dispatch": "single",
+      "dependsOn": [
+        "architecture-scan-executor"
+      ],
+      "sourcePath": ".pi/skills/architecture-scan/SKILL.md",
+      "sourceDigest": "3908003962d9617265e35e5e14d14a25758fd0b92f24ebdfc876a13708583024",
+      "workflowPath": ".pi/skills/architecture-scan/workflow.json",
+      "workflowDigest": "d84bc0c3da8608750ed91071d858c0451b63887eded54030e071cb8863c84aae",
+      "workflow": {
+        "version": 1,
+        "name": "architecture-scan",
+        "mode": "single",
+        "lanes": [
+          {
+            "key": "scan",
+            "agent": "worker",
+            "skills": [
+              "architecture-scan-executor"
+            ],
+            "timeoutMs": 600000,
+            "turnBudget": {
+              "maxTurns": 24,
+              "graceTurns": 4
+            },
+            "taskPrefix": "只在父任务固定 scope 内扫描 architecture friction。repository 全程只读；唯一允许的写入是 OS temp 中的新 HTML report。每个 candidate 必须有真实文件证据、dependency category 与 deletion test；不要设计具体 interface，不要强行制造 candidate。",
+            "gate": {
+              "field": "status",
+              "equals": "REPORTED",
+              "nonEmpty": [
+                "scopeEvidence",
+                "commands"
+              ]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "REPORTED",
+                    "BLOCKED"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "scope": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "scopeEvidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "reportPath": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "strength": {
+                        "type": "string",
+                        "enum": [
+                          "Strong",
+                          "Worth exploring",
+                          "Speculative"
+                        ]
+                      },
+                      "dependencyCategory": {
+                        "type": "string",
+                        "enum": [
+                          "in-process",
+                          "local-substitutable",
+                          "ports-adapters",
+                          "mock"
+                        ]
+                      },
+                      "files": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      "problem": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "solution": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "benefits": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      "deletionTest": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "before": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "after": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "adrConflict": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "strength",
+                      "dependencyCategory",
+                      "files",
+                      "problem",
+                      "solution",
+                      "benefits",
+                      "deletionTest",
+                      "before",
+                      "after",
+                      "adrConflict",
+                      "evidence"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "topRecommendation": {
+                  "type": "string"
+                },
+                "commands": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "command",
+                      "outcome"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "minItems": 1
+                },
+                "warnings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "summary",
+                "scope",
+                "scopeEvidence",
+                "reportPath",
+                "candidates",
+                "topRecommendation",
+                "commands",
+                "warnings"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
+    },
+    "architecture-scan-executor": {
+      "name": "architecture-scan-executor",
+      "description": "在固定 scope 内只读探索代码库，寻找通过 deletion test 的 deepening candidates，并把报告写到 OS temp。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "worker",
+      "dispatch": "none",
+      "dependsOn": [
+        "codebase-design",
+        "architecture-html-report"
+      ],
+      "sourcePath": "skillpacks/leaf/architecture-scan-executor/SKILL.md",
+      "sourceDigest": "8963e6cc92c3db683e6334f20c702fbf7eed21cbdb231e56223386f40d6abcae",
+      "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
+    },
+    "architecture-vocabulary-reader": {
+      "name": "architecture-vocabulary-reader",
+      "description": "为只读 architecture interface 设计提供 module、interface、depth、seam、adapter、leverage 与 locality 词汇。",
+      "scope": "leaf",
+      "class": "executor",
+      "agent": "reader",
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": "skillpacks/leaf/architecture-vocabulary-reader/SKILL.md",
+      "sourceDigest": "c93f3018157cac5bb4b27793b312d132801a347b8fe6fbd8d6b78a5d425234a4",
+      "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
+    },
     "code-review": {
       "name": "code-review",
       "description": "沿 Standards 与 Spec 两个相互独立的轴评审固定范围内的代码变化。用于评审分支、PR、工作区变更、计划实现结果或指定文件。",
@@ -240,7 +1005,7 @@
         "implement"
       ],
       "sourcePath": ".pi/skills/diagnosing-bugs/SKILL.md",
-      "sourceDigest": "6edc11854e79008867db5a5145d5f3d1a52bbedc056927ed4583d397e80a4857",
+      "sourceDigest": "455f0d4d8ef16a1065d1d85b25963e21829f0a87327891c8b54be342dc1b4d25",
       "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "77f3cf31bc99b2f49af943222526531fcc9fc41d047626d3640e875e85af3e84"
@@ -305,6 +1070,23 @@
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
+    },
+    "improve-codebase-architecture": {
+      "name": "improve-codebase-architecture",
+      "description": "只读扫描近期或用户指定范围中的 shallow modules，生成 OS temp 可视化 deepening report，并在用户选择后通过 grilling 形成可进入 to-spec 的架构决定。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [
+        "grilling",
+        "domain-modeling"
+      ],
+      "sourcePath": ".pi/skills/improve-codebase-architecture/SKILL.md",
+      "sourceDigest": "172970f1d52b115014b8b174020c25f8048935ff8f288123da594ff412b32174",
+      "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
     },
     "prototype": {
       "name": "prototype",

@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "name": "architecture-design",
+  "mode": "parallel",
+  "lanes": [
+    {
+      "key": "minimal",
+      "agent": "reader",
+      "skills": ["architecture-interface-design"],
+      "timeoutMs": 300000,
+      "turnBudget": { "maxTurns": 10, "graceTurns": 2 },
+      "taskPrefix": "为已选择 candidate 设计结构显著不同的 minimal interface：限制为 1–3 个 entry points，最大化每个入口的 leverage。只读，不重新扫描或修改文件。",
+      "gate": { "field": "status", "equals": "COMPLETE", "nonEmpty": ["entries", "tradeoffs"] },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["COMPLETE", "BLOCKED"] },
+          "strategy": { "type": "string", "enum": ["minimal"] },
+          "interfaceName": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "inputs": { "type": "string", "minLength": 1 },
+                "result": { "type": "string", "minLength": 1 },
+                "invariants": { "type": "array", "items": { "type": "string" } },
+                "ordering": { "type": "array", "items": { "type": "string" } },
+                "errors": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["name", "inputs", "result", "invariants", "ordering", "errors"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "usageExample": { "type": "string", "minLength": 1 },
+          "hiddenImplementation": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+          "dependencyStrategy": { "type": "string", "minLength": 1 },
+          "adapters": { "type": "array", "items": { "type": "string" } },
+          "depthAssessment": { "type": "string", "minLength": 1 },
+          "localityAssessment": { "type": "string", "minLength": 1 },
+          "tradeoffs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+        },
+        "required": ["status", "strategy", "interfaceName", "summary", "entries", "usageExample", "hiddenImplementation", "dependencyStrategy", "adapters", "depthAssessment", "localityAssessment", "tradeoffs"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "key": "flexible",
+      "agent": "reader",
+      "skills": ["architecture-interface-design"],
+      "timeoutMs": 300000,
+      "turnBudget": { "maxTurns": 10, "graceTurns": 2 },
+      "taskPrefix": "为已选择 candidate 设计结构显著不同的 flexible interface：覆盖全部已确认 use cases 与 extension，同时禁止假想需求。只读，不重新扫描或修改文件。",
+      "gate": { "field": "status", "equals": "COMPLETE", "nonEmpty": ["entries", "tradeoffs"] },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["COMPLETE", "BLOCKED"] },
+          "strategy": { "type": "string", "enum": ["flexible"] },
+          "interfaceName": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "inputs": { "type": "string", "minLength": 1 },
+                "result": { "type": "string", "minLength": 1 },
+                "invariants": { "type": "array", "items": { "type": "string" } },
+                "ordering": { "type": "array", "items": { "type": "string" } },
+                "errors": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["name", "inputs", "result", "invariants", "ordering", "errors"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "usageExample": { "type": "string", "minLength": 1 },
+          "hiddenImplementation": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+          "dependencyStrategy": { "type": "string", "minLength": 1 },
+          "adapters": { "type": "array", "items": { "type": "string" } },
+          "depthAssessment": { "type": "string", "minLength": 1 },
+          "localityAssessment": { "type": "string", "minLength": 1 },
+          "tradeoffs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+        },
+        "required": ["status", "strategy", "interfaceName", "summary", "entries", "usageExample", "hiddenImplementation", "dependencyStrategy", "adapters", "depthAssessment", "localityAssessment", "tradeoffs"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "key": "common-caller",
+      "agent": "reader",
+      "skills": ["architecture-interface-design"],
+      "timeoutMs": 300000,
+      "turnBudget": { "maxTurns": 10, "graceTurns": 2 },
+      "taskPrefix": "为已选择 candidate 设计结构显著不同的 common-caller interface：让最常见 caller 的默认路径最简单，并明确少见路径成本。只读，不重新扫描或修改文件。",
+      "gate": { "field": "status", "equals": "COMPLETE", "nonEmpty": ["entries", "tradeoffs"] },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["COMPLETE", "BLOCKED"] },
+          "strategy": { "type": "string", "enum": ["common-caller"] },
+          "interfaceName": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "inputs": { "type": "string", "minLength": 1 },
+                "result": { "type": "string", "minLength": 1 },
+                "invariants": { "type": "array", "items": { "type": "string" } },
+                "ordering": { "type": "array", "items": { "type": "string" } },
+                "errors": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["name", "inputs", "result", "invariants", "ordering", "errors"],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "usageExample": { "type": "string", "minLength": 1 },
+          "hiddenImplementation": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+          "dependencyStrategy": { "type": "string", "minLength": 1 },
+          "adapters": { "type": "array", "items": { "type": "string" } },
+          "depthAssessment": { "type": "string", "minLength": 1 },
+          "localityAssessment": { "type": "string", "minLength": 1 },
+          "tradeoffs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+        },
+        "required": ["status", "strategy", "interfaceName", "summary", "entries", "usageExample", "hiddenImplementation", "dependencyStrategy", "adapters", "depthAssessment", "localityAssessment", "tradeoffs"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

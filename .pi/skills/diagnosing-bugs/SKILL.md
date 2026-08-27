@@ -72,7 +72,7 @@ Root-cause gate 需要：
 - 已识别正确的公开 regression seam，或明确证明当前架构没有这样的 seam；
 - 所有生产文件中的 `[DEBUG-<id>]` instrumentation 已移除，`grep` 结果为空。
 
-没有正确 regression seam 时，先清理所有诊断改动并停止。把“无法通过真实 call-site pattern 锁定 bug”作为架构 finding 报告；不得写浅层测试，也不得假定尚未移植的 `improve-codebase-architecture` 当前可调用。
+没有正确 regression seam 时，先清理所有诊断改动并停止。把“无法通过真实 call-site pattern 锁定 bug”作为架构 finding 报告，并提供已确认 root cause、call-site evidence、缺失 seam 与相关 files，建议用户在新的手动阶段调用已移植的 `improve-codebase-architecture`，把 scope 固定在该 finding；不得写浅层测试，也不得在诊断阶段自动开始 refactor。
 
 ## 交给 Implement
 

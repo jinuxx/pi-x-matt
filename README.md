@@ -2,13 +2,13 @@
 
 `pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
 
-当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、throwaway prototype 与 hard-bug 诊断入口，以及 9 个交互式 parent：`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`；另有 4 个执行型 parent：`research`、`prototype`、双轴 `code-review` 与分阶段 `tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `prototype` 仍由父会话保留 question 与用户 verdict gate。
+当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、throwaway prototype、hard-bug 诊断与 architecture deepening survey，以及 10 个交互式 parent：`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`、`improve-codebase-architecture`；另有 6 个执行型 parent：`research`、`prototype`、`architecture-scan`、`architecture-design`、双轴 `code-review` 与分阶段 `tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `prototype` 与 architecture workflows 的用户选择仍留在父会话。
 
 ## 架构
 
 系统分为三个边界：
 
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`research`、`prototype`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
+1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs`、`improve-codebase-architecture`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`research`、`prototype`、`architecture-scan`、`architecture-design`、`code-review`、`tdd`）通过 registry workflow 调度子代理。
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
@@ -24,7 +24,7 @@
   → 父会话核验并综合结果
 ```
 
-`research` 与 `prototype` 使用单 lane；`prototype` 只把 artifact 构建交给唯一 `worker`，question、浏览器评审、用户 verdict 和本地 throwaway branch capture 仍由父会话负责；`code-review` 使用相互独立的 `standards` 与 `spec` 两个 reviewer lane；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement` 和 `diagnosing-bugs` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，也不能作为 lane 直接传给 `pi_matt_dispatch`；它们可以在父会话中调用执行型 parent workflow。`setup-matt-pocock-skills` 负责项目级 tracker 与文档契约，`grilling`、`domain-modeling` 和 `grill-with-docs` 负责单会话澄清与共享文档，`wayfinder` 负责跨会话 decision map、fog 与 frontier，`to-spec` 负责 seam 确认与规格综合，`to-tickets` 负责 tracer-bullet 切分与 blocking edges，`implement` 在父会话中调用 `tdd` 和 `code-review`，负责单 ticket 的 TDD、验证、review 和当前分支提交；model-invoked 的 `diagnosing-bugs` 先在父会话中建立 red-capable loop、最小复现并验证根因，再把一个已确认 slice 顺序交给 `implement`。
+`research`、`prototype` 与 `architecture-scan` 使用单 lane；`architecture-design` 使用 minimal/flexible/common-caller 三个 fresh 只读 lane；`prototype` 只把 artifact 构建交给唯一 `worker`，`architecture-scan` 的 worker 只写 OS temp report；`code-review` 使用相互独立的 `standards` 与 `spec` reviewer lanes；`tdd` 先由唯一 `worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`setup-matt-pocock-skills`、`grilling`、`domain-modeling`、`grill-with-docs`、`wayfinder`、`to-spec`、`to-tickets`、`implement`、`diagnosing-bugs` 和 `improve-codebase-architecture` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，可以在父会话中调用执行型 workflow。`improve-codebase-architecture` 先调用 `architecture-scan` 生成 temp report，用户选择 candidate 并 grilling 后，只有明确需要 alternative interfaces 才调用 `architecture-design`；它不修改生产代码。`implement` 仍在父会话中调用 `tdd` 和 `code-review`，负责单 ticket 的实现、验证、review 与提交。
 
 ## pi-subagents 最小加载
 
@@ -59,10 +59,10 @@
 
 | Agent | 权限 | 当前用途 |
 | --- | --- | --- |
-| `reader` | 本地只读 | 代码库探索 |
+| `reader` | 本地只读 | 代码库探索与 `architecture-design` 三方案 lanes |
 | `researcher` | `read`、`web_search`、`web_fetch` | `research` |
 | `reviewer` | 本地只读 | `code-review` 与 `tdd` 的 Standards/Spec lanes |
-| `worker` | 单写者工具集 | `tdd` 的 red→green 实现与 `prototype` artifact 构建 |
+| `worker` | 单写者工具集 | `tdd` 实现、`prototype` artifact 与 OS temp architecture report |
 
 `researcher` 依赖父环境中已经注册的 `web_search` 与 `web_fetch` provider。显式 allowlist 不会自动加载 provider；若工具未注册，pi-subagents 应在 child 启动阶段失败，而不是生成无来源回答。
 
@@ -111,7 +111,9 @@ npm run check          # 测试 + registry freshness + upstream drift
 
 需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`CONTEXT.md`、ADR 和明确提供的 research note 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
 
-具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `implement`；没有正确 seam 时停止并报告架构缺口，不写浅层测试或直接修生产代码。
+具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `implement`；没有正确 seam 时停止并给出可供手动 `improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
+
+周期性 architecture upkeep、build 前 seam 评估或诊断确认缺少正确 seam 时，手动运行 `improve-codebase-architecture`。它按用户方向或近期 hot paths 限定 scope，调用 `architecture-scan` 在 OS temp 生成 deletion-test report；用户可以只保留报告，或选择一个 candidate 进入 `grilling`/`domain-modeling`。需要比较 interface 时再调用三个只读 `architecture-design` lanes。最终只产生可进入 `to-spec` 的决定，不修改生产代码。
 
 ```json
 {
