@@ -18,7 +18,7 @@ metadata:
 ## 开始前
 
 1. 确认当前 branch 是用户希望写入的 branch；读取 `git status`、`git log` 和当前 fixed point。不要改写或归因用户既有工作区改动。
-2. 读取完整 ticket/spec/当前已确认计划、相关 `CONTEXT-MAP.md`/`CONTEXT.md`、ADR、项目说明和直接调用者。使用已确认的领域词汇。
+2. 读取完整 ticket/spec/当前已确认计划、`.x-matt/context/`、`.x-matt/adr/`、项目说明和直接调用者。使用已确认的领域词汇。
 3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。
 4. 从 ticket 或当前会话单 slice 计划中提取已批准 seams。若没有可执行的 seam、行为或测试命令，停止并报告缺口；不要在 implement 中重新设计。将 seam 交给 `matt-tdd`，由其执行公开 seam 确认 gate。
 5. 固定实现前基线和调度前工作区状态，并明确允许修改的范围、测试命令、typecheck 命令（若项目提供）和停止条件。

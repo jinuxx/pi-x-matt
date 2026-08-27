@@ -1,6 +1,6 @@
 ---
 name: matt-grill-with-docs
-description: 在代码库中分轮澄清计划或设计，并在术语与重大决定形成时更新 CONTEXT.md 和 ADR。
+description: 在代码库中分轮澄清计划或设计，并在术语与重大决定形成时更新 `.x-matt/context/` 和 `.x-matt/adr/`。
 disable-model-invocation: true
 metadata:
   pi-scope: parent
@@ -20,7 +20,7 @@ metadata:
 ## 初始化
 
 1. 明确本次要澄清的目标，而不是先设计实现。
-2. 读取相关代码、项目说明、`CONTEXT-MAP.md`/`CONTEXT.md` 和相关 ADR，区分已有事实、已有决定与新提议。
+2. 读取相关代码、项目说明、`.x-matt/context/` 和 `.x-matt/adr/`，区分已有事实、已有决定与新提议。
 3. 在当前会话维护以下状态，不另建 scratch 决策文档：
    - 目标、范围和非目标
    - 已核验 facts 及其来源
@@ -35,12 +35,12 @@ metadata:
 2. 按 `matt-grilling` 协议一次询问当前 frontier 的 1–4 个决定，并为每项给出有依据的推荐答案。
 3. 用户回答后，明确区分新事实和用户决定。不要把 agent 推荐、现有代码或默认实践改写为用户决定。
 4. 按 `matt-domain-modeling` 规则检查每个答案：
-   - 新的 canonical term 一旦确定，立即更新对应 `CONTEXT.md`。
+   - 新的 canonical term 一旦确定，立即更新 `.x-matt/context/` 下对应的 `CONTEXT.md`。
    - 与 glossary 或代码冲突时，先暴露冲突并留在 frontier。
    - 决定同时通过三项 ADR gate 时，向用户提议；取得同意后立即写入。
 5. 更新会话状态和 decision tree，重复直到 frontier 为空。
 
-每次共享文档写入前说明将修改的术语或决定；写后检查 diff。子代理和 reviewer 不得写 `CONTEXT.md` 或 ADR。
+每次共享文档写入前说明将修改的术语或决定；写后检查 diff。子代理和 reviewer 不得写 `.x-matt/context/` 或 `.x-matt/adr/`。
 
 ## Shared-understanding gate
 

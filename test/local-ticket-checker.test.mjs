@@ -44,7 +44,7 @@ function assertEnvelope(result, ticketPath, ok) {
 
 test("validates the required metadata for a ready ticket with no blockers", async () => {
   await withTempRepo(async (repo) => {
-    const validPath = ".scratch/example/issues/01-ready.md";
+    const validPath = ".x-matt/work/example/issues/01-ready.md";
     const validContent = `# 01: Ready\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: None\n`;
     const validFullPath = await writeFixture(repo, validPath, validContent);
 
@@ -84,8 +84,8 @@ test("validates the required metadata for a ready ticket with no blockers", asyn
       ],
       [
         "07-has-blocker.md",
-        `# 07: Has blocker\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: .scratch/example/issues/00-blocker.md\n`,
-        ["Blocker .scratch/example/issues/00-blocker.md could not be read"],
+        `# 07: Has blocker\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: .x-matt/work/example/issues/00-blocker.md\n`,
+        ["Blocker .x-matt/work/example/issues/00-blocker.md could not be read"],
       ],
       [
         "08-missing-parent.md",
@@ -95,7 +95,7 @@ test("validates the required metadata for a ready ticket with no blockers", asyn
     ];
 
     for (const [name, content, expectedErrors] of invalidFixtures) {
-      const ticketPath = `.scratch/example/issues/${name}`;
+      const ticketPath = `.x-matt/work/example/issues/${name}`;
       await writeFixture(repo, ticketPath, content);
       const result = runChecker(repo, ticketPath);
       assert.equal(result.status, 1, name);
@@ -107,8 +107,8 @@ test("validates the required metadata for a ready ticket with no blockers", asyn
 
 test("treats Parent as a non-empty preflight field without dereferencing it", async () => {
   await withTempRepo(async (repo) => {
-    const ticketPath = ".scratch/example/issues/01-parent-reference.md";
-    const missingParentPath = ".scratch/example/missing-spec.md";
+    const ticketPath = ".x-matt/work/example/issues/01-parent-reference.md";
+    const missingParentPath = ".x-matt/work/example/missing-spec.md";
     await writeFixture(
       repo,
       ticketPath,
@@ -125,17 +125,17 @@ test("treats Parent as a non-empty preflight field without dereferencing it", as
 
 test("accepts a ready ticket whose blocker ticket is resolved", async () => {
   await withTempRepo(async (repo) => {
-    const blockerPath = ".scratch/example/issues/01-resolved.md";
-    const ticketPath = ".scratch/example/issues/02-ready.md";
+    const blockerPath = ".x-matt/work/example/issues/01-resolved.md";
+    const ticketPath = ".x-matt/work/example/issues/02-ready.md";
     await writeFixture(
       repo,
       blockerPath,
-      `# 01: Resolved\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: resolved\nBlocked by: None\n`,
+      `# 01: Resolved\n\nType: ticket\nParent: .x-matt/work/example/spec.md\nStatus: resolved\nBlocked by: None\n`,
     );
     await writeFixture(
       repo,
       ticketPath,
-      `# 02: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
+      `# 02: Ready\n\nType: ticket\nParent: .x-matt/work/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
     );
 
     const result = runChecker(repo, ticketPath);
@@ -154,24 +154,24 @@ test("reports missing, unresolved, and non-ticket blockers", async () => {
     const fixtures = [
       {
         name: "missing",
-        blockerPath: ".scratch/example/issues/00-missing.md",
+        blockerPath: ".x-matt/work/example/issues/00-missing.md",
         blockerContent: null,
         blocker: { type: null, status: null },
-        error: "Blocker .scratch/example/issues/00-missing.md could not be read",
+        error: "Blocker .x-matt/work/example/issues/00-missing.md could not be read",
       },
       {
         name: "unresolved",
-        blockerPath: ".scratch/example/issues/01-unresolved.md",
+        blockerPath: ".x-matt/work/example/issues/01-unresolved.md",
         blockerContent: `# 01: Unresolved\n\nType: ticket\nStatus: ready-for-agent\n`,
         blocker: { type: "ticket", status: "ready-for-agent" },
-        error: "Blocker .scratch/example/issues/01-unresolved.md Status must be resolved",
+        error: "Blocker .x-matt/work/example/issues/01-unresolved.md Status must be resolved",
       },
       {
         name: "spec",
-        blockerPath: ".scratch/example/issues/01-spec.md",
+        blockerPath: ".x-matt/work/example/issues/01-spec.md",
         blockerContent: `# 01: Spec\n\nType: spec\nStatus: resolved\n`,
         blocker: { type: "spec", status: "resolved" },
-        error: "Blocker .scratch/example/issues/01-spec.md Type must be ticket",
+        error: "Blocker .x-matt/work/example/issues/01-spec.md Type must be ticket",
       },
     ];
     const results = [];
@@ -180,11 +180,11 @@ test("reports missing, unresolved, and non-ticket blockers", async () => {
       if (fixture.blockerContent !== null) {
         await writeFixture(repo, fixture.blockerPath, fixture.blockerContent);
       }
-      const ticketPath = `.scratch/example/issues/02-${fixture.name}.md`;
+      const ticketPath = `.x-matt/work/example/issues/02-${fixture.name}.md`;
       await writeFixture(
         repo,
         ticketPath,
-        `# 02: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${fixture.blockerPath}\n`,
+        `# 02: Ready\n\nType: ticket\nParent: .x-matt/work/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${fixture.blockerPath}\n`,
       );
       results.push({ fixture, ticketPath, result: runChecker(repo, ticketPath) });
     }
@@ -212,8 +212,8 @@ test("reports missing, unresolved, and non-ticket blockers", async () => {
 test("accepts multiple resolved blockers in input order", async () => {
   await withTempRepo(async (repo) => {
     const blockerPaths = [
-      ".scratch/example/issues/01-first.md",
-      ".scratch/example/issues/02-second.md",
+      ".x-matt/work/example/issues/01-first.md",
+      ".x-matt/work/example/issues/02-second.md",
     ];
     for (const [index, blockerPath] of blockerPaths.entries()) {
       await writeFixture(
@@ -222,11 +222,11 @@ test("accepts multiple resolved blockers in input order", async () => {
         `# 0${index + 1}: Resolved\n\nType: ticket\nStatus: resolved\n`,
       );
     }
-    const ticketPath = ".scratch/example/issues/03-ready.md";
+    const ticketPath = ".x-matt/work/example/issues/03-ready.md";
     await writeFixture(
       repo,
       ticketPath,
-      `# 03: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPaths[0]},   ${blockerPaths[1]}\n`,
+      `# 03: Ready\n\nType: ticket\nParent: .x-matt/work/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPaths[0]},   ${blockerPaths[1]}\n`,
     );
 
     const result = runChecker(repo, ticketPath);
@@ -246,7 +246,7 @@ test("accepts multiple resolved blockers in input order", async () => {
   });
 });
 
-test("rejects invalid blocker references without reading outside .scratch", async () => {
+test("rejects invalid blocker references without reading outside .x-matt/work", async () => {
   await withTempRepo(async (repo) => {
     const outsideRepo = await mkdtemp(join(tmpdir(), "local-ticket-blocker-outside-"));
     const resolvedContent = `# 01: Resolved\n\nType: ticket\nStatus: resolved\n`;
@@ -254,13 +254,13 @@ test("rejects invalid blocker references without reading outside .scratch", asyn
     try {
       const absolutePath = await writeFixture(
         repo,
-        ".scratch/example/issues/absolute.md",
+        ".x-matt/work/example/issues/absolute.md",
         resolvedContent,
       );
-      await writeFixture(repo, "outside-scratch.md", resolvedContent);
+      await writeFixture(repo, "outside-work.md", resolvedContent);
       const outsideFile = await writeFixture(outsideRepo, "outside-ticket.md", resolvedContent);
-      const lexicalOutside = `.scratch/${relative(join(repo, ".scratch"), outsideFile)}`;
-      const symlinkPath = ".scratch/example/issues/outside-link.md";
+      const lexicalOutside = `.x-matt/work/${relative(join(repo, ".x-matt/work"), outsideFile)}`;
+      const symlinkPath = ".x-matt/work/example/issues/outside-link.md";
       const symlinkFullPath = join(repo, symlinkPath);
       await mkdir(dirname(symlinkFullPath), { recursive: true });
       await symlink(outsideFile, symlinkFullPath);
@@ -269,7 +269,7 @@ test("rejects invalid blocker references without reading outside .scratch", asyn
         ["bare-number", "01"],
         ["title", "Resolved blocker"],
         ["absolute", absolutePath],
-        ["outside-scratch", "outside-scratch.md"],
+        ["outside-work", "outside-work.md"],
         ["lexical-outside", lexicalOutside],
         ["realpath-outside", symlinkPath],
         ["empty", ""],
@@ -277,11 +277,11 @@ test("rejects invalid blocker references without reading outside .scratch", asyn
       const results = [];
 
       for (const [name, blockerPath] of fixtures) {
-        const ticketPath = `.scratch/example/issues/03-${name}.md`;
+        const ticketPath = `.x-matt/work/example/issues/03-${name}.md`;
         await writeFixture(
           repo,
           ticketPath,
-          `# 03: Ready\n\nType: ticket\nParent: .scratch/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
+          `# 03: Ready\n\nType: ticket\nParent: .x-matt/work/example/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
         );
         results.push({ blockerPath, ticketPath, result: runChecker(repo, ticketPath) });
       }
@@ -299,7 +299,7 @@ test("rejects invalid blocker references without reading outside .scratch", asyn
       assert.deepEqual(
         results.map(({ result }) => result.json.errors),
         fixtures.map(([, blockerPath]) => [
-          `Blocker ${JSON.stringify(blockerPath)} must be a repository-relative path under .scratch`,
+          `Blocker ${JSON.stringify(blockerPath)} must be a repository-relative path under .x-matt/work`,
         ]),
       );
       for (const { ticketPath, result } of results) {
@@ -326,7 +326,7 @@ test("rejects metadata outside the continuous block after the ticket heading", a
 
     const results = [];
     for (const [name, content] of fixtures) {
-      const ticketPath = `.scratch/example/issues/${name}`;
+      const ticketPath = `.x-matt/work/example/issues/${name}`;
       await writeFixture(repo, ticketPath, content);
       results.push([name, ticketPath, runChecker(repo, ticketPath)]);
     }
@@ -342,20 +342,20 @@ test("rejects metadata outside the continuous block after the ticket heading", a
   });
 });
 
-test("rejects paths that are not repo-relative files under .scratch", async () => {
+test("rejects paths that are not repo-relative files under .x-matt/work", async () => {
   await withTempRepo(async (repo) => {
     const validContent = `# 11: Path boundary\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: None\n`;
-    const absolutePath = await writeFixture(repo, ".scratch/example/issues/absolute.md", validContent);
-    await writeFixture(repo, "outside-scratch.md", validContent);
+    const absolutePath = await writeFixture(repo, ".x-matt/work/example/issues/absolute.md", validContent);
+    await writeFixture(repo, "outside-work.md", validContent);
     const outsideRepo = await mkdtemp(join(tmpdir(), "local-ticket-checker-outside-"));
 
     try {
       const outsideFile = await writeFixture(outsideRepo, "outside-repo.md", validContent);
       const invalidPaths = [
         [absolutePath, ["Ticket path must be repository-relative"]],
-        ["outside-scratch.md", ["Ticket path must be under .scratch"]],
-        [".scratch/example/../../outside-scratch.md", ["Ticket path must be under .scratch"]],
-        [relative(repo, outsideFile), ["Ticket path must be under .scratch"]],
+        ["outside-work.md", ["Ticket path must be under .x-matt/work"]],
+        [".x-matt/work/example/../../outside-work.md", ["Ticket path must be under .x-matt/work"]],
+        [relative(repo, outsideFile), ["Ticket path must be under .x-matt/work"]],
       ];
 
       for (const [ticketPath, expectedErrors] of invalidPaths) {
@@ -375,10 +375,10 @@ test("rejects paths that are not repo-relative files under .scratch", async () =
   });
 });
 
-test("rejects a .scratch symlink whose real target is outside the repository", async () => {
+test("rejects a .x-matt/work symlink whose real target is outside the repository", async () => {
   await withTempRepo(async (repo) => {
     const outsideRepo = await mkdtemp(join(tmpdir(), "local-ticket-checker-symlink-target-"));
-    const ticketPath = ".scratch/example/issues/symlink.md";
+    const ticketPath = ".x-matt/work/example/issues/symlink.md";
     const validContent = `# 12: Symlink target\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: None\n`;
 
     try {
@@ -391,7 +391,7 @@ test("rejects a .scratch symlink whose real target is outside the repository", a
 
       assert.equal(result.status, 1);
       assertEnvelope(result, ticketPath, false);
-      assert.deepEqual(result.json.errors, ["Ticket path must be under .scratch"]);
+      assert.deepEqual(result.json.errors, ["Ticket path must be under .x-matt/work"]);
     } finally {
       await rm(outsideRepo, { recursive: true, force: true });
     }

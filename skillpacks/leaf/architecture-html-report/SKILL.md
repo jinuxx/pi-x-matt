@@ -22,7 +22,7 @@ metadata:
 - Benefits 只用 **locality**、**leverage**、interface/test surface 等可核验收益，不写“cleaner/easier to maintain”。
 - Before/After 是中心内容：依赖/call flow 可使用 Mermaid；deep-vs-shallow mass、cross-section、collapse 使用 inline HTML/CSS/SVG。图不清楚时重画，不用长段落补救。
 - 默认遵循上游 Tailwind/Mermaid CDN scaffold。网络策略、离线环境或浏览器安全策略不允许 CDN 时，改用 inline CSS 与 hand-built SVG，并在 warnings 中说明；不得伪称 Mermaid 已渲染。
-- 架构词汇只能使用 module、interface、implementation、depth/deep/shallow、seam、adapter、leverage、locality。项目领域名来自 `CONTEXT.md`。
+- 架构词汇只能使用 module、interface、implementation、depth/deep/shallow、seam、adapter、leverage、locality。项目领域名来自 `.x-matt/context/`。
 - 报告末尾只有一个 Top recommendation；没有 actionable candidate 时明确写“未发现通过 deletion test 的候选”，不得捏造。
 
 写后读取文件，确认 doctype、每张 candidate id/card、before/after、strength 与 top recommendation 都存在，并返回绝对路径。不要自动提交、push 或复制到仓库。

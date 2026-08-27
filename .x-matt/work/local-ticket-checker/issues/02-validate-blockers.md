@@ -1,9 +1,9 @@
 # 02: 解析并验证 blocker lifecycle
 
 Type: ticket
-Parent: .scratch/local-ticket-checker/spec.md
+Parent: .x-matt/work/local-ticket-checker/spec.md
 Status: resolved
-Blocked by: .scratch/local-ticket-checker/issues/01-validate-ready-ticket.md
+Blocked by: .x-matt/work/local-ticket-checker/issues/01-validate-ready-ticket.md
 
 ## What to build
 

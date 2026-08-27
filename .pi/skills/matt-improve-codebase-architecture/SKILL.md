@@ -19,12 +19,12 @@ metadata:
 
 ## Vocabulary
 
-所有建议只使用：**module**、**interface**、**implementation**、**depth/deep/shallow**、**seam**、**adapter**、**leverage**、**locality**。interface 同时是 caller surface 与 test surface。一个 adapter 是 hypothetical seam；只有 production/test 等至少两个真实 adapters 才说明 real seam。领域名称来自 `CONTEXT.md`；不要用 component/service/API/boundary 替代上述架构含义。
+所有建议只使用：**module**、**interface**、**implementation**、**depth/deep/shallow**、**seam**、**adapter**、**leverage**、**locality**。interface 同时是 caller surface 与 test surface。一个 adapter 是 hypothetical seam；只有 production/test 等至少两个真实 adapters 才说明 real seam。领域名称来自 `.x-matt/context/`；不要用 component/service/API/boundary 替代上述架构含义。
 
 ## Scope gate
 
 1. 记录 `HEAD`、branch、`git status` 与 staged/untracked files。允许已有用户改动，但必须逐文件记录，scan 全程不得改变；报告需说明它观察的是当前 worktree 还是 HEAD。
-2. 读取 `CONTEXT-MAP.md`/`CONTEXT.md`、相关 ADR、项目说明、测试布局和用户给出的未来 change direction。
+2. 读取 `.x-matt/context/`、`.x-matt/adr/`、项目说明、测试布局和用户给出的未来 change direction。
 3. 用户指定 module/subsystem/pain point/spec 时直接采用该 scope，不做全库巡检。
 4. 未指定方向时读取足够的 `git log --oneline --name-only`，找反复变化的 hot paths；有清晰热点就限于这些路径，变化分散才扩大。不要扫描 dormant 代码来凑候选。
 5. 向用户简短报告 scope 与依据。scope 过大、monorepo context 不明或与 ADR 归属冲突时使用 `ask_user_question` 确认；否则直接进行只读 scan。
@@ -34,7 +34,7 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `architecture-scan`
-- `task`: 包含 fixed HEAD、完整初始 status、精确 scope/hot-spot evidence、future change direction、领域文档/ADR、测试线索、OS temp 规则、禁止 repo 写入与停止条件。
+- `task`: 包含 fixed HEAD、完整初始 status、精确 scope/hot-spot evidence、future change direction、`.x-matt/context/`、`.x-matt/adr/`、测试线索、OS temp 规则、禁止 repo 写入与停止条件。
 
 只消费 `scan` lane 的 `structuredOutput`。缺失 lane、schema 无效、status 非 `REPORTED`、reportPath/scopeEvidence/commands 为空、reportPath 位于 repository 内、普通 prose 冒充结果或 scan 后 repository status 不一致时 fail closed。
 
@@ -68,7 +68,7 @@ metadata:
 - 哪些旧 shallow tests 在新 interface tests 覆盖后可删除；
 - migration boundary、明确 out of scope 与风险。
 
-不要在用户确认前设计最终 interface。每轮只问当前 frontier 的 1–4 个问题。术语形成时按 `matt-domain-modeling` 即时更新 `CONTEXT.md`；candidate 若与 ADR 冲突，明确引用。用户以长期、load-bearing 原因拒绝 candidate 时，按三项 ADR gate 询问是否记录，以免未来 scan 重复建议；“现在不值得”一类临时原因不写 ADR。
+不要在用户确认前设计最终 interface。每轮只问当前 frontier 的 1–4 个问题。术语形成时按 `matt-domain-modeling` 即时更新 `.x-matt/context/` 下对应的 `CONTEXT.md`；candidate 若与 ADR 冲突，明确引用。用户以长期、load-bearing 原因拒绝 candidate 时，按三项 ADR gate 询问是否记录，以免未来 scan 重复建议；“现在不值得”一类临时原因不写 ADR。
 
 ## Design it twice
 
@@ -82,7 +82,7 @@ metadata:
 4. 顺序展示每个 interface、usage、隐藏的 implementation、dependency strategy 与 trade-offs，再以 depth、locality、seam placement 横向比较。给出有立场的推荐；元素可组合时提议 hybrid，但不得替用户确认。
 5. 使用 `ask_user_question` 让用户选择一个方案、hybrid、继续澄清或拒绝当前 candidate。未确认前保持 frontier 未完成。
 
-三个 readers 永远只读，不能修改 code、tests、`CONTEXT.md` 或 ADR。领域文档仍由父会话唯一写入。
+三个 readers 永远只读，不能修改 code、tests、`.x-matt/context/` 或 `.x-matt/adr/`。领域文档仍由父会话唯一写入。
 
 ## Shared decision gate
 

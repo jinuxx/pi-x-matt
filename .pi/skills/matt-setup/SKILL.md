@@ -21,11 +21,11 @@ metadata:
 
 1. `git remote -v` 与 `.git/config`，识别 GitHub、GitLab 或无 remote；不要仅凭目录名推断。
 2. 根目录 `AGENTS.md`；Pi-only 移植不读取或创建 `CLAUDE.md`。
-3. `docs/agents/`、`.scratch/`、`CONTEXT.md`、`CONTEXT-MAP.md`、`docs/adr/` 与 context-scoped ADR 目录。
+3. `.x-matt/agents/`、`.x-matt/work/`、`.x-matt/context/` 与 `.x-matt/adr/`。
 4. registry 是否已登记 `triage` 与 `matt-wayfinder`。即使尚未移植 triage，`matt-to-spec` 与 `matt-to-tickets` 仍需要 `ready-for-agent` 映射；wayfinder 已登记时 tracker 契约还必须包含可执行的 Wayfinding operations。
 5. `pnpm-workspace.yaml`、`package.json#workspaces` 和真实的多包目录，只在证据充分时判断为 multi-context。
 
-先总结已存在、缺失和可能复用的配置。已有 `docs/agents/*.md` 时按更新处理，保留用户自定义内容，不从头覆盖。
+先总结已存在、缺失和可能复用的配置。已有 `.x-matt/agents/*.md` 时按更新处理，保留用户自定义内容，不从头覆盖。
 
 ## 分段决策
 
@@ -37,7 +37,7 @@ metadata:
 
 - GitHub remote：推荐 GitHub，使用 `gh`。
 - GitLab remote：推荐 GitLab，使用 `glab`。
-- 无可识别 remote：推荐 Local Markdown，写入 `.scratch/<feature-slug>/`。
+- 无可识别 remote：推荐 Local Markdown，写入 `.x-matt/work/<feature-slug>/`。
 - Other：要求用户提供一段可执行说明，至少包含 create、read、label/status、blocking relationship 和结果核验方式。
 
 选择 GitHub/GitLab 时先只读核验 CLI、认证和 remote 解析；失败时保持未配置，不写一个看似可用的契约。不得以 setup 名义创建远端 issue、label、project 或 repository。
@@ -46,24 +46,24 @@ metadata:
 
 询问是否保留 canonical labels，推荐是：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。用户拒绝时收集现有 tracker 中的实际映射。该文件只定义语义映射，不创建远端 labels；GitHub/GitLab 缺少 `ready-for-agent` 时必须报告下游发布仍会 fail closed。
 
-即使 `triage` 尚未登记，也要写 `docs/agents/triage-labels.md`，因为 `matt-to-spec`、`matt-to-tickets` 和 Local Markdown lifecycle 需要区分 `spec-ready`、`ready-for-agent` 与 `resolved`。`spec-ready` 与 `resolved` 是非 triage 的 lifecycle 状态；`ready-for-agent` 是 canonical triage role，也是可实现 ticket 的入口状态。
+即使 `triage` 尚未登记，也要写 `.x-matt/agents/triage-labels.md`，因为 `matt-to-spec`、`matt-to-tickets` 和 Local Markdown lifecycle 需要区分 `spec-ready`、`ready-for-agent` 与 `resolved`。`spec-ready` 与 `resolved` 是非 triage 的 lifecycle 状态；`ready-for-agent` 是 canonical triage role，也是可实现 ticket 的入口状态。
 
 ### C. Domain docs
 
-没有真实 monorepo signals 时直接采用 single-context：根目录按需创建 `CONTEXT.md`，ADR 位于 `docs/adr/`；setup 本身不创建空 glossary 或 ADR。只有发现真实多 context 时才询问是否采用根 `CONTEXT-MAP.md` 与各 context 的 `CONTEXT.md`/`docs/adr/`。
+没有真实 monorepo signals 时直接采用 single-context：glossary 按需创建在 `.x-matt/context/CONTEXT.md`，ADR 位于 `.x-matt/adr/`；setup 本身不创建空 glossary 或 ADR。只有发现真实多 context 时才询问是否采用 `.x-matt/context/CONTEXT-MAP.md`，并把各 context 的 glossary 放在 `.x-matt/context/<context>/CONTEXT.md`、ADR 放在 `.x-matt/adr/<context>/`。所有 Matt 管理的领域文档必须留在 `.x-matt/` 内。
 
 ### D. Pi instruction file
 
-根目录已有 `AGENTS.md` 时更新其中唯一的 `## Agent skills` block。不存在时询问是否创建项目级 `AGENTS.md`；用户拒绝则只写 `docs/agents/`，并明确 Pi 不会自动获得这些入口说明。不得编辑用户级 `~/.pi/agent/AGENTS.md`。
+根目录已有 `AGENTS.md` 时更新其中唯一的 `## Agent skills` block。不存在时询问是否创建项目级 `AGENTS.md`；用户拒绝则只写 `.x-matt/agents/`，并明确 Pi 不会自动获得这些入口说明。不得编辑用户级 `~/.pi/agent/AGENTS.md`。
 
 ## 写入前确认
 
 展示完整 draft 并取得一次明确批准，至少包括：
 
 - `AGENTS.md` 中将新增或替换的 `## Agent skills` block；
-- `docs/agents/issue-tracker.md`；
-- `docs/agents/triage-labels.md`；
-- `docs/agents/domain.md`。
+- `.x-matt/agents/issue-tracker.md`；
+- `.x-matt/agents/triage-labels.md`；
+- `.x-matt/agents/domain.md`。
 
 用户要求修改时更新 draft 并再次确认；批准前不得写文件。
 
@@ -74,15 +74,15 @@ metadata:
 
 ### Issue tracker
 
-<issues 存储位置的一行摘要>。见 `docs/agents/issue-tracker.md`。
+<issues 存储位置的一行摘要>。见 `.x-matt/agents/issue-tracker.md`。
 
 ### Triage labels
 
-<canonical role 到实际 label/status 的一行摘要>。见 `docs/agents/triage-labels.md`。
+<canonical role 到实际 label/status 的一行摘要>。见 `.x-matt/agents/triage-labels.md`。
 
 ### Domain docs
 
-<single-context 或 multi-context 的一行摘要>。见 `docs/agents/domain.md`。
+<single-context 或 multi-context 的一行摘要>。见 `.x-matt/agents/domain.md`。
 ```
 
 ## 配置内容
@@ -97,6 +97,6 @@ Local Markdown 至少定义：spec 路径、每 implementation ticket 文件路�
 
 1. 对批准文件做小范围写入；`AGENTS.md` block 已存在时原位更新，不追加重复 section。
 2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用。
-3. Local Markdown 不预先创建 `.scratch` feature；GitHub/GitLab 只执行只读 CLI/auth/repo/label 核验。
+3. Local Markdown 不预先创建 `.x-matt/work/<feature-slug>/`；GitHub/GitLab 只执行只读 CLI/auth/repo/label 核验。
 4. 缺少 CLI、认证、remote、必要 label、可执行 Other workflow 或任一目标文件核验失败时，明确列为未完成；不得告诉下游 tracker 已配置。
-5. 成功时报告修改文件，并说明 `matt-to-spec` 与 `matt-to-tickets` 现在会读取这些契约。日后切换 tracker 或布局时重新运行本 skill；普通文字调整可直接编辑 `docs/agents/*.md`。
+5. 成功时报告修改文件，并说明 `matt-to-spec` 与 `matt-to-tickets` 现在会读取这些契约。日后切换 tracker 或布局时重新运行本 skill；普通文字调整可直接编辑 `.x-matt/agents/*.md`。

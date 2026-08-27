@@ -25,7 +25,7 @@ metadata:
 ## 初始化
 
 1. 固定一个 bug：记录用户原话中的可观察症状、预期行为、实际行为、首次出现时间/已知 good state、环境和影响。多个症状先选一个；不要把附近失败替换成目标 bug。
-2. 读取 `git status`、当前 `HEAD`、相关 `CONTEXT.md`/`CONTEXT-MAP.md`、ADR、项目说明、现有测试命令和直接调用路径。保护用户既有改动，不改写或归因它们。
+2. 读取 `git status`、当前 `HEAD`、`.x-matt/context/`、`.x-matt/adr/`、项目说明、现有测试命令和直接调用路径。保护用户既有改动，不改写或归因它们。
 3. 记录诊断前基线、允许读取范围、允许命令、现有工作区变化和敏感数据边界。
 4. 诊断阶段默认只读。若建立反馈循环或探针必须写仓库文件，先用一次 `ask_user_question` 确认精确文件范围；只允许临时 harness、fixture 或带唯一 `[DEBUG-<id>]` 前缀的 instrumentation。不得在 Root-cause gate 前写生产修复。
 
@@ -95,7 +95,7 @@ Root-cause gate 通过且存在正确 seam 后，形成当前会话单 slice han
 - regression test 在正确 seam 上通过；
 - 相关测试、typecheck 和完整 suite 按 `matt-implement` 通过；
 - `grep` 确认所有 `[DEBUG-<id>]` instrumentation 已删除；
-- throwaway harness/artifact 已删除，或按用户批准保存在明确的 `.scratch/` 诊断路径且不含敏感数据；
+- throwaway harness/artifact 已删除，或按用户批准保存在明确的 `.x-matt/work/` 诊断路径且不含敏感数据；
 - Standards 与 Spec review 均 PASS，提交可核验；
 - 完成报告明确写出正确假设、根因、命令证据、commit 与 residual risks。
 

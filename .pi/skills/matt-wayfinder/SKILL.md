@@ -15,11 +15,11 @@ metadata:
 
 本 skill 是手动调用的多会话规划入口，只适用于**目标可以命名、但到达目标的路线仍存在 fog，且无法装进一个 agent session** 的工作。单会话可澄清的工作使用 `matt-grill-with-docs`；决定已经完成时直接进入 `matt-to-spec`。Wayfinder 默认只形成决定，不交付 destination、不写生产实现、不创建 implementation tickets。
 
-开始时完整读取 [matt-grilling](../matt-grilling/SKILL.md) 与 [matt-domain-modeling](../matt-domain-modeling/SKILL.md)。地图清空后才读取 [matt-to-spec](../matt-to-spec/SKILL.md)。父会话是 map、decision tickets、`CONTEXT.md` 与 ADR 的唯一写者；事实调查子代理保持只读。
+开始时完整读取 [matt-grilling](../matt-grilling/SKILL.md) 与 [matt-domain-modeling](../matt-domain-modeling/SKILL.md)。地图清空后才读取 [matt-to-spec](../matt-to-spec/SKILL.md)。父会话是 map、decision tickets、`.x-matt/context/` 与 `.x-matt/adr/` 的唯一写者；事实调查子代理保持只读。
 
 ## Tracker gate
 
-先按根 `AGENTS.md` 指针读取 `docs/agents/issue-tracker.md`、`docs/agents/triage-labels.md` 和 `docs/agents/domain.md`。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。
+先按根 `AGENTS.md` 指针读取 `.x-matt/agents/issue-tracker.md`、`.x-matt/agents/triage-labels.md` 和 `.x-matt/agents/domain.md`。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。
 
 所有 tracker 写入使用配置中的真实操作。外部 tracker 的 create/edit/assign/close 属外部写入，执行前必须取得明确授权；Local Markdown 是当前仓库内写入，可在用户明确调用本 skill 后按已确认 draft 执行。写后必须重新读取目标并核验。
 

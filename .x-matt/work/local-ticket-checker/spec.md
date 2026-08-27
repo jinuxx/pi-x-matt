@@ -24,7 +24,7 @@ node scripts/check-local-ticket.mjs <repo-relative-ticket-path>
 ## Implementation Decisions
 
 - 仅使用 Node.js 标准库。
-- 输入必须是仓库内 `.scratch/` 下的相对路径。
+- 输入必须是仓库内 `.x-matt/work/` 下的相对路径。
 - `Parent` 在本 CLI 中只做非空存在性 preflight；允许 `None` 或非空 reference，但不读取、解析或验证 parent 文件。真实 parent relationship 由 `implement` 父会话按 tracker 契约核验。
 - `Blocked by` 仅接受 `None` 或逗号分隔的仓库相对 ticket 路径，不接受裸编号或标题。
 - stdout JSON 包含 `ok`、`ticket`、`blockers`、`errors`。

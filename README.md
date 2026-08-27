@@ -10,7 +10,7 @@
 
 ```bash
 pi install -l npm:pi-subagents@0.57.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.1.0
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.0
 ```
 
 然后重启或 reload Pi：
@@ -37,7 +37,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.1.0
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.1.0
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.0
 ```
 
 ## 架构
@@ -48,7 +48,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.1.0
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
-作为 Git package 安装时，package root 负责保存和校验 `.pi/skills`、`skillpacks/leaf`、`config/skill-registry.json` 与上游快照；目标项目 root 只提供代码、测试、`CONTEXT.md`、ADR 和 `.scratch/`。dispatcher 不再要求这些 package 文件出现在目标项目中，child 仍以目标项目 root 作为 `cwd`。
+作为 Git package 安装时，package root 负责保存和校验 `.pi/skills`、`skillpacks/leaf`、`config/skill-registry.json` 与上游快照；目标项目 root 提供代码、测试和统一的 `.x-matt/` 项目文档树。dispatcher 不再要求 package 文件出现在目标项目中，child 仍以目标项目 root 作为 `cwd`。
 
 运行链路支持单 lane、并行 lane 和按 stage 顺序执行、stage 内并行的 pipeline：
 
@@ -134,15 +134,25 @@ npm run pack:check     # 检查 package 文件清单
 /reload
 ```
 
-首次使用发布链前运行 `matt-setup`，由用户确认 tracker、label mapping 和领域文档布局；它只在用户批准 draft 后写入 `docs/agents/*.md` 与可选的项目级 `AGENTS.md`，不会创建远端 issue 或 label。未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，spec 与 tickets 写入 `.scratch/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成后由 `matt-implement` 在最终提交中写为 `resolved`。
+首次使用发布链前运行 `matt-setup`，由用户确认 tracker、label mapping 和领域文档布局；它只在用户批准 draft 后写入 `.x-matt/` 与可选的项目级 `AGENTS.md` 指针，不会创建远端 issue 或 label。Matt 管理的项目文档统一采用：
 
-需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 ADR。单个 session 能澄清的工作在 shared understanding 后进入 `matt-to-spec` 或一个 `matt-implement` slice；目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
+```text
+.x-matt/
+├── agents/   # tracker、label 和 domain 契约
+├── context/  # CONTEXT.md、CONTEXT-MAP.md 与多 context glossary
+├── adr/      # single-context ADR；多 context 时按子目录分组
+└── work/     # Local Markdown spec、tickets、map 和 decisions
+```
+
+未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，spec 与 tickets 写入 `.x-matt/work/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成后由 `matt-implement` 在最终提交中写为 `resolved`。
+
+需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。单个 session 能澄清的工作在 shared understanding 后进入 `matt-to-spec` 或一个 `matt-implement` slice；目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
 
 讨论无法回答一个明确的状态/逻辑或 UI 设计问题时，使用 model-invoked `matt-prototype`。父会话先确认唯一 question 与 logic/UI branch，再由单 worker 构建：logic 是可双击的单文件 HTML；UI 是真实页面上下文中通过 `?variant=` 切换的 3–5 个结构差异方案。用户本人给出 verdict 后，artifact 只提交到本地 `prototype/<slug>` branch，不合并、不 push；原 branch 只接收可核验 context pointer，生产实现仍进入 `matt-to-spec`/`matt-implement`。
 
-`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得 artifact branch pointer 与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.scratch/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
+`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得 artifact branch pointer 与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
 
-需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`CONTEXT.md`、ADR 和明确提供的 research note 综合规格；只有配置了 `docs/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
+需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
 
 具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
 

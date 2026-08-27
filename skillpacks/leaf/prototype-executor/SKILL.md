@@ -21,7 +21,7 @@ metadata:
 1. 读取父任务中的唯一 design question、明确的 `logic`/`ui` branch、fixed HEAD、原 branch、既有工作区变化、允许文件、运行命令和停止条件。
 2. 核对允许文件不覆盖用户既有改动；范围、branch 或问题含糊时使用 `contact_supervisor`，不要自行默认。
 3. `logic` 只应用 `prototype-logic`；`ui` 只应用 `prototype-ui`。另一套 skill 仅用于识别边界，不混合 artifact 形状。
-4. 读取相关代码、项目说明、`CONTEXT.md` 和 ADR，复用现有依赖、route、component library 与领域词汇。
+4. 读取相关代码、项目说明、`.x-matt/context/` 和 `.x-matt/adr/`，复用现有依赖、route、component library 与领域词汇。
 
 ## 构建
 

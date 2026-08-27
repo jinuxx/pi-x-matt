@@ -19,7 +19,7 @@ metadata:
 ## 开始前
 
 1. 读取父任务中的需求、固定基线、既有工作区状态、允许范围、测试命令和已确认 seams。
-2. 读取相关 `CONTEXT.md`、ADR、项目说明、调用者与现有测试，使用项目领域词汇。
+2. 读取 `.x-matt/context/`、`.x-matt/adr/`、项目说明、调用者与现有测试，使用项目领域词汇。
 3. 若 seams 未明确确认、范围会覆盖既有改动、测试命令不可确定，或必须改变批准的 interface，先 `contact_supervisor`；不要猜测。
 
 ## Red → Green

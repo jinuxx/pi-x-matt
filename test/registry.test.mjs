@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.version, "0.2.0");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -262,13 +262,13 @@ test("project dispatcher defers pi-subagents RPC until turn_end", async () => {
 test("repository tracker setup is executable and discoverable by Pi", async () => {
   const agents = await readFile(join(ROOT, "AGENTS.md"), "utf8");
   assert.equal((agents.match(/^## Agent skills$/gm) ?? []).length, 1);
-  assert.match(agents, /docs\/agents\/issue-tracker\.md/);
-  assert.match(agents, /docs\/agents\/triage-labels\.md/);
-  assert.match(agents, /docs\/agents\/domain\.md/);
+  assert.match(agents, /\.x-matt\/agents\/issue-tracker\.md/);
+  assert.match(agents, /\.x-matt\/agents\/triage-labels\.md/);
+  assert.match(agents, /\.x-matt\/agents\/domain\.md/);
 
-  const tracker = await readFile(join(ROOT, "docs", "agents", "issue-tracker.md"), "utf8");
+  const tracker = await readFile(join(ROOT, ".x-matt", "agents", "issue-tracker.md"), "utf8");
   assert.match(tracker, /Issue Tracker: Local Markdown/);
-  assert.match(tracker, /\.scratch\/<feature-slug>\/spec\.md/);
+  assert.match(tracker, /\.x-matt\/work\/<feature-slug>\/spec\.md/);
   assert.match(tracker, /issues\/<NN>-<slug>\.md/);
   assert.match(tracker, /Type: spec/);
   assert.match(tracker, /Status: spec-ready/);
@@ -285,7 +285,7 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(tracker, /同一个最终提交/);
   assert.match(tracker, /重新读取目标文件/);
   assert.match(tracker, /## Wayfinding operations/);
-  assert.match(tracker, /\.scratch\/<effort>\/map\.md/);
+  assert.match(tracker, /\.x-matt\/work\/<effort>\/map\.md/);
   assert.match(tracker, /decisions\/<NN>-<slug>\.md/);
   assert.match(tracker, /Type: wayfinder-map/);
   assert.match(tracker, /Status: active/);
@@ -297,16 +297,19 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(tracker, /\*\*Release\*\*.*Status: open.*Claimed by: None/);
   assert.match(tracker, /implementation.*`issues\/` 冲突/);
 
-  const labels = await readFile(join(ROOT, "docs", "agents", "triage-labels.md"), "utf8");
+  const labels = await readFile(join(ROOT, ".x-matt", "agents", "triage-labels.md"), "utf8");
   assert.match(labels, /`ready-for-agent` \| `ready-for-agent`/);
   assert.match(labels, /`spec-ready`/);
   assert.match(labels, /`resolved`/);
   assert.match(labels, /`active` \/ `cleared`/);
   assert.match(labels, /`open` \/ `claimed` \/ `resolved` \/ `out-of-scope`/);
-  const domain = await readFile(join(ROOT, "docs", "agents", "domain.md"), "utf8");
+  const domain = await readFile(join(ROOT, ".x-matt", "agents", "domain.md"), "utf8");
   assert.match(domain, /single-context/);
-  assert.match(domain, /CONTEXT\.md/);
-  assert.match(domain, /docs\/adr\//);
+  assert.match(domain, /\.x-matt\/context\/CONTEXT\.md/);
+  assert.match(domain, /\.x-matt\/context\/<context>\/CONTEXT\.md/);
+  assert.match(domain, /\.x-matt\/adr\/<context>\//);
+  assert.match(tracker, /\.x-matt\/work\//);
+  assert.match(agents, /\.x-matt\/agents\//);
 });
 
 test("all project agents are leaf-only and use the private skill path", async () => {
@@ -344,9 +347,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(setup, /disable-model-invocation:\s*true/);
   assert.match(setup, /pi-class:\s*interaction/);
   assert.match(setup, /ask_user_question/);
-  assert.match(setup, /docs\/agents\/issue-tracker\.md/);
-  assert.match(setup, /docs\/agents\/triage-labels\.md/);
-  assert.match(setup, /docs\/agents\/domain\.md/);
+  assert.match(setup, /\.x-matt\/agents\/issue-tracker\.md/);
+  assert.match(setup, /\.x-matt\/agents\/triage-labels\.md/);
+  assert.match(setup, /\.x-matt\/agents\/domain\.md/);
+  assert.match(setup, /\.x-matt\/context\/<context>\/CONTEXT\.md/);
+  assert.match(setup, /\.x-matt\/adr\/<context>\//);
+  assert.match(setup, /\.x-matt\/work\/<feature-slug>\//);
   assert.match(setup, /不创建远端 issue、label/);
   assert.match(setup, /Pi-only/);
   assert.match(setup, /`spec-ready`、`ready-for-agent` 与 `resolved`/);
@@ -383,8 +389,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toSpec, /tracker/);
   assert.match(toSpec, /ready-for-agent/);
   assert.match(toSpec, /已移植的 `matt-setup`/);
-  assert.match(toSpec, /docs\/agents\/issue-tracker\.md/);
-  assert.match(toSpec, /docs\/agents\/triage-labels\.md/);
+  assert.match(toSpec, /\.x-matt\/agents\/issue-tracker\.md/);
+  assert.match(toSpec, /\.x-matt\/agents\/triage-labels\.md/);
   assert.match(toSpec, /Type: spec/);
   assert.match(toSpec, /Status: spec-ready/);
   assert.match(toSpec, /^description:.*parent spec.*spec-ready/m);
@@ -406,8 +412,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /ask_user_question/);
   assert.match(toTickets, /ready-for-agent/);
   assert.match(toTickets, /已移植的 `matt-setup`/);
-  assert.match(toTickets, /docs\/agents\/issue-tracker\.md/);
-  assert.match(toTickets, /docs\/agents\/triage-labels\.md/);
+  assert.match(toTickets, /\.x-matt\/agents\/issue-tracker\.md/);
+  assert.match(toTickets, /\.x-matt\/agents\/triage-labels\.md/);
   assert.match(toTickets, /wide refactor/i);
   assert.match(toTickets, /native relationship/);
   assert.match(toTickets, /Real tracker issue template/);
@@ -540,8 +546,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.1\.0/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.1\.0/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.0/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.0/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 

@@ -1,15 +1,15 @@
 # Issue Tracker: Local Markdown
 
-Issues 与 specs 位于仓库内的 `.scratch/<feature-slug>/`。当前 tracker 不执行远端 API 或 CLI 操作。
+Issues 与 specs 位于仓库内的 `.x-matt/work/<feature-slug>/`。当前 tracker 不执行远端 API 或 CLI 操作。
 
 ## 路径
 
-- Parent spec：`.scratch/<feature-slug>/spec.md`
-- Implementation tickets：`.scratch/<feature-slug>/issues/<NN>-<slug>.md`
+- Parent spec：`.x-matt/work/<feature-slug>/spec.md`
+- Implementation tickets：`.x-matt/work/<feature-slug>/issues/<NN>-<slug>.md`
 - `<NN>` 从 `01` 开始，并按 blockers-first 创建
 - 一个 ticket 一个文件，不创建合并的 tickets 文档
 
-`.scratch/<feature-slug>/` 按需创建；setup 不预先创建空 feature 目录。
+`.x-matt/work/<feature-slug>/` 按需创建；setup 不预先创建空 feature 目录。
 
 ## Spec 格式
 
@@ -62,8 +62,8 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 
 Wayfinder artifacts 与后续 implementation tickets 分目录保存，避免 decision ticket 编号和 `to-tickets` 的 `issues/` 冲突：
 
-- Map：`.scratch/<effort>/map.md`
-- Child decision ticket：`.scratch/<effort>/decisions/<NN>-<slug>.md`
+- Map：`.x-matt/work/<effort>/map.md`
+- Child decision ticket：`.x-matt/work/<effort>/decisions/<NN>-<slug>.md`
 - `<NN>` 从 `01` 开始；frontier 稳定顺序按编号升序
 
 Map 至少使用：

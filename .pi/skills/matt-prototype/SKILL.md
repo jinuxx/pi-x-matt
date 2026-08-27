@@ -16,7 +16,7 @@ Prototype 是**回答一个设计问题的 throwaway code**。只有问题无法
 
 ## Question gate
 
-先读取相关代码、项目说明、`CONTEXT-MAP.md`/`CONTEXT.md`、ADR、当前 tracker/map ticket 和真实 route/module。把 design question 收敛为一句可由 artifact 回答的话，并判断 branch：
+先读取相关代码、项目说明、`.x-matt/context/`、`.x-matt/adr/`、当前 tracker/map ticket 和真实 route/module。把 design question 收敛为一句可由 artifact 回答的话，并判断 branch：
 
 - **Logic**：状态模型、业务规则、transition、data shape 或 API surface 是否符合预期。
 - **UI**：页面/组件应采用什么 layout、information hierarchy 或 primary interaction。

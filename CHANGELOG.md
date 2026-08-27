@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- 将 tracker、领域上下文、ADR、spec、tickets 与 Wayfinder 文档统一收口到 `.x-matt/`。
+
 ## 0.1.0
 
 - 首次发布 Pi-native Matt Pocock 工程工作流。

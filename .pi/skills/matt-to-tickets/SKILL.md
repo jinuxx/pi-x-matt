@@ -18,8 +18,8 @@ metadata:
 ## 前置条件
 
 1. 读取当前会话中的 spec 或用户提供的 spec reference；若是 issue/URL，读取完整正文和评论。
-2. 读取相关代码、`CONTEXT-MAP.md`/`CONTEXT.md` 和 ADR，使用项目领域词汇，尊重既有决定。
-3. 检查 `docs/agents/issue-tracker.md` 和 `docs/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `matt-setup`，不要自行猜测 GitHub、GitLab 或 local-markdown。
+2. 读取相关代码、`.x-matt/context/` 和 `.x-matt/adr/`，使用项目领域词汇，尊重既有决定。
+3. 检查 `.x-matt/agents/issue-tracker.md` 和 `.x-matt/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `matt-setup`，不要自行猜测 GitHub、GitLab 或 local-markdown。
 4. 不要把 `matt-to-tickets` 当作 triage：它产生的 tickets 已按 `ready-for-agent` 约定准备好，不需要再次 triage；不要关闭或修改 parent spec issue。
 
 ## 切分原则
@@ -59,7 +59,7 @@ metadata:
 ## 发布
 
 1. 用户批准 breakdown 后，先发布无 blocker 的 tickets，再按依赖顺序发布后续 tickets。
-2. local-markdown tracker：按 blockers-first 写入 `.scratch/<feature-slug>/issues/<NN>-<slug>.md`，每张 ticket 一个文件，`NN` 从 `01` 开始；每个文件使用 `Type: ticket`、`Status: ready-for-agent`、Parent、Blocked by、What to build、Acceptance criteria 和空的 `## Comments` 锚点。
+2. local-markdown tracker：按 blockers-first 写入 `.x-matt/work/<feature-slug>/issues/<NN>-<slug>.md`，每张 ticket 一个文件，`NN` 从 `01` 开始；每个文件使用 `Type: ticket`、`Status: ready-for-agent`、Parent、Blocked by、What to build、Acceptance criteria 和空的 `## Comments` 锚点。
 3. real tracker：按配置执行 issue 创建，使用 `ready-for-agent` label；优先使用 tracker 原生 blocking/sub-issue relationship，不可用时将 blocking references 写入 body。父 spec 只作为 parent reference，不关闭、不修改。
 4. 每次创建后读取或查询结果。Local Markdown 核对标题、Type、Parent、Status、Blocked by、正文、验收标准和 Comments 锚点；real tracker 核对标题、正文、label、identifier 和 blocking edge。任何发布结果无法核验时停止并报告，不继续批量创建。
 5. 发布完成后报告 ticket 数量、frontier、blocking graph 和下一步 `matt-implement`；`matt-implement` 已移植，每次只处理一个 ticket，并在 TDD、完整验证和双轴 code-review 通过后提交当前 branch。不要在 `matt-to-tickets` 中自行实施或批量处理 tickets。

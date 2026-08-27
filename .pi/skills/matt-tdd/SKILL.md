@@ -14,7 +14,7 @@ metadata:
 
 ## 调度前
 
-1. 读取相关代码、`CONTEXT.md`、ADR、项目说明和现有测试约定，明确用户可观察行为。
+1. 读取相关代码、`.x-matt/context/`、`.x-matt/adr/`、项目说明和现有测试约定，明确用户可观察行为。
 2. 写出建议测试的公开 **seam**、每个 seam 的 **interface** 与待验证行为。测试只能穿过公开 interface，不测试实现细节。
 3. 若用户尚未明确批准这些 seams，使用 `ask_user_question` 请求一次聚焦确认。确认前不得调用 TDD workflow。
 4. 记录固定基线（优先当前 `HEAD`）和调度前工作区状态，避免把既有改动错误归因给 worker。
