@@ -7,7 +7,7 @@ Blocked by: .scratch/local-ticket-checker/issues/01-validate-ready-ticket.md
 
 ## What to build
 
-使其解析逗号分隔的仓库相对 blocker 路径并读取每个 blocker。只有全部 blocker 都是 `Type: ticket` 且 `Status: resolved` 时，目标 ticket 才可进入实现。
+扩展 Local ticket checker，使其解析逗号分隔的仓库相对 blocker 路径并读取每个 blocker。只有全部 blocker 都是 `Type: ticket` 且 `Status: resolved` 时，目标 ticket 才可进入实现。
 
 ## Acceptance criteria
 
