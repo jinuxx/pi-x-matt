@@ -47,7 +47,7 @@
     "projectRootResolution": "nearest",
     "agentOverrides": {
       "reviewer": {
-        "model": "openai-codex/gpt-5.6-sol",
+        "model": "deepseek/deepseek-v4-pro",
         "thinking": "high"
       }
     }
@@ -55,7 +55,7 @@
 }
 ```
 
-因此项目不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。项目只暴露四个自定义 agent；项目级 reviewer 固定使用 `openai-codex/gpt-5.6-sol`、thinking `high`，worker 保持当前父会话模型：
+因此项目不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。项目只暴露四个自定义 agent；项目级 reviewer 固定使用 `deepseek/deepseek-v4-pro`、thinking `high`，worker 保持当前父会话模型：
 
 | Agent | 权限 | 当前用途 |
 | --- | --- | --- |

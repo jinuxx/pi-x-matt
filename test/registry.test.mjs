@@ -127,7 +127,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.disableBuiltins, true);
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.deepEqual(settings.subagents.agentOverrides, {
-    reviewer: { model: "openai-codex/gpt-5.6-sol", thinking: "high" },
+    reviewer: { model: "deepseek/deepseek-v4-pro", thinking: "high" },
   });
   assert.deepEqual(settings.packages, [{
     source: "npm:pi-subagents",

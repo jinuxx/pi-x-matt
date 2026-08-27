@@ -14,7 +14,7 @@
     "projectRootResolution": "nearest",
     "agentOverrides": {
       "reviewer": {
-        "model": "openai-codex/gpt-5.6-sol",
+        "model": "deepseek/deepseek-v4-pro",
         "thinking": "high"
       }
     }
