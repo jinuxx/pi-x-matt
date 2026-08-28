@@ -20,8 +20,8 @@ metadata:
 1. 确认当前 branch 是用户希望写入的 branch；读取 `git status`、`git log` 和当前 fixed point。不要改写或归因用户既有工作区改动。
 2. 读取完整 ticket/spec/当前已确认计划、`.x-matt/context/`、`.x-matt/adr/`、项目说明和直接调用者。使用已确认的领域词汇。
 3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。
-4. 从 ticket 或当前会话单 slice 计划中提取已批准 seams。若没有可执行的 seam、行为或测试命令，停止并报告缺口；不要在 implement 中重新设计。将 seam 交给 `matt-tdd`，由其执行公开 seam 确认 gate。
-5. 固定实现前基线和调度前工作区状态，并明确允许修改的范围、测试命令、typecheck 命令（若项目提供）和停止条件。
+4. 从 ticket 或当前会话单 slice 计划中提取候选 seams，并先做测试价值判断。显式 acceptance criterion、缺陷回归、业务规则、分支/状态转换、权限/数据完整性和公开 contract 必须有测试；不要仅因代码行数少而跳过。纯机械且已被现有行为测试覆盖的映射、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格明确排除的假设性边缘情况，不必新增独立测试方法；多个紧密相关的简单字段优先由一个行为级测试覆盖，而不是一字段一测试。把保留的测试行为和省略项的理由都写入 TDD task。若没有可执行的公开 seam、行为或聚焦测试命令，停止并报告缺口；不要在 implement 中重新设计。
+5. 固定实现前基线和调度前工作区状态，并把验证命令明确分为三类：每轮 RED/GREEN 使用的最小命令、所有 slices 完成后由 worker 运行的相关回归命令、以及只由父会话运行的最终验证命令（完整测试套件与必要的全量 typecheck/build）。同时明确允许修改的范围和停止条件。不得把父会话最终验证命令作为 worker 执行项下发。
 6. 完整读取并应用 [domain-modeling](../matt-domain-modeling/SKILL.md) 的写入边界。worker 若在实现中发现值得持久化的新术语或 ADR 级决定，必须通过 `contact_supervisor` 报告而不是写共享文档；当前 TDD run 随即停止为 `BLOCKED`。run 退出后由父会话按 domain-modeling gate 取得用户决定并写入，再以新基线重新调度，确保父会话与 worker 不并行写同一工作区。
 
 ## 执行顺序
@@ -31,7 +31,7 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、测试/typecheck 命令、相关标准和停止条件。
+- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、相关标准和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
 
 只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。
 
@@ -39,7 +39,7 @@ TDD worker 是唯一写者。implement 父会话不直接与 worker 并行写入
 
 ### 2. 持续验证
 
-TDD 期间按 slice 运行最小单测；有 typecheck 时定期运行。TDD 完成后运行 ticket 相关测试、typecheck（若有）和一次完整测试套件。任何失败都保持未提交状态，报告命令、失败证据和阻塞原因。
+TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成后运行一次相关回归命令；只有明确属于当前 slice 的聚焦 typecheck 才交给 worker。TDD 完成后，父会话再运行必要的 ticket 相关复核、typecheck（若有）和一次完整测试套件。完整测试套件不得消耗 TDD worker 的 workflow runtime。任何失败都保持未提交状态，报告命令、失败证据和阻塞原因。
 
 ### 3. 独立 code review
 

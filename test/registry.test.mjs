@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.4");
+  assert.equal(manifest.version, "0.2.5");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -580,8 +580,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.4/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.4/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.5/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.5/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
@@ -648,6 +648,32 @@ test("workflow schemas require structured output and distinct review axes", asyn
   assert.deepEqual([implement.stage, tddStandards.stage, tddSpec.stage], [1, 2, 2]);
   assert.deepEqual(tddStandards.gate, { field: "verdict", equals: "PASS" });
   assert.deepEqual(tddSpec.gate, { field: "verdict", equals: "PASS" });
+});
+
+test("TDD keeps full validation in the parent and filters low-value tests", async () => {
+  const implementSkill = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
+  assert.match(implementSkill, /不得把父会话最终验证命令作为 worker 执行项下发/);
+  assert.match(implementSkill, /显式 acceptance criterion.*必须有测试/);
+  assert.match(implementSkill, /无分支且无业务语义.*低风险简单变更/);
+  assert.match(implementSkill, /多个紧密相关的简单字段优先由一个行为级测试覆盖/);
+
+  const tddSkill = await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "SKILL.md"), "utf8");
+  assert.match(tddSkill, /测试价值 gate/);
+  assert.match(tddSkill, /完整测试套件.*worker 不得运行/);
+  assert.match(tddSkill, /省略测试的候选项及理由/);
+
+  const executorSkill = await readFile(join(ROOT, "skillpacks", "leaf", "tdd-executor", "SKILL.md"), "utf8");
+  assert.match(executorSkill, /不要运行完整测试套件、全量 build/);
+  assert.match(executorSkill, /不可达或规格明确排除的假设性边缘情况/);
+  assert.match(executorSkill, /residualRisks.*未新增独立测试/);
+
+  const workflow = JSON.parse(await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "workflow.json"), "utf8"));
+  assert.match(workflow.lanes[0].taskPrefix, /只运行任务列明的 RED\/GREEN 最小命令和 worker 相关回归命令/);
+  assert.match(workflow.lanes[0].taskPrefix, /不得跳过显式验收/);
+
+  const readme = await readFile(join(ROOT, "README.md"), "utf8");
+  assert.match(readme, /完整测试套件、全量 build 与最终验证不下发给 worker/);
+  assert.match(readme, /紧密相关的简单字段可以合并到一个行为级测试/);
 });
 
 test("registry generation fails closed on a missing dependency", async () => {

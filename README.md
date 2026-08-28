@@ -12,7 +12,7 @@
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.4
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.5
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
@@ -41,7 +41,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.4
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.4
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.5
 ```
 
 ## 架构
@@ -171,7 +171,7 @@ npm run pack:check     # 检查 package 文件清单
 
 代码评审使用 `workflow: "matt-code-review"`，task 中应包含目标、边界、fixed point/diff、标准来源、spec 来源和停止条件。
 
-TDD 使用 `workflow: "matt-tdd"`。调度前必须由用户确认公开 seam 与待验证行为；task 还要包含固定基线、既有工作区变化、允许范围和测试命令。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
+TDD 使用 `workflow: "matt-tdd"`。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令和 worker 相关回归命令。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
 
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
 

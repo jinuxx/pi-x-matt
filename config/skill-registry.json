@@ -1066,7 +1066,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "f4ce66aeeea4f16c627472ae2e27596ec6493653b9b8a3acbf9ec8aa3f315d23",
+      "sourceDigest": "4e63bd75609c3cb255d107d1077e926af56126cbd9fc400d04794138c920ad20",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1407,9 +1407,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "91612c07843ac335a3ff7d18d235f24fd7a251776e6b20c6cce8f90c3be39ddb",
+      "sourceDigest": "c5186b3c3693178bc0551a17e3e7f9fb5721f2bc500f78697dd71d3eac1aa6e8",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "f896b5c7feb56019619a3f6356f879ef94733ee3be27301f8b5538b566c5ec09",
+      "workflowDigest": "0e586a2d06b6d231b8a6411e53081140a1b57266d17f74b0ffa06b4dd6bbaa34",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1427,7 +1427,7 @@
               "maxTurns": 36,
               "graceTurns": 4
             },
-            "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、固定基线和允许范围；逐个 vertical slice 取得真实 RED 后写最小 GREEN。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
+            "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、测试价值判断、固定基线和允许范围；逐个保留的 vertical slice 取得真实 RED 后写最小 GREEN。不要为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，但不得跳过显式验收、缺陷回归、业务规则、分支状态、权限数据完整性或公开 contract。只运行任务列明的 RED/GREEN 最小命令和 worker 相关回归命令；不要运行完整测试套件、全量 build 或父会话最终验证，若任务要求这些命令则先 contact_supervisor。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
             "gate": {
               "field": "status",
               "equals": "COMPLETE",
@@ -1904,7 +1904,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "3fe209a5535eae6f6031e4c62bd3045ba560d7a35c02fb7aa9364fcaa6bd67ea",
+      "sourceDigest": "6e0550c0fe7fbb2632565179b48d2123586851a47dbcc63011cef86dc08c5775",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"

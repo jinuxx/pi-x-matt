@@ -10,7 +10,7 @@
       "skills": ["tdd-executor"],
       "timeoutMs": 600000,
       "turnBudget": { "maxTurns": 36, "graceTurns": 4 },
-      "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、固定基线和允许范围；逐个 vertical slice 取得真实 RED 后写最小 GREEN。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
+      "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、测试价值判断、固定基线和允许范围；逐个保留的 vertical slice 取得真实 RED 后写最小 GREEN。不要为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，但不得跳过显式验收、缺陷回归、业务规则、分支状态、权限数据完整性或公开 contract。只运行任务列明的 RED/GREEN 最小命令和 worker 相关回归命令；不要运行完整测试套件、全量 build 或父会话最终验证，若任务要求这些命令则先 contact_supervisor。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
       "gate": {
         "field": "status",
         "equals": "COMPLETE",
