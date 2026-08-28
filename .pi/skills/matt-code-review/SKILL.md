@@ -15,16 +15,17 @@ metadata:
 ## 调度前
 
 1. 明确评审对象：优先使用用户给出的 fixed point、diff、文件或计划。没有明确范围时必须先收敛范围。
-2. 若评审 Git 变化，父会话先确认 ref 可解析且 diff 非空；把 fixed point、diff 命令和 commit 范围写入 task。
-3. 列出仓库标准来源，例如 `AGENTS.md`、`CONTRIBUTING.md` 或项目约定文件。
-4. 列出规格来源或明确写 `无可用 spec`。不要伪造需求。
+2. 若评审 Git 变化，父会话先确认 ref 可解析且 diff 非空，并取得具体 changed-file 路径列表；把 fixed point、逐文件 diff 方式和初始证据 allowlist 写入 task。不要只给目录或笼统的“相关代码”。
+3. 列出仓库标准文件的具体路径，例如 `AGENTS.md`、`CONTRIBUTING.md` 或项目约定文件。
+4. 列出当前 ticket、其明确引用的 parent spec 和其他规格来源的具体路径，或明确写 `无可用 spec`。默认不把 sibling/future tickets、ADR、context 或 roadmap 交给 Spec reviewer；不要伪造需求。
+5. 为 Standards reviewer 写明允许的一层依赖扩展规则，为 Spec reviewer 写明 module/package 搜索边界。初始证据不足且无法在该边界内核验时，reviewer 应返回 `NO_EVIDENCE`，父会话不得期待它扫描项目补齐材料。
 
 ## 调度
 
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-code-review`
-- `task`: 包含目标、评审边界、fixed point/diff、标准来源、spec 来源、已知约束和停止条件
+- `task`: 包含目标、具体 changed-file 路径、逐文件 fixed point/diff 方法、初始证据 allowlist、标准文件路径、当前 ticket/parent spec 路径、允许的一层依赖扩展、module/package 搜索边界、已知约束和停止条件
 
 Dispatcher 会并行启动两个 fresh-context reviewer：
 

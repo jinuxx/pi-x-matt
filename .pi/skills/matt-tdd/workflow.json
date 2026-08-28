@@ -89,7 +89,7 @@
       "skills": ["review-standards"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核。Dispatcher 会附加 implement 的 structuredOutput 作为 RED/GREEN 命令证据；结合 git_read status/worktree-files/worktree-diff、任务固定基线和真实文件核验，只读检查仓库规则、正确性、测试质量及范围。不要修改文件，不要审计未列入范围的基础设施。",
+      "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核。Dispatcher 会附加 implement 的 structuredOutput；以其中的 changedFiles 和 RED/GREEN 命令为实现证据，并结合任务列出的标准文件与初始证据边界。先核对 changedFiles，再使用带 path 的逐文件 worktree-diff。只有为消除一个已命名的 diff 不确定性时才扩展到一级直接调用者、被调用者、配置、映射或聚焦测试，不得递归。FFF 查询必须指定任务 module/package path；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件，不要审计未列入范围的基础设施。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
@@ -125,7 +125,7 @@
       "skills": ["review-spec"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核。Dispatcher 会附加 implement 的 structuredOutput 作为实现证据；结合 git_read status/worktree-files/worktree-diff、任务固定基线和真实文件核验，只依据任务中的明确需求、已确认 seams 与验收标准检查遗漏、错误行为和范围膨胀。不要修改文件；没有可用 spec 时返回 NO_EVIDENCE。",
+      "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核。Dispatcher 会附加 implement 的 structuredOutput；以其中的 changedFiles 作为实现范围，只读取任务列出的当前 ticket、其明确引用的 parent spec、带 path 的逐文件 worktree-diff 和其他显式规格来源。不得默认读取 sibling/future tickets、ADR、context、roadmap 或迁移计划。只有为核验一条明确验收行为时才扩展到一级实现依赖，不得递归。FFF 查询必须指定任务 module/package path；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",

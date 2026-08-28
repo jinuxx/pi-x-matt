@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.5");
+  assert.equal(manifest.version, "0.2.6");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -333,6 +333,13 @@ test("all project agents are leaf-only and use the private skill path", async ()
   assert.match(reviewer, /tools:.*\bgit_read\b/);
   assert.doesNotMatch(reviewer.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write|apply_patch|bash)\b/);
   assert.match(reviewer, /subagentOnlyExtensions:\s*\.\.\/\.\.\/child-tools\/review-readonly-git\.ts/);
+  const reviewerBudget = reviewer.match(/^toolBudget:\s*(\{.*\})$/m);
+  assert.ok(reviewerBudget);
+  assert.deepEqual(JSON.parse(reviewerBudget[1]), {
+    soft: 12,
+    hard: 20,
+    block: ["read", "grep", "find", "ffgrep", "fffind", "ls", "git_read"],
+  });
   const gitTool = await readFile(join(ROOT, "child-tools", "review-readonly-git.ts"), "utf8");
   assert.match(gitTool, /"worktree-files"/);
   assert.match(gitTool, /"worktree-diff"/);
@@ -556,7 +563,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(prototype, /生产实现.*implement.*tdd.*code-review/);
 
   const tdd = await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "SKILL.md"), "utf8");
-  assert.match(tdd, /没有明确 spec\/验收行为时停止/);
+  assert.match(tdd, /没有明确 spec\/验收行为.*时停止/);
 
   const research = await readFile(join(ROOT, ".pi", "skills", "matt-research", "SKILL.md"), "utf8");
   assert.match(research, /跨会话证据/);
@@ -580,8 +587,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.5/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.5/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.6/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.6/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
@@ -591,6 +598,44 @@ test("parent workflows require structured completion results", async () => {
     assert.match(content, /structuredOutput/);
     assert.match(content, /fail|失败/);
   }
+});
+
+test("reviewers stay inside a bounded evidence envelope", async () => {
+  const standardsSkill = await readFile(join(ROOT, "skillpacks", "leaf", "review-standards", "SKILL.md"), "utf8");
+  assert.match(standardsSkill, /初始证据 allowlist/);
+  assert.match(standardsSkill, /带 `path` 的 `worktree-diff`\/`diff`/);
+  assert.match(standardsSkill, /不得继续递归到二级依赖/);
+  assert.match(standardsSkill, /不得为了制造 `PASS` 扩大文件范围/);
+
+  const specSkill = await readFile(join(ROOT, "skillpacks", "leaf", "review-spec", "SKILL.md"), "utf8");
+  assert.match(specSkill, /当前 ticket 路径/);
+  assert.match(specSkill, /不得读取 sibling\/future tickets、ADR、context、roadmap/);
+  assert.match(specSkill, /不得为了制造 `PASS` 扩大文档或代码范围/);
+
+  const reviewParent = await readFile(join(ROOT, ".pi", "skills", "matt-code-review", "SKILL.md"), "utf8");
+  assert.match(reviewParent, /具体 changed-file 路径列表/);
+  assert.match(reviewParent, /初始证据 allowlist/);
+
+  const implementParent = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
+  assert.match(implementParent, /标准文件具体路径、当前 ticket\/parent spec 具体路径/);
+  const tddParent = await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "SKILL.md"), "utf8");
+  assert.match(tddParent, /reviewer 初始证据边界、module\/package 搜索边界/);
+
+  const reviewWorkflow = JSON.parse(await readFile(join(ROOT, ".pi", "skills", "matt-code-review", "workflow.json"), "utf8"));
+  assert.ok(reviewWorkflow.lanes.every((lane) => /逐文件 diff/.test(lane.taskPrefix)));
+  assert.ok(reviewWorkflow.lanes.every((lane) => /禁止目录级或全项目扫描/.test(lane.taskPrefix)));
+  assert.ok(reviewWorkflow.lanes.every((lane) => /不足时立即 NO_EVIDENCE/.test(lane.taskPrefix)));
+
+  const tddWorkflow = JSON.parse(await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "workflow.json"), "utf8"));
+  const tddReviewers = tddWorkflow.lanes.filter((lane) => lane.stage === 2);
+  assert.equal(tddReviewers.length, 2);
+  assert.ok(tddReviewers.every((lane) => /structuredOutput/.test(lane.taskPrefix)));
+  assert.ok(tddReviewers.every((lane) => /禁止目录级或全项目扫描/.test(lane.taskPrefix)));
+  assert.ok(tddReviewers.every((lane) => /不得扩大范围制造 PASS/.test(lane.taskPrefix)));
+
+  const readme = await readFile(join(ROOT, "README.md"), "utf8");
+  assert.match(readme, /soft 12、hard 20 的只读工具预算/);
+  assert.match(readme, /限定证据不足时立即返回 `NO_EVIDENCE`/);
 });
 
 test("workflow schemas require structured output and distinct review axes", async () => {

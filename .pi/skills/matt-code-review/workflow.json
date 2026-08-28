@@ -9,7 +9,7 @@
       "skills": ["review-standards"],
       "timeoutMs": 600000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "执行 Standards 轴评审。只读取任务列出的目标、标准及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。检查真实材料，只报告当前存在且有证据的问题。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确，证据足够后立即停止。",
+      "taskPrefix": "执行 Standards 轴评审。只读取任务列出的 changed files、标准文件和初始证据 allowlist；先列出 changed files，再使用带 path 的逐文件 diff。只有为消除一个已命名的 diff 不确定性时才扩展到一级直接调用者、被调用者、配置、映射或聚焦测试，不得递归。FFF 查询必须是已命名 symbol 且 path 限定到任务 module/package；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
@@ -44,7 +44,7 @@
       "skills": ["review-spec"],
       "timeoutMs": 600000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "执行 Spec 轴评审。只读取任务列出的目标、规格及其直接依赖；除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。只依据明确规格和验收标准检查需求遗漏、范围膨胀及看似实现但行为错误的部分。不要用个人代码风格替代规格。没有 spec 时返回 NO_EVIDENCE，证据足够后立即停止。",
+      "taskPrefix": "执行 Spec 轴评审。只读取任务列出的当前 ticket、其明确引用的 parent spec、changed files、逐文件 diff 和其他显式规格来源。除非 task 明确列为规格来源，不得读取 sibling/future tickets、ADR、context、roadmap 或迁移计划。只有为核验一条明确验收行为时才扩展到一级实现依赖，不得递归。FFF 查询必须是已命名 symbol 且 path 限定到任务 module/package；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要用个人代码风格替代规格。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",

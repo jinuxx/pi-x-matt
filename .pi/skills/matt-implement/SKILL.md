@@ -31,7 +31,7 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、相关标准和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
+- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
 
 只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。
 

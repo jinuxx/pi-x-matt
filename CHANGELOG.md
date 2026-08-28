@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+- 为 Standards 与 Spec reviewer 增加逐文件证据边界、一级依赖限制和路径限定搜索，禁止目录级或全项目扫描。
+- 为 `matt-reviewer` 增加只读工具预算，并要求证据不足时快速返回 `NO_EVIDENCE`，继续保持 PASS-only gate。
+- 在 standalone review 与 TDD review 任务中要求具体 changed files、标准/spec 路径和 module/package 搜索边界。
+
 ## 0.2.5
 
 - 将 TDD worker 限制为 RED/GREEN 聚焦测试与相关回归，完整测试套件和最终验证改由父会话执行。
