@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- 在 workflow lane 缺少合法结构化输出时优先报告子代理的 timeout、provider error、termination、turn budget 等真实失败原因。
+- 明确 `git_read` 的 `diff-files` action 也必须提供 `ref`。
+
 ## 0.2.2
 
 - 在 `matt-setup` 中内置 canonical Local Markdown Wayfinding 路径、字段和模板，并在写后拒绝不兼容的 `Claim:` 与 decision ticket 路径。

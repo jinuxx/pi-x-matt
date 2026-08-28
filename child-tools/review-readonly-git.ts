@@ -27,7 +27,7 @@ export default function (pi: ExtensionAPI) {
     description: "Run a fixed allowlist of read-only Git queries for review. Output is truncated to 50KB/2000 lines.",
     parameters: Type.Object({
       action: StringEnum(["status", "resolve", "commits", "diff-files", "diff", "worktree-files", "worktree-diff", "show"] as const),
-      ref: Type.Optional(Type.String({ description: "Base ref or object name; required for resolve/commits/diff/show" })),
+      ref: Type.Optional(Type.String({ description: "Base ref or object name; required for resolve/commits/diff-files/diff/show" })),
       path: Type.Optional(Type.String({ description: "Optional project-relative path for diff/show/worktree queries" })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {

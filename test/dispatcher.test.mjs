@@ -303,6 +303,38 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
     () => execute({ all: async () => [{ key: "research", ok: true, output: "prose only" }] }),
     /completed without valid structuredOutput/,
   );
+
+  const failureCases = [
+    {
+      name: "timeout error",
+      result: { error: "Subagent timed out after 600000ms.", timedOut: true },
+      reason: "Subagent timed out after 600000ms.",
+    },
+    { name: "provider error", result: { error: "fetch failed" }, reason: "fetch failed" },
+    { name: "timeout flag", result: { timedOut: true }, reason: "Subagent timed out." },
+    {
+      name: "turn budget",
+      result: { turnBudgetExceeded: true },
+      reason: "Subagent exceeded its turn budget.",
+    },
+    { name: "stopped", result: { stopped: true }, reason: "Subagent stopped before completion." },
+    {
+      name: "termination signal",
+      result: { processSignal: "SIGTERM" },
+      reason: "Subagent terminated with process signal SIGTERM.",
+    },
+    { name: "non-zero exit", result: { exitCode: 1 }, reason: "Subagent exited with code 1." },
+  ];
+  for (const { name, result, reason } of failureCases) {
+    await assert.rejects(
+      () => execute({ all: async () => [{ key: "research", ...result }] }),
+      (error) => {
+        assert.equal(error.message, `Workflow lane research failed before structuredOutput: ${reason}`, name);
+        return true;
+      },
+    );
+  }
+
   const structuredOutput = { question: "q" };
   const result = await execute({ all: async () => [{ key: "research", ok: true, structuredOutput }] });
   assert.deepEqual(result[0].structuredOutput, structuredOutput);
