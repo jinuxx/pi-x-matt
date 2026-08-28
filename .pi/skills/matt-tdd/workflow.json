@@ -89,7 +89,7 @@
       "skills": ["review-standards"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核。Dispatcher 会附加 implement 的 structuredOutput；以其中的 changedFiles 和 RED/GREEN 命令为实现证据，并结合任务列出的标准文件与初始证据边界。先核对 changedFiles，再使用带 path 的逐文件 worktree-diff。只有为消除一个已命名的 diff 不确定性时才扩展到一级直接调用者、被调用者、配置、映射或聚焦测试，不得递归。FFF 查询必须指定任务 module/package path；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件，不要审计未列入范围的基础设施。",
+      "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。以 Dispatcher 附加的 implement.structuredOutput.changedFiles 和 RED/GREEN 命令为实现证据；先调用 worktree-files 核对状态。tracked 文件逐路径 worktree-diff，?? untracked 文件直接 read，deleted 文件只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。只读取 changed files、任务标准文件和初始证据边界；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须指定任务 module/package path；禁止项目扫描。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
@@ -125,7 +125,7 @@
       "skills": ["review-spec"],
       "timeoutMs": 300000,
       "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核。Dispatcher 会附加 implement 的 structuredOutput；以其中的 changedFiles 作为实现范围，只读取任务列出的当前 ticket、其明确引用的 parent spec、带 path 的逐文件 worktree-diff 和其他显式规格来源。不得默认读取 sibling/future tickets、ADR、context、roadmap 或迁移计划。只有为核验一条明确验收行为时才扩展到一级实现依赖，不得递归。FFF 查询必须指定任务 module/package path；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
+      "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后以 Dispatcher 附加的 implement.structuredOutput.changedFiles 为实现范围，先调用 worktree-files 核对状态：tracked 逐路径 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",

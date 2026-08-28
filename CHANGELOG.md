@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.7
+
+- 强制 Spec reviewer 先读取当前 ticket 与 parent spec、提取验收行为，再访问 diff、FFF 或实现文件。
+- 增加 `reviewKind=worktree|committed|files` 契约，区分工作区、已提交范围和指定文件评审。
+- 明确 tracked、untracked、deleted 与 rename 的逐文件证据语义，禁止用 `ref...HEAD` 作为工作区唯一证据。
+
 ## 0.2.6
 
 - 为 Standards 与 Spec reviewer 增加逐文件证据边界、一级依赖限制和路径限定搜索，禁止目录级或全项目扫描。

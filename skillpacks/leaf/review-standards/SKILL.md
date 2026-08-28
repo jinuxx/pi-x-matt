@@ -18,8 +18,12 @@ metadata:
 
 ## 证据顺序
 
-1. 读取任务给出的 fixed point、changed-file 路径列表、标准文件路径（若有）和初始证据 allowlist。缺少 fixed point、changed-file 路径或初始证据边界时返回 `NO_EVIDENCE`，不要自行扫描项目补齐。
-2. 需要 Git 只读信息时使用 `git_read`；先用 `worktree-files`/`diff-files` 确认文件列表，再对每个目标文件使用带 `path` 的 `worktree-diff`/`diff`。不要使用无 `path` 的大范围 diff，也不要使用 shell。
+1. 读取任务给出的 `reviewKind`、fixed point、changed-file 路径列表、标准文件路径（若有）和初始证据 allowlist。Git 评审缺少 `reviewKind=worktree|committed`、逐文件 diff 方式或初始证据边界时返回 `NO_EVIDENCE`，不要自行扫描项目补齐；非 Git 指定文件评审使用 `reviewKind=files`。
+2. 按 `reviewKind` 获取目标材料；不要使用 shell：
+   - `worktree`：先用 `git_read worktree-files` 取得状态。tracked 修改逐文件使用 `worktree-diff path=<file>`；`??` untracked 文件直接 `read`；deleted 文件只读 diff，不读取已删除路径；`R old -> new` 对 old 与 new 两个路径分别读取 worktree diff，并作为同一次 rename 判断。禁止用 `diff ref...HEAD` 作为工作区唯一证据。
+   - `committed`：先用 `diff-files ref=<fixed-point>` 取得文件列表，再逐文件使用 `diff ref=<fixed-point> path=<file>`；rename 同时核验 old 与 new 路径。
+   - `files`：只读取任务列出的具体文件，不调用 Git diff。
+   不要使用无 `path` 的大范围 diff。
 3. 先检查 changed files 是否违反明确规则、引入正确性问题、可达回归或验证缺口。
 4. 只有为消除一个已命名的 diff 不确定性时，才允许读取一级直接调用者、被调用者、配置、映射或对应聚焦测试。每次扩展前必须能说明“这个文件用于验证哪个 hunk 的什么风险”；不得继续递归到二级依赖。
 5. 再用异味启发式补充判断：神秘命名、重复、Feature Envy、Data Clumps、Primitive Obsession、重复分支、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest。

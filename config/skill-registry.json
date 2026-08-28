@@ -796,9 +796,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "e283754ad5ab415dc098774ac970b7fbfa85f09e2d713aa8562017052614cce9",
+      "sourceDigest": "5c13109ab477e71a815807b0129f9e268a896fa0785f80d0bc933667deb97ae4",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
-      "workflowDigest": "a00184e80090b6d47cff56e5fcaefbb7e544a31cbdb53c8bd9c7bf0731f61ea1",
+      "workflowDigest": "5048386e8591c12730a95ced97ef78c8a08331653c8ed038a2230085dac5548a",
       "workflow": {
         "version": 1,
         "name": "matt-code-review",
@@ -815,7 +815,7 @@
               "maxTurns": 12,
               "graceTurns": 2
             },
-            "taskPrefix": "执行 Standards 轴评审。只读取任务列出的 changed files、标准文件和初始证据 allowlist；先列出 changed files，再使用带 path 的逐文件 diff。只有为消除一个已命名的 diff 不确定性时才扩展到一级直接调用者、被调用者、配置、映射或聚焦测试，不得递归。FFF 查询必须是已命名 symbol 且 path 限定到任务 module/package；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。除非任务明确要求，不要审计 pi-subagents 或 Pi 内部实现。仓库明确标准优先于通用启发式；代码异味只能作为 judgement call。不要评判产品需求是否正确。",
+            "taskPrefix": "执行 Standards 轴评审。任务必须声明 reviewKind。worktree：先 worktree-files；tracked 逐文件 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff；禁止用 ref...HEAD 作为工作区唯一证据。committed：先 diff-files ref，再逐文件 diff ref path，rename 同时核验 old/new。files：只读任务列出的文件且不调用 Git diff。只读取 changed/目标文件、标准文件和初始证据 allowlist；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须搜索已命名 symbol 且 path 限定到任务 module/package；禁止项目扫描。缺少 reviewKind 或对应逐文件证据方式时立即 NO_EVIDENCE；证据足够时立即 PASS/FAIL，不得扩大范围制造 PASS。仓库明确标准优先于通用启发式；不要评判产品需求是否正确。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -907,7 +907,7 @@
               "maxTurns": 12,
               "graceTurns": 2
             },
-            "taskPrefix": "执行 Spec 轴评审。只读取任务列出的当前 ticket、其明确引用的 parent spec、changed files、逐文件 diff 和其他显式规格来源。除非 task 明确列为规格来源，不得读取 sibling/future tickets、ADR、context、roadmap 或迁移计划。只有为核验一条明确验收行为时才扩展到一级实现依赖，不得递归。FFF 查询必须是已命名 symbol 且 path 限定到任务 module/package；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要用个人代码风格替代规格。",
+            "taskPrefix": "执行 Spec 轴评审。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后按任务声明的 reviewKind 取证。worktree：先 worktree-files；tracked 逐文件 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff；禁止用 ref...HEAD 作为工作区唯一证据。committed：先 diff-files ref，再逐文件 diff ref path，rename 同时核验 old/new。files：只读任务列出的实现文件。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。缺少 reviewKind 或对应逐文件证据方式时立即 NO_EVIDENCE；证据足够时立即 PASS/FAIL，不得扩大范围制造 PASS。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -1066,7 +1066,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "80273d653e9459238bd513f9ee990bfd703110ecb9b146f3a10e3b2ca8eae9f2",
+      "sourceDigest": "f453de4e53c27a800de88f5cfde46605e0f52374e9bcfbeaaa2efe2391d67548",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1407,9 +1407,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "619bdb74201ef4141f77dce94b6552343702cf8d4d8ce78ba3326dcf8a8ae833",
+      "sourceDigest": "fb13cfb949f2a5df087e2b416ca2d3b70a57112a9d4277fda1235eaee38e90c9",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "c443d3d49e813b74f2ff84d1042f4288f17e81fc447502de3e3f1938e525b39e",
+      "workflowDigest": "426ffc76692d32213a08b784da7198551d6b5cda067543ee1749ca47da937430",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1580,7 +1580,7 @@
               "maxTurns": 12,
               "graceTurns": 2
             },
-            "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核。Dispatcher 会附加 implement 的 structuredOutput；以其中的 changedFiles 和 RED/GREEN 命令为实现证据，并结合任务列出的标准文件与初始证据边界。先核对 changedFiles，再使用带 path 的逐文件 worktree-diff。只有为消除一个已命名的 diff 不确定性时才扩展到一级直接调用者、被调用者、配置、映射或聚焦测试，不得递归。FFF 查询必须指定任务 module/package path；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件，不要审计未列入范围的基础设施。",
+            "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。以 Dispatcher 附加的 implement.structuredOutput.changedFiles 和 RED/GREEN 命令为实现证据；先调用 worktree-files 核对状态。tracked 文件逐路径 worktree-diff，?? untracked 文件直接 read，deleted 文件只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。只读取 changed files、任务标准文件和初始证据边界；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须指定任务 module/package path；禁止项目扫描。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -1673,7 +1673,7 @@
               "maxTurns": 12,
               "graceTurns": 2
             },
-            "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核。Dispatcher 会附加 implement 的 structuredOutput；以其中的 changedFiles 作为实现范围，只读取任务列出的当前 ticket、其明确引用的 parent spec、带 path 的逐文件 worktree-diff 和其他显式规格来源。不得默认读取 sibling/future tickets、ADR、context、roadmap 或迁移计划。只有为核验一条明确验收行为时才扩展到一级实现依赖，不得递归。FFF 查询必须指定任务 module/package path；禁止目录级或全项目扫描。限定证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
+            "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后以 Dispatcher 附加的 implement.structuredOutput.changedFiles 为实现范围，先调用 worktree-files 核对状态：tracked 逐路径 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -1874,7 +1874,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "6b2478ed939d52af9420e640fb9c7b4401bfc4699d4608265fd8934a4bb8cbc8",
+      "sourceDigest": "5a7daf5af85341ebdecfe1793274aaf8cc9c0e9a33b1ebd2041c478a55b34d60",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
@@ -1888,7 +1888,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "a11b3e9e91d938100e52fd8ef9a589e6bd8aa3fb6e171405df19ed5271a2b6c7",
+      "sourceDigest": "2096fd3f6dd8d7d65f618196c61dbd2a613e1cd8cf38195968c2a4436b05acc2",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"

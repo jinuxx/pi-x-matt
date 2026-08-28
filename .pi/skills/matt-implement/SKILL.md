@@ -31,7 +31,7 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
+- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
 
 只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。
 
@@ -46,9 +46,9 @@ TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成�
 在提交前调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-code-review`
-- `task`: 包含固定基线、从 fixed point 到当前工作树的真实 diff、ticket/当前会话 slice、仓库标准、已批准 seams、测试命令和停止条件。
+- `task`: 包含 `reviewKind=worktree`、固定基线、`worktree-files` 得到的具体 changed-file 状态、tracked/untracked/deleted/rename 的逐文件证据方式、ticket/parent spec 具体路径、仓库标准文件路径、初始证据 allowlist、module/package 搜索边界、已批准 seams、测试命令和停止条件。
 
-明确告诉 reviewer 读取 worktree diff；不要把普通 prose 或 worker 自评当成 review 证据。Standards 与 Spec 两个 lane 都必须返回 `PASS`。任一 lane 失败、缺失或没有结构化结果时停止，不提交，不自动修改 reviewer finding。
+明确告诉 reviewer：tracked 文件读取逐文件 worktree diff，`??` untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new 路径；禁止使用 `ref...HEAD` 作为当前工作区的唯一证据。不要把普通 prose 或 worker 自评当成 review 证据。Standards 与 Spec 两个 lane 都必须返回 `PASS`。任一 lane 失败、缺失或没有结构化结果时停止，不提交，不自动修改 reviewer finding。
 
 ### 4. 提交
 
