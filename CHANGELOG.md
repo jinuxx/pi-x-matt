@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4
+
+- 为本地代码读取、评审和实现子代理开放 `fffind` 与 `ffgrep`。
+- 为唯一写者 `matt-worker` 开放 `apply_patch`，并将其声明为 mutation tool。
+- 在安装说明中列明 FFF 与 Codex minimal tools provider。
+
 ## 0.2.3
 
 - 在 workflow lane 缺少合法结构化输出时优先报告子代理的 timeout、provider error、termination、turn budget 等真实失败原因。

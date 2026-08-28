@@ -1,7 +1,7 @@
 ---
 name: matt-reader
 description: 只读探索本地代码库，定位文件、入口、数据流和约束，为父会话提供压缩上下文。
-tools: read, grep, find, ls
+tools: read, grep, find, ffgrep, fffind, ls
 inheritProjectContext: true
 inheritSkills: false
 skillPath: ../../skillpacks/leaf

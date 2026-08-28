@@ -6,12 +6,16 @@
 
 ## 安装
 
-要求已安装 Pi 与 Node.js 20 或更高版本。在目标代码库中先安装与项目绑定的 `pi-subagents`，再安装本 package：
+要求已安装 Pi 与 Node.js 20 或更高版本。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
+pi install -l npm:@ff-labs/pi-fff
+pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.3
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.4
 ```
+
+`@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
 
 然后重启或 reload Pi：
 
@@ -37,7 +41,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.3
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.3
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.4
 ```
 
 ## 架构

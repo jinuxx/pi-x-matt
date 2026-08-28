@@ -1,6 +1,6 @@
 {
   "name": "pi-x-matt",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Pi-native Matt Pocock engineering workflows with guarded subagents",
   "type": "module",

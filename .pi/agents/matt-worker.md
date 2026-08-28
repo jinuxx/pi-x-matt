@@ -1,7 +1,8 @@
 ---
 name: matt-worker
 description: 在已批准范围内作为唯一写者实现改动并执行聚焦验证。
-tools: read, grep, find, ls, edit, write, bash
+tools: read, grep, find, ffgrep, fffind, ls, edit, write, apply_patch, bash
+mutationTools: apply_patch
 inheritProjectContext: true
 inheritSkills: false
 skillPath: ../../skillpacks/leaf

@@ -1,7 +1,7 @@
 ---
 name: matt-reviewer
 description: 在独立上下文中只读评审代码、计划或设计，输出有证据的问题与裁决。
-tools: read, grep, find, ls, git_read
+tools: read, grep, find, ffgrep, fffind, ls, git_read
 subagentOnlyExtensions: ../../child-tools/review-readonly-git.ts
 inheritProjectContext: true
 inheritSkills: false

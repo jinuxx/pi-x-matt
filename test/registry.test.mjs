@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.3");
+  assert.equal(manifest.version, "0.2.4");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -323,9 +323,15 @@ test("all project agents are leaf-only and use the private skill path", async ()
     assert.doesNotMatch(content.match(/^tools:.*$/m)?.[0] ?? "", /\bsubagent\b/);
   }
 
+  for (const name of ["matt-reader", "matt-reviewer", "matt-worker"]) {
+    const content = await readFile(join(ROOT, ".pi", "agents", `${name}.md`), "utf8");
+    assert.match(content, /tools:.*\bffgrep\b/);
+    assert.match(content, /tools:.*\bfffind\b/);
+  }
+
   const reviewer = await readFile(join(ROOT, ".pi", "agents", "matt-reviewer.md"), "utf8");
   assert.match(reviewer, /tools:.*\bgit_read\b/);
-  assert.doesNotMatch(reviewer.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write|bash)\b/);
+  assert.doesNotMatch(reviewer.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write|apply_patch|bash)\b/);
   assert.match(reviewer, /subagentOnlyExtensions:\s*\.\.\/\.\.\/child-tools\/review-readonly-git\.ts/);
   const gitTool = await readFile(join(ROOT, "child-tools", "review-readonly-git.ts"), "utf8");
   assert.match(gitTool, /"worktree-files"/);
@@ -334,9 +340,11 @@ test("all project agents are leaf-only and use the private skill path", async ()
   const worker = await readFile(join(ROOT, ".pi", "agents", "matt-worker.md"), "utf8");
   assert.match(worker, /tools:.*\bedit\b/);
   assert.match(worker, /tools:.*\bwrite\b/);
+  assert.match(worker, /tools:.*\bapply_patch\b/);
+  assert.match(worker, /mutationTools:\s*apply_patch/);
   for (const name of ["matt-reader", "matt-researcher", "matt-reviewer"]) {
     const content = await readFile(join(ROOT, ".pi", "agents", `${name}.md`), "utf8");
-    assert.doesNotMatch(content.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write)\b/);
+    assert.doesNotMatch(content.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write|apply_patch)\b/);
   }
 
   const researcher = await readFile(join(ROOT, ".pi", "agents", "matt-researcher.md"), "utf8");
@@ -572,8 +580,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.3/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.3/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.4/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.4/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
