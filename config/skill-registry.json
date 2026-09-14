@@ -2,7 +2,7 @@
   "version": 1,
   "upstream": {
     "repository": "https://github.com/mattpocock/skills",
-    "sha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76"
+    "sha": "3cca18b368ae95cdbdebbff572ccafa662551015"
   },
   "skills": {
     "architecture-deepening-reader": {
@@ -16,9 +16,9 @@
         "architecture-vocabulary-reader"
       ],
       "sourcePath": "skillpacks/leaf/architecture-deepening-reader/SKILL.md",
-      "sourceDigest": "dc6ec0f14f8bef5d20cda4ca63c7b216c1c197e7d119bdefc8f0832d903ae81c",
+      "sourceDigest": "9866b4b9af0531d5d385c95b909dd7f861acc722170929645a3032b1fb04a496",
       "upstreamPath": "skills/engineering/codebase-design/DEEPENING.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "f3dd099ce99289bd213914d8ee3e2429b78309c3957ca4583f7659551b1d53c1"
     },
     "architecture-design": {
@@ -32,7 +32,7 @@
         "architecture-interface-design"
       ],
       "sourcePath": ".pi/skills/architecture-design/SKILL.md",
-      "sourceDigest": "e7f3952fec0a2de5d640320385d496423296581718219f41b6fb6d2dc1e0b6c2",
+      "sourceDigest": "29ed501fa7d062db52c724d9b75dca4fcbb076a33d8508305f5c39e3297fdfd9",
       "workflowPath": ".pi/skills/architecture-design/workflow.json",
       "workflowDigest": "82e546cef416edee1aebbd65e1ce946c2d42cb4da3e5f4dc7e79511ed9605772",
       "workflow": {
@@ -487,7 +487,7 @@
         ]
       },
       "upstreamPath": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "8e740bf98446dbd4dfdc132ac4346d9a7eedaf93de6a495889171cf7f99f16bd"
     },
     "architecture-html-report": {
@@ -499,9 +499,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/architecture-html-report/SKILL.md",
-      "sourceDigest": "fe3f095370dd4e30e8948dea9a74e858f60f99b98558780f45958a6673cf270e",
+      "sourceDigest": "26097c1f45f57709a20b9ff1f0b3eeb363fef97cc868c3cce700e5c7f07f73e5",
       "upstreamPath": "skills/engineering/improve-codebase-architecture/HTML-REPORT.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "581e8bb5a521e46bbda8ca7e19b15948bed882187108092ebb90c62513b77528"
     },
     "architecture-interface-design": {
@@ -516,9 +516,9 @@
         "architecture-deepening-reader"
       ],
       "sourcePath": "skillpacks/leaf/architecture-interface-design/SKILL.md",
-      "sourceDigest": "87e1ce0e0fb0c6225e64e63ab2879faeb5cfb989cbe3a3688cf9e5482b9e3912",
+      "sourceDigest": "a4a4a4f49ce5267cb164611c321b8c345dc7f6ad6868015aa4d3728be6960ab6",
       "upstreamPath": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "8e740bf98446dbd4dfdc132ac4346d9a7eedaf93de6a495889171cf7f99f16bd"
     },
     "architecture-scan": {
@@ -532,7 +532,7 @@
         "architecture-scan-executor"
       ],
       "sourcePath": ".pi/skills/architecture-scan/SKILL.md",
-      "sourceDigest": "39e3d9bf4e25230163d14d5dc2cf68139151d326acc67d2002bd3f191e174049",
+      "sourceDigest": "ad38346cd47d9859a2f075fffcc7295f773605949b439802674a64c76790b1e3",
       "workflowPath": ".pi/skills/architecture-scan/workflow.json",
       "workflowDigest": "88d7252b68098252cb738774e2926ffe4212e3c56c3d20652ec68ce9c88798dc",
       "workflow": {
@@ -736,7 +736,7 @@
         ]
       },
       "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
     },
     "architecture-scan-executor": {
@@ -751,9 +751,9 @@
         "architecture-html-report"
       ],
       "sourcePath": "skillpacks/leaf/architecture-scan-executor/SKILL.md",
-      "sourceDigest": "22aa970d208ae3894d752e013ed6aaebd3d689b17238a6da6a4865ad9cc2191f",
+      "sourceDigest": "0753a11157019a2b379843347112b3a4a150738618a4524a51f063234585806a",
       "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
     },
     "architecture-vocabulary-reader": {
@@ -765,9 +765,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/architecture-vocabulary-reader/SKILL.md",
-      "sourceDigest": "32124561626d1149e1668d70b1a2f9b911e215ece2666de58b238e1d490a2910",
+      "sourceDigest": "8dc0d40e9935b160f0ddfdb7c576c0ef6a4588491442d3cf48cfb8bf95cb4b03",
       "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
     "codebase-design": {
@@ -779,9 +779,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/codebase-design/SKILL.md",
-      "sourceDigest": "6e8a92e81ae62cc219c79c7067e7f6abe4859d0f54ddc5986b5365ebb5c51f1a",
+      "sourceDigest": "ef11c942c4dfecda55093b9646839c65d934d245e70f68f6cbc614b3acd11cc3",
       "upstreamPath": "skills/engineering/codebase-design/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
     "matt-code-review": {
@@ -796,7 +796,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "5c13109ab477e71a815807b0129f9e268a896fa0785f80d0bc933667deb97ae4",
+      "sourceDigest": "12d8b7a94418afb8814e8e696fa471a92f036dc482331c70cb581f8452cb4efc",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
       "workflowDigest": "5048386e8591c12730a95ced97ef78c8a08331653c8ed038a2230085dac5548a",
       "workflow": {
@@ -991,7 +991,7 @@
         ]
       },
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
     },
     "matt-diagnosing-bugs": {
@@ -1005,9 +1005,9 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-diagnosing-bugs/SKILL.md",
-      "sourceDigest": "5565d6b4d9812413abefdac7379c71e2f1d96b4a85215c87620b663ceda42b40",
+      "sourceDigest": "b5c17a0b7af62c8e24f4182e96d6f38fedc6fe85ebba0bf319d39aaab95f8282",
       "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "77f3cf31bc99b2f49af943222526531fcc9fc41d047626d3640e875e85af3e84"
     },
     "matt-domain-modeling": {
@@ -1019,9 +1019,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-domain-modeling/SKILL.md",
-      "sourceDigest": "fa533388e79dca34eb90647f75f0ed73ba2ebc391940552d7738b228b9213d6a",
+      "sourceDigest": "97b11582705cd1e51cb7afe64d0ab1ab97c3d149118f4980b11fb8c89baa32ff",
       "upstreamPath": "skills/engineering/domain-modeling/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "327a2b50620e2fd70abc6893cd6965e76b20f8d0adb0dc2c8d5eb3845efb643e"
     },
     "matt-grill-with-docs": {
@@ -1036,9 +1036,9 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-grill-with-docs/SKILL.md",
-      "sourceDigest": "2a5f3cb737b3a4445afdd1f38de1bbcec912db663aff12a6352840b839175bb3",
+      "sourceDigest": "732a653b543fbea801bf24638d8e1dd2e420c18f7cb033b743fc7778fbd82240",
       "upstreamPath": "skills/engineering/grill-with-docs/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
     },
     "matt-grilling": {
@@ -1050,9 +1050,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-grilling/SKILL.md",
-      "sourceDigest": "03f31e747787a87774ebc3c22eea6cfe8c00d2d9607c578c13c006e675f86644",
+      "sourceDigest": "3a24fca5c58b177d509b7d22d71dc3e0f3bebdf21fa4825245c88fcf4bbe0b4f",
       "upstreamPath": "skills/productivity/grilling/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "10ff989e7498b23b5acb49d5048f11dcd906757d2f79c5cdf8a00001381296f2"
     },
     "matt-implement": {
@@ -1066,9 +1066,9 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "f453de4e53c27a800de88f5cfde46605e0f52374e9bcfbeaaa2efe2391d67548",
+      "sourceDigest": "78c639069b788a9d4d12bb04ac856682341e85b2c181a2cb1e4cb96c6f1ca573",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
     },
     "matt-improve-codebase-architecture": {
@@ -1083,9 +1083,9 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-improve-codebase-architecture/SKILL.md",
-      "sourceDigest": "a25992460fbaf4ca4abd3f70ca29f9ba5a8f3e7e768ab4c78e86d993a5bce297",
+      "sourceDigest": "ea2532dc1191b88546a67b90ceb9ef9ee4981d77100265d458727154b2b64cbd",
       "upstreamPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "d1ac25511a936ff4250a48dbcefda363837d6bb9321b3cba73df99fa37270a75"
     },
     "matt-prototype": {
@@ -1099,7 +1099,7 @@
         "prototype-executor"
       ],
       "sourcePath": ".pi/skills/matt-prototype/SKILL.md",
-      "sourceDigest": "747760788cdeee800991f43d04b2b5de7af7b33d640a79ffd7727aeb5aca3680",
+      "sourceDigest": "971c040bb5f402346bd3ca6359239da438886528cc4f58cdbc5c907af76593fd",
       "workflowPath": ".pi/skills/matt-prototype/workflow.json",
       "workflowDigest": "77c8d5ff232eab3989e7f67e9ff613d791cfd3a4cdcd504559c567a44c26fc0a",
       "workflow": {
@@ -1263,7 +1263,7 @@
         ]
       },
       "upstreamPath": "skills/engineering/prototype/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
     },
     "matt-research": {
@@ -1277,7 +1277,7 @@
         "research-executor"
       ],
       "sourcePath": ".pi/skills/matt-research/SKILL.md",
-      "sourceDigest": "1584a59acdd304c4145ef8b82aaa3aa78b2f09cc4c6721e1bfb9b652818c0f51",
+      "sourceDigest": "3c97807727e7d4f77651caed786e6edf736388dc7e55e4bc6ffb2a31d02a617e",
       "workflowPath": ".pi/skills/matt-research/workflow.json",
       "workflowDigest": "f3520cfb34f0b18a17f1fabd3762b4654739f9747483c3318f4dd7a27d190687",
       "workflow": {
@@ -1377,7 +1377,7 @@
         ]
       },
       "upstreamPath": "skills/engineering/research/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
     },
     "matt-setup": {
@@ -1389,9 +1389,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-setup/SKILL.md",
-      "sourceDigest": "f2df139e5514f9412bdc2d75ed364b7090a5039cfb27dc4c0eb781779e83a9e4",
+      "sourceDigest": "6206b9534525c13824dc7d5aa9cd33d6154d318d8f594896320a0e49583e47d4",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
     },
     "matt-tdd": {
@@ -1407,7 +1407,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "fb13cfb949f2a5df087e2b416ca2d3b70a57112a9d4277fda1235eaee38e90c9",
+      "sourceDigest": "2256c5b8710e1e40eee329ab2160e3e0ae385c20c9bb017182c3100fba271201",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "426ffc76692d32213a08b784da7198551d6b5cda067543ee1749ca47da937430",
       "workflow": {
@@ -1757,7 +1757,7 @@
         ]
       },
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
     },
     "matt-to-spec": {
@@ -1769,9 +1769,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-spec/SKILL.md",
-      "sourceDigest": "53954c1527f34d819c421ebdecfa153a33735e8f7d1219a18116b18b45c6e97d",
+      "sourceDigest": "2ab953ca2d2589d3f69e532f0383ea45a07b2d84532232a0b72d67e04665d104",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
     },
     "matt-to-tickets": {
@@ -1783,9 +1783,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-tickets/SKILL.md",
-      "sourceDigest": "bfeac056decfd472127b71e003c70af910ffbbe04a3b0c3c69f6621081199c82",
+      "sourceDigest": "900fe7209dedbbe0ca14bf770b91e0c05e49d58f73783ce5d6cedfeef9d61f89",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
     },
     "matt-wayfinder": {
@@ -1801,9 +1801,9 @@
         "matt-to-spec"
       ],
       "sourcePath": ".pi/skills/matt-wayfinder/SKILL.md",
-      "sourceDigest": "a7603a082562b504207ef9a3eaf7796c2f1a630aae511d3a9c1934a4ad4f53bb",
+      "sourceDigest": "60015b33c3b8ac04aa7d17bc6755dbc68ccd3af9f4bd47b9d2756fb98c9b8761",
       "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"
     },
     "prototype-executor": {
@@ -1818,9 +1818,9 @@
         "prototype-ui"
       ],
       "sourcePath": "skillpacks/leaf/prototype-executor/SKILL.md",
-      "sourceDigest": "4cc29958014c2df91b956da705d96095dd71f2fc0804e052d8ec70df79d5a362",
+      "sourceDigest": "4814ab32722c4035d2bcb9b6a9d800c3fabcab05ef73d9483f588fd1dae37aa7",
       "upstreamPath": "skills/engineering/prototype/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "714de632d116bb73f65cdb5a882db15b9369a6713b9a47c0fad827848f0bfbe3"
     },
     "prototype-logic": {
@@ -1832,9 +1832,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/prototype-logic/SKILL.md",
-      "sourceDigest": "0b65ddaac7f4ade3f6d5aaa16778e3b19a468aa6705cf75b2a7ff5cb2f940f4b",
+      "sourceDigest": "9a1874173a970fe95b952ef0ef8742f55c872527ece6f307b5c3117a76018620",
       "upstreamPath": "skills/engineering/prototype/LOGIC.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "f61c7d249e786a79ef289018901c348271e1798dd0b0bc5607b5c6f4d4a01ab9"
     },
     "prototype-ui": {
@@ -1846,9 +1846,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/prototype-ui/SKILL.md",
-      "sourceDigest": "6578123ef93b96d729b35e33a647ceafc14a470913c881cb15dff5473928c9de",
+      "sourceDigest": "371a68c739d9a4df9d5e9fec4cb0988b69c61ee0ca74ac662dc720580782de2e",
       "upstreamPath": "skills/engineering/prototype/UI.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "723211e878acbc7b6ff09755263f3295cde724ba902ff0064da41eed51d45ad3"
     },
     "research-executor": {
@@ -1860,9 +1860,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/research-executor/SKILL.md",
-      "sourceDigest": "3c04ee69c1f2938865e2d8a441ecb4bc1989d018cf4a3b4eebbc20e93112b061",
+      "sourceDigest": "e0576adc586010416eb146a595bfee8a31a0957836be9e759b2f5fe9153b74a3",
       "upstreamPath": "skills/engineering/research/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "985569f15739c713d6784887c3d186d4ef9ac85bec5ad9c068d25bf0739928e4"
     },
     "review-spec": {
@@ -1874,9 +1874,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "5a7daf5af85341ebdecfe1793274aaf8cc9c0e9a33b1ebd2041c478a55b34d60",
+      "sourceDigest": "6354c658f46847e442856922e0cff9119cb37c3ef4d79cfe140cf7e9f0a98558",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
     },
     "review-standards": {
@@ -1888,9 +1888,9 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "2096fd3f6dd8d7d65f618196c61dbd2a613e1cd8cf38195968c2a4436b05acc2",
+      "sourceDigest": "609da47f34403dbf60836fbe43ebfc37d4733af45e46d680d069768d3b996faf",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
     },
     "tdd-executor": {
@@ -1904,9 +1904,9 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "6e0550c0fe7fbb2632565179b48d2123586851a47dbcc63011cef86dc08c5775",
+      "sourceDigest": "6d3199d0cf177129ed78dbaaf542178b9d9cad069a225eca751995a75c6862c4",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
-      "upstreamSha": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
     }
   }

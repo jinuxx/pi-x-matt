@@ -9,7 +9,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/prototype/LOGIC.md
-  pi-upstream-sha: 6654f6b60cd9d5be8b54c6fafe44346dabeb3b76
+  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
 ---
 
 # Prototype Logic

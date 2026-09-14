@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.8
+
+- 将 `mattpocock/skills` 上游快照从 `6654f6b` 同步到 `3cca18b`。
+- 同步 `link-skills.sh` 对 `misc/` 技能目录的排除规则；本次上游没有修改已移植的 `SKILL.md`。
+
 ## 0.2.7
 
 - 强制 Spec reviewer 先读取当前 ticket 与 parent spec、提取验收行为，再访问 diff、FFF 或实现文件。
