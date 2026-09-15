@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.12
+
+- 移除 `matt-reviewer` 会催促提前收尾的 soft 工具预算，只保留 hard 50 的只读工具上限，避免复杂 diff 复核在完成取证前过早结束，同时保留失控保护。
+- 按角色延长 workflow lane：worker 20 分钟、reviewer 15 分钟、reader/researcher 10 分钟；settlement-only resume 延长到 5 分钟。
+
 ## 0.2.11
 
 - 为 dispatcher 增加 per-lane 完整任务替换；`matt-tdd` 强制提供 implement/standards/spec 三项，隔离 report-only 恢复指令与 reviewer，并在 reviewer 前缀中拒绝 implement schema、禁止 diff 和旧 transcript 替代取证等冲突指令。

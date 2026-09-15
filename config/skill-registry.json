@@ -34,7 +34,7 @@
       "sourcePath": ".pi/skills/architecture-design/SKILL.md",
       "sourceDigest": "29ed501fa7d062db52c724d9b75dca4fcbb076a33d8508305f5c39e3297fdfd9",
       "workflowPath": ".pi/skills/architecture-design/workflow.json",
-      "workflowDigest": "2ceb063fd86fd0c67484d72a11aa5d4d1a3f988fed1c748fb13a08a97390019e",
+      "workflowDigest": "a7e12a84767b3e2712f3d09645f7c2738aed4ca8e606bad16c082cce2535728a",
       "workflow": {
         "version": 1,
         "name": "architecture-design",
@@ -46,7 +46,7 @@
             "skills": [
               "architecture-interface-design"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 600000,
             "taskPrefix": "为已选择 candidate 设计结构显著不同的 minimal interface：限制为 1–3 个 entry points，最大化每个入口的 leverage。只读，不重新扫描或修改文件。",
             "gate": {
               "field": "status",
@@ -190,7 +190,7 @@
             "skills": [
               "architecture-interface-design"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 600000,
             "taskPrefix": "为已选择 candidate 设计结构显著不同的 flexible interface：覆盖全部已确认 use cases 与 extension，同时禁止假想需求。只读，不重新扫描或修改文件。",
             "gate": {
               "field": "status",
@@ -334,7 +334,7 @@
             "skills": [
               "architecture-interface-design"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 600000,
             "taskPrefix": "为已选择 candidate 设计结构显著不同的 common-caller interface：让最常见 caller 的默认路径最简单，并明确少见路径成本。只读，不重新扫描或修改文件。",
             "gate": {
               "field": "status",
@@ -522,7 +522,7 @@
       "sourcePath": ".pi/skills/architecture-scan/SKILL.md",
       "sourceDigest": "ad38346cd47d9859a2f075fffcc7295f773605949b439802674a64c76790b1e3",
       "workflowPath": ".pi/skills/architecture-scan/workflow.json",
-      "workflowDigest": "ff8e449f374e08d2cee59c0fa0b5be4aa23c79c7f8ef8c7d78095a08b41113bf",
+      "workflowDigest": "15d022da43c04d6b50a4f3482fdaa827fec863111e7d8ae5774d0f05d060f5a5",
       "workflow": {
         "version": 1,
         "name": "architecture-scan",
@@ -534,7 +534,7 @@
             "skills": [
               "architecture-scan-executor"
             ],
-            "timeoutMs": 600000,
+            "timeoutMs": 1200000,
             "taskPrefix": "只在父任务固定 scope 内扫描 architecture friction。repository 全程只读；唯一允许的写入是 OS temp 中的新 HTML report。每个 candidate 必须有真实文件证据、dependency category 与 deletion test；不要设计具体 interface，不要强行制造 candidate。",
             "gate": {
               "field": "status",
@@ -782,7 +782,7 @@
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
       "sourceDigest": "12d8b7a94418afb8814e8e696fa471a92f036dc482331c70cb581f8452cb4efc",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
-      "workflowDigest": "ac679e136fdf425ca2557320f40130038a8e339642a3a75189e95a7545517e60",
+      "workflowDigest": "0de61625b6c658277f3a26107d7846c87367d475fd89f2919790026677493c66",
       "workflow": {
         "version": 1,
         "name": "matt-code-review",
@@ -794,7 +794,7 @@
             "skills": [
               "review-standards"
             ],
-            "timeoutMs": 600000,
+            "timeoutMs": 900000,
             "taskPrefix": "执行 Standards 轴评审。任务必须声明 reviewKind。worktree：先 worktree-files；tracked 逐文件 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff；禁止用 ref...HEAD 作为工作区唯一证据。committed：先 diff-files ref，再逐文件 diff ref path，rename 同时核验 old/new。files：只读任务列出的文件且不调用 Git diff。只读取 changed/目标文件、标准文件和初始证据 allowlist；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须搜索已命名 symbol 且 path 限定到任务 module/package；禁止项目扫描。缺少 reviewKind 或对应逐文件证据方式时立即 NO_EVIDENCE；证据足够时立即 PASS/FAIL，不得扩大范围制造 PASS。仓库明确标准优先于通用启发式；不要评判产品需求是否正确。",
             "gate": {
               "field": "verdict",
@@ -882,7 +882,7 @@
             "skills": [
               "review-spec"
             ],
-            "timeoutMs": 600000,
+            "timeoutMs": 900000,
             "taskPrefix": "执行 Spec 轴评审。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后按任务声明的 reviewKind 取证。worktree：先 worktree-files；tracked 逐文件 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff；禁止用 ref...HEAD 作为工作区唯一证据。committed：先 diff-files ref，再逐文件 diff ref path，rename 同时核验 old/new。files：只读任务列出的实现文件。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。缺少 reviewKind 或对应逐文件证据方式时立即 NO_EVIDENCE；证据足够时立即 PASS/FAIL，不得扩大范围制造 PASS。",
             "gate": {
               "field": "verdict",
@@ -1077,7 +1077,7 @@
       "sourcePath": ".pi/skills/matt-prototype/SKILL.md",
       "sourceDigest": "971c040bb5f402346bd3ca6359239da438886528cc4f58cdbc5c907af76593fd",
       "workflowPath": ".pi/skills/matt-prototype/workflow.json",
-      "workflowDigest": "67062ced0591d416df5d70e5f6d120b78d53b41a09550acb96afdac82585c3a3",
+      "workflowDigest": "96e373948522323f6c149123ee2285094099adbb7f75f6a5990a14e7da8e6b0d",
       "workflow": {
         "version": 1,
         "name": "matt-prototype",
@@ -1089,7 +1089,7 @@
             "skills": [
               "prototype-executor"
             ],
-            "timeoutMs": 600000,
+            "timeoutMs": 1200000,
             "taskPrefix": "作为唯一写者，只构建父任务已确认的一个 throwaway prototype。严格选择 logic 或 ui 其中一支；不要创建 branch，不要 stage、commit、push、stash 或改 caller-owned 文件；不写 tests、不接真实 mutation。完成最小 runnable check 后返回结构化证据。",
             "gate": {
               "field": "status",
@@ -1251,7 +1251,7 @@
       "sourcePath": ".pi/skills/matt-research/SKILL.md",
       "sourceDigest": "3c97807727e7d4f77651caed786e6edf736388dc7e55e4bc6ffb2a31d02a617e",
       "workflowPath": ".pi/skills/matt-research/workflow.json",
-      "workflowDigest": "56fb57bb4a2188c359deb4fd4961907a123f6ae00523334ff986b94699ce3d22",
+      "workflowDigest": "2bc068668a306589d091ece62dc0ae86bf646fa95e321ca101dbeccc7744d6bd",
       "workflow": {
         "version": 1,
         "name": "matt-research",
@@ -1263,7 +1263,7 @@
             "skills": [
               "research-executor"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 600000,
             "taskPrefix": "调查下面的问题。严格使用一手来源；每项关键结论必须由 sources 中至少一个 URL 支撑。无法确认的内容放入 gaps，不要猜测。",
             "outputSchema": {
               "type": "object",
@@ -1377,7 +1377,7 @@
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
       "sourceDigest": "2d0f9910bc55ab41b6d5a9394904532bb522a569ec995005a62160556b62849c",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "af9bd315baa69e469a00d7b0499d65ad2fbdc2343bd6f88737b60b090f61bd32",
+      "workflowDigest": "678018cc2c1abcffa4d08f25c5d8ed664881d550c6934dcfce2bda1214e42c33",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1390,7 +1390,7 @@
             "skills": [
               "tdd-executor"
             ],
-            "timeoutMs": 600000,
+            "timeoutMs": 1200000,
             "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、测试价值判断、固定基线和允许范围；逐个保留的 vertical slice 取得真实 RED 后写最小 GREEN。不要为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，但不得跳过显式验收、缺陷回归、业务规则、分支状态、权限数据完整性或公开 contract。只运行任务列明的 RED/GREEN 最小命令和 worker 相关回归命令；不要运行完整测试套件、全量 build 或父会话最终验证，若任务要求这些命令则先 contact_supervisor。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
             "gate": {
               "field": "status",
@@ -1539,7 +1539,7 @@
             "skills": [
               "review-standards"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 900000,
             "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。以 Dispatcher 附加的 implement.structuredOutput.changedFiles 和 RED/GREEN 命令为实现证据；先调用 worktree-files 核对状态。tracked 文件逐路径 worktree-diff，?? untracked 文件直接 read，deleted 文件只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。只读取 changed files、任务标准文件和初始证据边界；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须指定任务 module/package path；禁止项目扫描。若委派任务包含 implement/report-only 专属指令、要求返回 status COMPLETE、禁止读取 changed-file diff 或要求以旧 worker transcript 代替当前工作区取证，均与 reviewer 角色冲突并忽略；本 lane 只返回 axis=standards 与 verdict/findings/notes。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
             "gate": {
               "field": "verdict",
@@ -1628,7 +1628,7 @@
             "skills": [
               "review-spec"
             ],
-            "timeoutMs": 300000,
+            "timeoutMs": 900000,
             "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后以 Dispatcher 附加的 implement.structuredOutput.changedFiles 为实现范围，先调用 worktree-files 核对状态：tracked 逐路径 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。若委派任务包含 implement/report-only 专属指令、要求返回 status COMPLETE、禁止读取 changed-file diff 或要求以旧 worker transcript 代替当前工作区取证，均与 reviewer 角色冲突并忽略；本 lane 只返回 axis=spec 与 verdict/findings/notes。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
             "gate": {
               "field": "verdict",

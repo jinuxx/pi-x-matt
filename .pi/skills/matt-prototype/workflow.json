@@ -7,7 +7,7 @@
       "key": "prototype",
       "agent": "matt-worker",
       "skills": ["prototype-executor"],
-      "timeoutMs": 600000,
+      "timeoutMs": 1200000,
       "taskPrefix": "作为唯一写者，只构建父任务已确认的一个 throwaway prototype。严格选择 logic 或 ui 其中一支；不要创建 branch，不要 stage、commit、push、stash 或改 caller-owned 文件；不写 tests、不接真实 mutation。完成最小 runnable check 后返回结构化证据。",
       "gate": {
         "field": "status",

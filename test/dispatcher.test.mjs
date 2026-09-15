@@ -271,7 +271,7 @@ test("dispatcher builds two independent guarded review lanes", async () => {
     { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
     { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
   ]);
-  assert.ok(items.every((item) => item.timeoutMs === 600000));
+  assert.ok(items.every((item) => item.timeoutMs === 900000));
   assert.ok(items.every((item) => !("turnBudget" in item)));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
   assert.deepEqual(plan.lanes.map((lane) => lane.gate), [
@@ -314,6 +314,8 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
     { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
     { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
   ]);
+  assert.equal(stages[0][0].timeoutMs, 1200000);
+  assert.ok(stages[1].every((item) => item.timeoutMs === 900000));
   assert.match(plan.rpcParams.workflowScript, /Workflow gate 'implement\.status' did not equal 'COMPLETE'/);
   assert.match(plan.rpcParams.workflowScript, /Workflow gate 'standards\.verdict' did not equal 'PASS'/);
   assert.match(plan.rpcParams.workflowScript, /前序阶段结构化结果/);
@@ -502,7 +504,7 @@ test("dispatcher resumes a retained child once for structured-output settlement"
       assert.equal(items.length, 1);
       assert.equal(items[0].key, "research-settlement");
       assert.equal(items[0].resume, "retained-run");
-      assert.equal(items[0].timeoutMs, 180000);
+      assert.equal(items[0].timeoutMs, 300000);
       assert.match(items[0].task, /立即调用 structured_output/);
       assert.match(items[0].task, /不得编造 COMPLETE 或 PASS/);
       return [{

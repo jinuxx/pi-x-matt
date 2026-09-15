@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.11");
+  assert.equal(manifest.version, "0.2.12");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -353,8 +353,7 @@ test("all project agents are leaf-only and use the private skill path", async ()
   const reviewerBudget = reviewer.match(/^toolBudget:\s*(\{.*\})$/m);
   assert.ok(reviewerBudget);
   assert.deepEqual(JSON.parse(reviewerBudget[1]), {
-    soft: 12,
-    hard: 20,
+    hard: 50,
     block: ["read", "grep", "find", "ffgrep", "fffind", "ls", "git_read"],
   });
   const gitTool = await readFile(join(ROOT, "child-tools", "review-readonly-git.ts"), "utf8");
@@ -640,8 +639,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI\/RPC 授权/);
   assert.match(readme, /本 session 以 `\/skill:matt-implement` 启动时直接放行/);
   assert.match(readme, /取消或 print\/JSON mode 没有 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.11/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.11/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.12/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.12/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
@@ -703,15 +702,17 @@ test("reviewers stay inside a bounded evidence envelope", async () => {
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
   assert.match(readme, /reviewKind=worktree\|committed\|files/);
   assert.match(readme, /Spec reviewer 必须先读取 ticket\/parent spec/);
-  assert.match(readme, /soft 12、hard 20 的只读工具预算/);
+  assert.match(readme, /只保留 hard 50 的只读工具预算/);
 });
 
 test("workflow schemas require structured output and distinct review axes", async () => {
   const registry = await buildRegistry(ROOT);
   const researchLane = registry.skills["matt-research"].workflow.lanes[0];
+  assert.equal(researchLane.timeoutMs, 600000);
   assert.deepEqual(researchLane.outputSchema.required, ["question", "summary", "findings", "sources", "gaps"]);
 
   const prototypeLane = registry.skills["matt-prototype"].workflow.lanes[0];
+  assert.equal(prototypeLane.timeoutMs, 1200000);
   assert.equal(prototypeLane.outputSchema.properties.status.enum.join(","), "BUILT,BLOCKED");
   assert.equal("turnBudget" in prototypeLane, false);
   assert.deepEqual(prototypeLane.gate, {
@@ -724,6 +725,7 @@ test("workflow schemas require structured output and distinct review axes", asyn
   ]);
 
   const scanLane = registry.skills["architecture-scan"].workflow.lanes[0];
+  assert.equal(scanLane.timeoutMs, 1200000);
   assert.equal(scanLane.outputSchema.properties.status.enum.join(","), "REPORTED,BLOCKED");
   assert.deepEqual(scanLane.gate, { field: "status", equals: "REPORTED", nonEmpty: ["scopeEvidence", "commands"] });
   assert.equal(scanLane.outputSchema.properties.candidates.maxItems, 6);
@@ -732,6 +734,7 @@ test("workflow schemas require structured output and distinct review axes", asyn
   assert.deepEqual(designLanes.map((lane) => lane.key), ["minimal", "flexible", "common-caller"]);
   assert.deepEqual(designLanes.map((lane) => lane.outputSchema.properties.strategy.enum[0]), ["minimal", "flexible", "common-caller"]);
   assert.ok(designLanes.every((lane) => lane.agent === "matt-reader"));
+  assert.ok(designLanes.every((lane) => lane.timeoutMs === 600000));
   assert.ok(designLanes.every((lane) => lane.gate.field === "status" && lane.gate.equals === "COMPLETE"));
   assert.ok(designLanes.every((lane) => lane.gate.nonEmpty.join(",") === "entries,tradeoffs"));
 
@@ -739,13 +742,16 @@ test("workflow schemas require structured output and distinct review axes", asyn
   assert.deepEqual(standards.outputSchema.properties.axis.enum, ["standards"]);
   assert.deepEqual(spec.outputSchema.properties.axis.enum, ["spec"]);
   for (const lane of [standards, spec]) {
-    assert.equal(lane.timeoutMs, 600000);
+    assert.equal(lane.timeoutMs, 900000);
     assert.equal("turnBudget" in lane, false);
     assert.deepEqual(lane.outputSchema.required, ["axis", "verdict", "summary", "findings", "notes"]);
     assert.equal(lane.outputSchema.properties.findings.items.properties.severity.enum.join(","), "P0,P1,P2");
   }
 
   const [implement, tddStandards, tddSpec] = registry.skills["matt-tdd"].workflow.lanes;
+  assert.equal(implement.timeoutMs, 1200000);
+  assert.equal(tddStandards.timeoutMs, 900000);
+  assert.equal(tddSpec.timeoutMs, 900000);
   assert.equal(implement.outputSchema.properties.status.enum.join(","), "COMPLETE,BLOCKED");
   assert.equal("turnBudget" in implement, false);
   assert.deepEqual(implement.gate, {

@@ -7,7 +7,7 @@
       "key": "research",
       "agent": "matt-researcher",
       "skills": ["research-executor"],
-      "timeoutMs": 300000,
+      "timeoutMs": 600000,
       "taskPrefix": "调查下面的问题。严格使用一手来源；每项关键结论必须由 sources 中至少一个 URL 支撑。无法确认的内容放入 gaps，不要猜测。",
       "outputSchema": {
         "type": "object",

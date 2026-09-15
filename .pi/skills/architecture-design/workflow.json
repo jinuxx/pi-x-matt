@@ -7,7 +7,7 @@
       "key": "minimal",
       "agent": "matt-reader",
       "skills": ["architecture-interface-design"],
-      "timeoutMs": 300000,
+      "timeoutMs": 600000,
       "taskPrefix": "为已选择 candidate 设计结构显著不同的 minimal interface：限制为 1–3 个 entry points，最大化每个入口的 leverage。只读，不重新扫描或修改文件。",
       "gate": { "field": "status", "equals": "COMPLETE", "nonEmpty": ["entries", "tradeoffs"] },
       "outputSchema": {
@@ -50,7 +50,7 @@
       "key": "flexible",
       "agent": "matt-reader",
       "skills": ["architecture-interface-design"],
-      "timeoutMs": 300000,
+      "timeoutMs": 600000,
       "taskPrefix": "为已选择 candidate 设计结构显著不同的 flexible interface：覆盖全部已确认 use cases 与 extension，同时禁止假想需求。只读，不重新扫描或修改文件。",
       "gate": { "field": "status", "equals": "COMPLETE", "nonEmpty": ["entries", "tradeoffs"] },
       "outputSchema": {
@@ -93,7 +93,7 @@
       "key": "common-caller",
       "agent": "matt-reader",
       "skills": ["architecture-interface-design"],
-      "timeoutMs": 300000,
+      "timeoutMs": 600000,
       "taskPrefix": "为已选择 candidate 设计结构显著不同的 common-caller interface：让最常见 caller 的默认路径最简单，并明确少见路径成本。只读，不重新扫描或修改文件。",
       "gate": { "field": "status", "equals": "COMPLETE", "nonEmpty": ["entries", "tradeoffs"] },
       "outputSchema": {
