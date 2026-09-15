@@ -38,3 +38,11 @@ metadata:
 ## 完成 gate
 
 Frontier 为空时，汇总目标、范围、非目标、已确认决定、仍存在的事实缺口和显著风险。使用 `ask_user_question` 请求用户明确选择“确认 shared understanding”或“继续澄清”。只有用户确认后，本次 grilling 才完成；确认前不得实施或宣称计划已经定稿。
+
+## Transition handoff
+
+用户确认 shared understanding 后必须把控制权交还给用户，本次 skill 到此结束。不得在同一 invocation 或同一自动连续流程中继续确认测试 seam、调用 `matt-tdd`、写生产代码，或为解阻实现而创建 spec/tickets。
+
+- standalone grilling：报告 shared understanding 已确认，再使用一次 `ask_user_question` 让用户选择“发布 spec 并继续拆 tickets”“直接实现一个单 slice”或“暂停”。只记录选择并提示下一条显式命令 `/skill:matt-to-spec` 或 `/skill:matt-implement`，随后结束；不得代替用户执行命令。只有一个明确、可在当前 session 完成且事实已可追溯的单 slice 才提供直接实现选项。
+- 被 `matt-grill-with-docs`、`matt-wayfinder` 或其他 parent 作为依赖使用时：只把确认结果交还给该 parent，由调用方执行自己的 transition gate；不得替调用方选择或启动下一阶段。
+- “需求已经明确”“用户希望开始实现”或缺少 TDD 所需 artifact，都不是自动越过 transition handoff 的授权。下一阶段必须由用户在 grilling 完成之后另行明确选择。

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { authorizeWorkflowDispatch } from "../../../lib/dispatch-authorization.mjs";
 import {
   buildDispatchRequest,
   findProjectRoot,
@@ -104,6 +105,7 @@ export default function (pi: ExtensionAPI) {
       if (!workflow) throw new Error(`Unknown Pi-native workflow '${params.workflow}'`);
 
       const plan = buildDispatchRequest(registry, workflow, params.task, projectRoot);
+      const userAuthorized = await authorizeWorkflowDispatch(workflow.name, signal, ctx);
       pendingDispatches.push({
         workflow: workflow.name,
         mode: workflow.workflow.mode,
@@ -124,6 +126,7 @@ export default function (pi: ExtensionAPI) {
           mode: workflow.workflow.mode,
           lanes: plan.lanes,
           queued: true,
+          authorization: userAuthorized ? "user-confirmed" : "not-required",
         },
       };
     },

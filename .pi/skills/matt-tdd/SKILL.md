@@ -1,6 +1,7 @@
 ---
 name: matt-tdd
 description: 在用户确认测试 seam 后，以唯一 worker 执行逐片 red→green，并由 fresh Standards/Spec reviewer 复核结果。用于测试驱动实现功能或修复缺陷。
+disable-model-invocation: true
 metadata:
   pi-scope: parent
   pi-class: orchestration
@@ -9,6 +10,8 @@ metadata:
 ---
 
 # Test-Driven Development
+
+本 skill 是 `matt-implement` 使用的内部执行 parent，不是从 grilling 或普通功能请求自动进入的用户流程。没有 `matt-implement` 已核验的单 ticket/direct-slice handoff、固定基线和允许范围时，standalone 调用必须停止并提示先使用 `/skill:matt-implement`；不得自行补做 spec/ticket 或把“用户想开始实现”当作调度授权。
 
 父会话拥有需求收敛、seam 确认、调度和最终判断。`matt-worker` 是唯一写者；后续 reviewer 只读。
 
@@ -19,7 +22,7 @@ metadata:
 3. 对每个候选测试执行测试价值 gate：显式验收行为、缺陷回归、业务规则、分支/状态转换、权限/数据完整性或公开 contract 必须保留；仅重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、验证框架本身、不可达或规格明确排除的假设性边缘情况可以省略独立测试。代码行数少本身不是省略理由；多个紧密相关的简单断言可以合并进一个行为级测试。记录省略项和理由，避免 worker 机械地为每个字段或边缘情况创建测试方法。
 4. 若用户尚未明确批准这些 seams 与测试价值判断，使用 `ask_user_question` 请求一次聚焦确认。确认前不得调用 TDD workflow。
 5. 记录固定基线（优先当前 `HEAD`）和调度前工作区状态，避免把既有改动错误归因给 worker。
-6. 明确可供 reviewer 核验的标准文件、当前 ticket、parent spec 和其他规格来源的具体路径，以及允许修改的范围、module/package 搜索边界与停止条件。TDD reviewer 固定使用 `reviewKind=worktree`：先核对 `implement.structuredOutput.changedFiles` 与 `worktree-files`，tracked 文件逐文件使用 `worktree-diff`，untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new 路径。把命令分成每轮 RED/GREEN 的最小命令、全部 slices 后的相关回归命令和父会话最终验证命令；后者不得下发给 worker。没有明确 spec/验收行为或无法提供 reviewer 初始证据边界时停止，不进入 TDD；不要依赖 reviewer 的 `NO_EVIDENCE` 代替调度前检查。
+6. 明确可供 reviewer 核验的标准文件、当前 ticket、parent spec 和其他规格来源的具体路径，以及允许修改的范围、module/package 搜索边界与停止条件。TDD reviewer 固定使用 `reviewKind=worktree`：先核对 `implement.structuredOutput.changedFiles` 与 `worktree-files`，tracked 文件逐文件使用 `worktree-diff`，untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new 路径。把命令分成每轮 RED/GREEN 的最小命令、全部 slices 后的相关回归命令和父会话最终验证命令；后者不得下发给 worker。没有明确 spec/验收行为、没有来自 `matt-implement` 的已核验 ticket/direct-slice handoff，或无法提供 reviewer 初始证据边界时停止，不进入 TDD；不要依赖 reviewer 的 `NO_EVIDENCE` 代替调度前检查。缺少 artifact 时不得使用 `write`/`edit` 创建 spec 或 ticket 解阻。
 
 ## 调度
 
@@ -27,6 +30,8 @@ metadata:
 
 - `workflow`: `matt-tdd`
 - `task`: 必须包含需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确声明完整测试套件、全量 build 与最终验证由父会话在 workflow 完成后执行，worker 不得运行
+
+Dispatcher 会在排队前要求用户运行时确认当前调用来自已核验的 `matt-implement` ticket/direct-slice handoff。用户取消或当前 mode 没有可响应的 UI 时必须拒绝调度；不得把失败解释为已经授权，也不得绕过 `pi_matt_dispatch`。
 
 工作流按代码强制的阶段执行：
 

@@ -18,9 +18,10 @@ spec 文件保存 `to-spec` 已确认的完整 Markdown，并在顶部包含：
 ```markdown
 Type: spec
 Status: spec-ready
+Source session: pi:<PI_SESSION_ID>
 ```
 
-`spec-ready` 只表示 parent spec 可以进入 `to-tickets`，不授权 `implement` 直接实现整份 spec。只有 `Type: ticket` 且 `Status: ready-for-agent` 的单个 ticket 才是实现入口。发布后重新读取文件，核对路径、标题、正文、seams、Out of Scope、Type 和 Status。
+`spec-ready` 只表示 parent spec 可以进入 `to-tickets`，不授权 `implement` 直接实现整份 spec。只有 `Type: ticket` 且 `Status: ready-for-agent` 的单个 ticket 才是实现入口。用户提供且后续工作依赖、不能安全压缩的事实、说明、样例或约束，经过 secrets 脱敏后写入 `## Reference Inputs`；内容可以是业务规则、现状描述、操作步骤、边界解释、样例或技术 contract，不以特定项目或材料类型为限，也不得只保存 agent 的行为摘要。发布后重新读取文件，核对路径、标题、正文、seams、Out of Scope、Reference Inputs、Type、Status 和 Source session。
 
 ## Ticket 格式
 
@@ -32,6 +33,7 @@ Status: spec-ready
 Type: ticket
 Parent: <相对 spec 路径，或 None>
 Status: ready-for-agent
+Source session: pi:<PI_SESSION_ID>
 Blocked by: <仓库相对 ticket 路径，或 None>
 
 ## What to build
@@ -45,7 +47,7 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 ## Comments
 ```
 
-`Parent` metadata 必须存在且非空。没有 parent spec 的当前会话单 slice 可以写 `None`；否则只接受 ticket 中声明的仓库相对 spec 路径，并逐个读取核对 `Type: spec` 与 `Status: spec-ready`，不得凭编号、标题或 feature 名猜测。`scripts/check-local-ticket.mjs` 只负责 Parent 字段的存在性 preflight，不解析或读取 parent；`implement` 父会话仍必须按本段验证真实 relationship。
+新发布的 spec/ticket 必须从当前 Pi 进程读取非空 `PI_SESSION_ID`，并写为 `Source session: pi:<PI_SESSION_ID>`；不得用模型名、时间戳或工作区路径代替。`Parent` metadata 必须存在且非空。没有 parent spec 的当前会话单 slice 可以写 `None`；否则只接受 ticket 中声明的仓库相对 spec 路径，并逐个读取核对 `Type: spec` 与 `Status: spec-ready`，不得凭编号、标题或 feature 名猜测。`scripts/check-local-ticket.mjs` 只负责 Parent 字段的存在性 preflight，不解析或读取 parent；`implement` 父会话仍必须按本段验证真实 relationship。
 
 `Blocked by` 是当前 tracker 的可核验 blocking relationship。无 blocker 时写 `None`；有 blocker 时只接受逗号分隔的仓库相对 ticket 路径，不接受裸编号、标题或绝对路径。逐个读取引用文件，只有每个 blocker 都是 `Type: ticket` 且 `Status: resolved` 时，当前 ticket 才可开始；路径缺失、状态缺失或其他状态都按未完成处理。
 
@@ -56,7 +58,7 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 - “Fetch spec/ticket”：读取用户给出的仓库相对路径；不得凭编号猜测其他 feature。
 - Comments 追加到 `## Comments`，不覆盖原正文。
 - `implement` 完成 TDD、完整验证和双轴 review 后，由父会话把当前 Local Markdown ticket 改为 `Status: resolved`，追加完成说明，并把该 ticket 文件包含在同一个最终提交中。提交失败时撤销本次状态/comment 写入，保持 ticket 未完成。
-- 每次写入后重新读取目标文件，核对 Type、Parent、Status、Blocked by、正文和验收标准；核验失败时停止后续批量写入。
+- 每次写入后重新读取目标文件，核对 Type、Parent、Status、Source session、Blocked by、Reference Inputs（spec）、正文和验收标准；核验失败时停止后续批量写入。
 
 ## Wayfinding operations
 

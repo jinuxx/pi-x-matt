@@ -13,13 +13,13 @@ metadata:
 
 # Implement
 
-本 skill 把已经决定的一个工作切片变成当前分支上的提交。它不重新 grill，不改变计划/ticket 的目标，不批量处理多个 tickets，也不平行写共享工作区。每次 invocation 只处理一个 ticket；没有已发布 ticket 时，只接受当前会话已确认、可在一个 session 完成且尚未发布为 `Type: spec`/`Status: spec-ready` 的单 slice 计划。`spec-ready` parent spec 必须先进入 `matt-to-tickets`，不能直接实现。
+本 skill 把已经决定的一个工作切片变成当前分支上的提交。它不重新 grill，不改变计划/ticket 的目标，不批量处理多个 tickets，也不平行写共享工作区。每次 invocation 只处理一个 ticket；没有已发布 ticket 时，只接受用户在先前 transition handoff 中明确选择“直接实现”、可在一个 session 完成且尚未发布为 `Type: spec`/`Status: spec-ready` 的单 slice 计划。缺少 ticket 本身不构成 direct-slice 授权。`spec-ready` parent spec 必须先进入 `matt-to-tickets`，不能直接实现。
 
 ## 开始前
 
 1. 确认当前 branch 是用户希望写入的 branch；读取 `git status`、`git log` 和当前 fixed point。不要改写或归因用户既有工作区改动。
 2. 读取完整 ticket/spec/当前已确认计划、`.x-matt/context/`、`.x-matt/adr/`、项目说明和直接调用者。使用已确认的领域词汇。
-3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。
+3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。没有 ticket 时，必须在当前会话中找到 grilling/diagnosis 等上游流程留下的明确 direct-slice handoff 和用户授权；greenfield、多业务流程、多个独立 seam、部署或迁移工作，以及依赖用户提供且不能安全压缩的事实、说明、样例或约束的工作，不得作为无 ticket 单 slice 开始。材料类型不限于技术 contract。
 4. 从 ticket 或当前会话单 slice 计划中提取候选 seams，并先做测试价值判断。显式 acceptance criterion、缺陷回归、业务规则、分支/状态转换、权限/数据完整性和公开 contract 必须有测试；不要仅因代码行数少而跳过。纯机械且已被现有行为测试覆盖的映射、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格明确排除的假设性边缘情况，不必新增独立测试方法；多个紧密相关的简单字段优先由一个行为级测试覆盖，而不是一字段一测试。把保留的测试行为和省略项的理由都写入 TDD task。若没有可执行的公开 seam、行为或聚焦测试命令，停止并报告缺口；不要在 implement 中重新设计。
 5. 固定实现前基线和调度前工作区状态，并把验证命令明确分为三类：每轮 RED/GREEN 使用的最小命令、所有 slices 完成后由 worker 运行的相关回归命令、以及只由父会话运行的最终验证命令（完整测试套件与必要的全量 typecheck/build）。同时明确允许修改的范围和停止条件。不得把父会话最终验证命令作为 worker 执行项下发。
 6. 完整读取并应用 [domain-modeling](../matt-domain-modeling/SKILL.md) 的写入边界。worker 若在实现中发现值得持久化的新术语或 ADR 级决定，必须通过 `contact_supervisor` 报告而不是写共享文档；当前 TDD run 随即停止为 `BLOCKED`。run 退出后由父会话按 domain-modeling gate 取得用户决定并写入，再以新基线重新调度，确保父会话与 worker 不并行写同一工作区。
@@ -33,7 +33,9 @@ metadata:
 - `workflow`: `matt-tdd`
 - `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
 
-只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。
+`pi_matt_dispatch` 在真正排队 `matt-tdd` 前会要求一次运行时用户确认；只有用户确认当前入口确实是一个已核验 ticket 或已批准 direct slice 才能继续。取消、无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能排队 workflow，也不能改用其他调度入口绕过。
+
+只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。若阻塞原因是缺少 Git baseline、spec、ticket、acceptance criteria 或其他规划 artifact，禁止父会话直接创建或改写 `.x-matt/work/` 来解阻；应停止并提示用户显式进入 `matt-to-spec`、`matt-to-tickets` 或修正已有 artifact。
 
 TDD worker 是唯一写者。implement 父会话不直接与 worker 并行写入，也不允许另一个 worker 同时处理同一工作区。
 

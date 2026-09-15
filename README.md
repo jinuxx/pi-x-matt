@@ -12,7 +12,7 @@
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.8
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.9
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
@@ -41,7 +41,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.8
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.8
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.9
 ```
 
 ## 架构
@@ -126,7 +126,7 @@ npm run pack:check     # 检查 package 文件清单
 
 生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；工具调用只把已验证 plan 放入内存队列，随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；工具调用只把已验证 plan 放入内存队列，随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。`matt-tdd` 还会在入队前要求用户通过 TUI/RPC 明确授权；用户取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -150,13 +150,13 @@ npm run pack:check     # 检查 package 文件清单
 
 未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，spec 与 tickets 写入 `.x-matt/work/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成后由 `matt-implement` 在最终提交中写为 `resolved`。
 
-需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。单个 session 能澄清的工作在 shared understanding 后进入 `matt-to-spec` 或一个 `matt-implement` slice；目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
+需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。shared understanding 确认后必须停止并把控制权交还给用户，由用户显式选择 `/skill:matt-to-spec`、一个 `/skill:matt-implement` 单 slice 或暂停；不得在同一连续流程中直接确认测试 seam 或启动 TDD。greenfield、多业务流程、多个 seam、部署/迁移、跨 session，或依赖用户提供且不能安全压缩的事实、说明、样例与约束的工作默认进入 spec → tickets；这些材料不限于任何项目或技术格式。目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
 
 讨论无法回答一个明确的状态/逻辑或 UI 设计问题时，使用 model-invoked `matt-prototype`。父会话先确认唯一 question 与 logic/UI branch，再由单 worker 构建：logic 是可双击的单文件 HTML；UI 是真实页面上下文中通过 `?variant=` 切换的 3–5 个结构差异方案。用户本人给出 verdict 后，artifact 只提交到本地 `prototype/<slug>` branch，不合并、不 push；原 branch 只接收可核验 context pointer，生产实现仍进入 `matt-to-spec`/`matt-implement`。
 
 `matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得 artifact branch pointer 与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
 
-需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次调用 TDD、完整验证和双轴 code-review，全部通过后提交当前 branch；当前没有实现批量 ticket 或 push/PR 的自动化。
+需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次调用内部 `matt-tdd`、完整验证和双轴 code-review，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。当前没有实现批量 ticket 或 push/PR 的自动化。
 
 具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
 
@@ -171,7 +171,7 @@ npm run pack:check     # 检查 package 文件清单
 
 代码评审使用 `workflow: "matt-code-review"`。父会话必须在 task 中声明 `reviewKind=worktree|committed|files`，并提供具体 changed-file/目标文件路径、对应逐文件证据方法、初始证据 allowlist、标准文件路径、当前 ticket/parent spec 路径、允许的一层依赖扩展和 module/package 搜索边界。`worktree` 先读取状态：tracked 文件逐路径 `worktree-diff`，`??` untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new；禁止使用 `ref...HEAD` 作为工作区唯一证据。`committed` 才使用 `diff-files ref` 和逐文件 `diff ref path`；`files` 不调用 Git diff。Spec reviewer 必须先读取 ticket/parent spec 并提取验收行为，完成前禁止 diff、FFF 和实现文件读取。两轴只能为已命名风险读取一级依赖，使用路径限定 FFF，禁止项目扫描；限定证据不足时立即返回 `NO_EVIDENCE`，不得扩大范围制造 `PASS`。`matt-reviewer` 使用 soft 12、hard 20 的只读工具预算，达到 hard 后仍可返回结构化结果。
 
-TDD 使用 `workflow: "matt-tdd"`。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
+TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。即使模型直接请求该 workflow，dispatcher 也会在入队前再次要求用户确认当前确实要实现一个已核验 ticket 或已批准 direct slice；取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
 
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
 

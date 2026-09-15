@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.8");
+  assert.equal(manifest.version, "0.2.9");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -257,6 +257,17 @@ test("project dispatcher defers pi-subagents RPC until turn_end", async () => {
   assert.match(extension, /loadCurrentRegistry\(PACKAGE_ROOT\)/);
   assert.match(extension, /await requestRpc\(pi, "spawn", dispatch\.rpcParams\)/);
   assert.doesNotMatch(extension, /const result = await requestRpc/);
+});
+
+test("project dispatcher requires runtime user authorization before queuing matt-tdd", async () => {
+  const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
+  assert.match(extension, /import \{ authorizeWorkflowDispatch \} from "\.\.\/\.\.\/\.\.\/lib\/dispatch-authorization\.mjs"/);
+  assert.match(extension, /authorization: userAuthorized \? "user-confirmed" : "not-required"/);
+  const authorizationIndex = extension.indexOf("await authorizeWorkflowDispatch(workflow.name, signal, ctx)");
+  const queueIndex = extension.indexOf("pendingDispatches.push");
+  assert.notEqual(authorizationIndex, -1);
+  assert.notEqual(queueIndex, -1);
+  assert.ok(authorizationIndex < queueIndex, "matt-tdd authorization must happen before the dispatch is queued");
 });
 
 test("repository tracker setup is executable and discoverable by Pi", async () => {
@@ -406,6 +417,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(grilling, /ask_user_question/);
   assert.match(grilling, /Frontier/);
   assert.match(grilling, /shared understanding/);
+  assert.match(grilling, /Transition handoff/);
+  assert.match(grilling, /控制权交还给用户/);
+  assert.match(grilling, /不得.*调用 `matt-tdd`/);
+  assert.match(grilling, /发布 spec 并继续拆 tickets.*直接实现一个单 slice.*暂停/);
+  assert.match(grilling, /不得代替用户执行命令/);
 
   const domain = await readFile(join(ROOT, ".pi", "skills", "matt-domain-modeling", "SKILL.md"), "utf8");
   assert.match(domain, /CONTEXT\.md/);
@@ -417,9 +433,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(combined, /disable-model-invocation:\s*true/);
   assert.match(combined, /pi-depends-on:\s*matt-grilling, matt-domain-modeling/);
   assert.match(combined, /Shared-understanding gate/);
-  assert.match(combined, /不要在本 skill 中生成 spec、tickets 或生产实现/);
+  assert.match(combined, /不得在同一 invocation 中.*生成 spec\/tickets 或写生产实现/);
   assert.match(combined, /已移植的手动 `matt-wayfinder`/);
-  assert.match(combined, /小变更直接进入 `matt-implement`/);
+  assert.match(combined, /显式 transition handoff/);
+  assert.match(combined, /greenfield 项目.*事实\/说明\/样例\/约束/);
+  assert.match(combined, /不以特定项目或材料类型为限/);
+  assert.match(combined, /不得代替用户执行命令/);
 
   const toSpec = await readFile(join(ROOT, ".pi", "skills", "matt-to-spec", "SKILL.md"), "utf8");
   assert.match(toSpec, /不重新 interview/);
@@ -441,6 +460,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toSpec, /Status: cleared/);
   assert.match(toSpec, /Decisions so far/);
   assert.match(toSpec, /linked resolved ticket/);
+  assert.match(toSpec, /Source session: pi:<PI_SESSION_ID>/);
+  assert.match(toSpec, /## Reference Inputs/);
+  assert.match(toSpec, /用户提供且后续实现、验证或运维需要依赖的事实、说明性内容、样例和约束/);
+  assert.match(toSpec, /不以特定项目或材料类型为限/);
+  assert.match(toSpec, /不得.*静默跳过到 implement/);
 
   assert.match(toSpec, /不要为了“完整”发明用户未确认的需求/);
 
@@ -463,6 +487,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /## Acceptance criteria/);
   assert.match(toTickets, /`matt-implement` 已移植/);
   assert.match(toTickets, /每次只处理一个 ticket/);
+  assert.match(toTickets, /Source session: pi:<PI_SESSION_ID>/);
+  assert.match(toTickets, /不得.*静默跳过到 implement/);
 
   const implement = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
   assert.match(implement, /一个 ticket/);
@@ -480,6 +506,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /Parent: None.*当前会话单 slice/);
   assert.match(implement, /Parent.*Type: spec.*Status: spec-ready/);
   assert.match(implement, /只做 Parent 字段存在性 preflight/);
+  assert.match(implement, /缺少 ticket 本身不构成 direct-slice 授权/);
+  assert.match(implement, /依赖用户提供且不能安全压缩的事实、说明、样例或约束/);
+  assert.match(implement, /材料类型不限于技术 contract/);
+  assert.match(implement, /禁止父会话直接创建或改写 `\.x-matt\/work\/` 来解阻/);
+  assert.match(implement, /真正排队 `matt-tdd` 前会要求一次运行时用户确认/);
+  assert.match(implement, /无 UI 的 print\/JSON mode.*fail closed/);
 
   const diagnosing = await readFile(join(ROOT, ".pi", "skills", "matt-diagnosing-bugs", "SKILL.md"), "utf8");
   assert.doesNotMatch(diagnosing, /disable-model-invocation:\s*true/);
@@ -563,7 +595,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(prototype, /生产实现.*implement.*tdd.*code-review/);
 
   const tdd = await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "SKILL.md"), "utf8");
+  assert.match(tdd, /disable-model-invocation:\s*true/);
+  assert.match(tdd, /`matt-implement` 使用的内部执行 parent/);
+  assert.match(tdd, /不得使用 `write`\/`edit` 创建 spec 或 ticket 解阻/);
   assert.match(tdd, /没有明确 spec\/验收行为.*时停止/);
+  assert.match(tdd, /排队前要求用户运行时确认/);
+  assert.match(tdd, /没有可响应的 UI 时必须拒绝调度/);
 
   const research = await readFile(join(ROOT, ".pi", "skills", "matt-research", "SKILL.md"), "utf8");
   assert.match(research, /跨会话证据/);
@@ -587,8 +624,13 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /model-invoked `matt-prototype`/);
   assert.match(readme, /prototype\/<slug>/);
   assert.match(readme, /`matt-improve-codebase-architecture`.*deletion-test report/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.8/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.8/);
+  assert.match(readme, /shared understanding 确认后必须停止并把控制权交还给用户/);
+  assert.match(readme, /`Reference Inputs`/);
+  assert.match(readme, /TDD 使用内部 `workflow: "matt-tdd"`/);
+  assert.match(readme, /`matt-tdd` 还会在入队前要求用户通过 TUI\/RPC 明确授权/);
+  assert.match(readme, /取消或无 UI 时不会启动/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.9/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.9/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 

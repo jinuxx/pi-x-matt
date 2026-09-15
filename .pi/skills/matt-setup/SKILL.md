@@ -91,7 +91,7 @@ metadata:
 
 只保留当前已移植能力需要且可执行的约定；`triage` 尚未移植，可以标注为未来约定，但不得声称当前可调用。`matt-wayfinder` 已移植，配置不得省略它需要的 map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 和结果核验操作。
 
-Local Markdown 至少定义：spec 路径、每 implementation ticket 文件路径、`Type`、`Parent`、`Status`、`Blocked by`、comments 和发布后读取核验；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成 ticket 使用 `resolved`，并明确由 implement 父会话在最终提交中写回完成状态。
+Local Markdown 至少定义：spec 路径、每 implementation ticket 文件路径、`Type`、`Parent`、`Status`、`Source session: pi:<PI_SESSION_ID>`、`Blocked by`、comments 和发布后读取核验；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成 ticket 使用 `resolved`，并明确由 implement 父会话在最终提交中写回完成状态。spec 还必须在 `Reference Inputs` 中保留经脱敏、后续工作依赖且不能安全压缩的用户事实、说明、样例和约束，包括但不限于业务规则、现状描述、操作步骤及技术 contract，不能只保存 agent 的行为摘要。
 
 Local Markdown 的 Wayfinding schema 是唯一的，不得另拟字段或嵌套路径：
 
@@ -147,7 +147,7 @@ GitHub/GitLab 至少定义：CLI、repo 解析、create/read、label、native bl
 ## 写入与验证
 
 1. 对批准文件做小范围写入；`AGENTS.md` block 已存在时原位更新，不追加重复 section。
-2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用。Local Markdown 还必须逐项核对 map 路径、decision ticket 路径、完整 metadata 模板与 `Claimed by: None`；发现 metadata 行 `Claim:`、decision ticket 位于 `issues/` 或其他非 canonical 路径时核验失败并停止。
+2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用。Local Markdown 还必须逐项核对 spec/ticket 的 `Source session` 与 `Reference Inputs` 契约、map 路径、decision ticket 路径、完整 metadata 模板与 `Claimed by: None`；发现 metadata 行 `Claim:`、decision ticket 位于 `issues/` 或其他非 canonical 路径时核验失败并停止。
 3. Local Markdown 不预先创建 `.x-matt/work/<feature-slug>/`；GitHub/GitLab 只执行只读 CLI/auth/repo/label 核验。
 4. 缺少 CLI、认证、remote、必要 label、可执行 Other workflow 或任一目标文件核验失败时，明确列为未完成；不得告诉下游 tracker 已配置。
 5. 成功时报告修改文件，并说明 `matt-to-spec` 与 `matt-to-tickets` 现在会读取这些契约。日后切换 tracker 或布局时重新运行本 skill；普通文字调整可直接编辑 `.x-matt/agents/*.md`。

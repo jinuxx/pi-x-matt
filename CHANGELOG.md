@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.9
+
+- 在 grilling 确认 shared understanding 后强制交还控制权，由用户显式选择 `matt-to-spec`、单 slice `matt-implement` 或暂停；`pi_matt_dispatch` 在 `matt-tdd` 入队前增加 TUI/RPC 用户确认，无 UI 或取消时 fail closed。
+- 将 `matt-tdd` 收口为 `matt-implement` 的内部、禁止 model invocation 的执行 parent；缺少 baseline/spec/ticket 时禁止父会话手写规划 artifact 解阻。
+- Local Markdown spec/ticket 新增 `Source session` 追踪，并要求 spec 的 `Reference Inputs` 脱敏保留后续工作依赖、不能安全压缩的用户事实、说明、样例与约束，不限定具体项目或材料类型。
+
 ## 0.2.8
 
 - 将 `mattpocock/skills` 上游快照从 `6654f6b` 同步到 `3cca18b`。

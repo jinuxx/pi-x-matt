@@ -55,4 +55,8 @@ Frontier 为空后，向用户呈现一份可核对的理解摘要：
 
 使用 `ask_user_question` 请求用户明确确认 shared understanding。用户选择继续澄清时，把反馈重新加入 decision tree；只有用户确认后才能结束。
 
-结束时报告实际修改的文档，并按工作大小给出下一步：需要跨多个 session 保存和切分的工作进入 `matt-to-spec`；能在当前 session 以一个已确认 slice 完成的小变更直接进入 `matt-implement`。不要在本 skill 中生成 spec、tickets 或生产实现；除 glossary 与经同意的 ADR 外，其余决定保留在会话上下文，供后续 `matt-to-spec` 或 `matt-implement` 消费。
+结束时报告实际修改的文档，然后执行显式 transition handoff：使用 `ask_user_question` 让用户选择“发布 spec 并继续拆 tickets”“直接实现一个单 slice”或“暂停”。本 skill 只记录选择并结束，不得在同一 invocation 中加载下一阶段、确认测试 seam、调用 `matt-tdd`、生成 spec/tickets 或写生产实现。
+
+只有目标与公开行为都已确认、只包含一个可独立验证的 vertical slice、实现所依赖的事实与约束已经可追溯、且预计当前 session 可以完成时，才提供“直接实现”选项。greenfield 项目、多个业务流程、多个独立测试 seam、用户提供了不能安全压缩而不损失实现语义的事实/说明/样例/约束、需要部署或迁移、或明显需要跨 session 的工作，默认推荐“发布 spec 并继续拆 tickets”。这些用户输入可以是业务规则、操作说明、现状描述、数据或交互样例、查询/API/schema/config 等技术材料，不以特定项目或材料类型为限。用户选择后分别提示下一条显式命令 `/skill:matt-to-spec` 或 `/skill:matt-implement`，并立即结束当前回合；不得代替用户执行命令。
+
+除 glossary 与经同意的 ADR 外，其余决定保留在会话上下文，供后续 `matt-to-spec` 或 `matt-implement` 消费。

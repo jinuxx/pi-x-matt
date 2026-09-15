@@ -1036,7 +1036,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-grill-with-docs/SKILL.md",
-      "sourceDigest": "732a653b543fbea801bf24638d8e1dd2e420c18f7cb033b743fc7778fbd82240",
+      "sourceDigest": "0aaa2c763ebcc80e87bc52506a050a49c5fb09a34462eec3c5b69a6597dca07b",
       "upstreamPath": "skills/engineering/grill-with-docs/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "7de372c13488f1ee96cc11cd8907b56b6809cc93eef776eeddd37de6b6cbe3fe"
@@ -1050,7 +1050,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-grilling/SKILL.md",
-      "sourceDigest": "3a24fca5c58b177d509b7d22d71dc3e0f3bebdf21fa4825245c88fcf4bbe0b4f",
+      "sourceDigest": "79809edd7d574942727b3ec41fdc2f51ef580d2ec0990972bf18cfa3c233b8ae",
       "upstreamPath": "skills/productivity/grilling/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "10ff989e7498b23b5acb49d5048f11dcd906757d2f79c5cdf8a00001381296f2"
@@ -1066,7 +1066,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "78c639069b788a9d4d12bb04ac856682341e85b2c181a2cb1e4cb96c6f1ca573",
+      "sourceDigest": "d2ee3fc87c9f4bad38e013e89dec9626ec9d311f86e0a7212384b3b7c5410bd7",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1389,7 +1389,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-setup/SKILL.md",
-      "sourceDigest": "6206b9534525c13824dc7d5aa9cd33d6154d318d8f594896320a0e49583e47d4",
+      "sourceDigest": "593f40c9a916b120ac77f2e6d5cd51112dc78975a4d7662f9559112c57104cd4",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
@@ -1407,7 +1407,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "2256c5b8710e1e40eee329ab2160e3e0ae385c20c9bb017182c3100fba271201",
+      "sourceDigest": "684d404559d316dfa61af676db534299f1757e2cc77542f0fd7b22c455414b2b",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "426ffc76692d32213a08b784da7198551d6b5cda067543ee1749ca47da937430",
       "workflow": {
@@ -1769,7 +1769,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-spec/SKILL.md",
-      "sourceDigest": "2ab953ca2d2589d3f69e532f0383ea45a07b2d84532232a0b72d67e04665d104",
+      "sourceDigest": "e107e2c1c2b9ad77e39acf0ca7cee966f64d67854d2dea2f117b1e5b2c9895b0",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
@@ -1783,7 +1783,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-tickets/SKILL.md",
-      "sourceDigest": "900fe7209dedbbe0ca14bf770b91e0c05e49d58f73783ce5d6cedfeef9d61f89",
+      "sourceDigest": "22608528985ffe57bc82ae4ca54b66672c2dda6136fc9efe00cf4d4b88486a3b",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"

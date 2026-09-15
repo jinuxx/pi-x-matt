@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { authorizeWorkflowDispatch } from "../lib/dispatch-authorization.mjs";
 import {
   buildDispatchRequest,
   findProjectRoot,
@@ -53,6 +54,49 @@ function completeWorkerOutput() {
     residualRisks: [],
   };
 }
+
+test("dispatcher authorization allows ordinary workflows without prompting", async () => {
+  let prompted = false;
+  const authorized = await authorizeWorkflowDispatch("matt-research", undefined, {
+    hasUI: false,
+    ui: { confirm: async () => { prompted = true; return true; } },
+  });
+
+  assert.equal(authorized, false);
+  assert.equal(prompted, false);
+});
+
+test("dispatcher authorization fails closed for matt-tdd without UI or confirmation", async () => {
+  await assert.rejects(
+    () => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false, ui: {} }),
+    /requires explicit user authorization in TUI or RPC mode/,
+  );
+
+  let prompt;
+  await assert.rejects(
+    () => authorizeWorkflowDispatch("matt-tdd", undefined, {
+      hasUI: true,
+      ui: {
+        confirm: async (title, message) => {
+          prompt = { title, message };
+          return false;
+        },
+      },
+    }),
+    /was not authorized by the user; no workflow was queued/,
+  );
+  assert.equal(prompt.title, "Authorize matt-tdd?");
+  assert.match(prompt.message, /verified ready ticket or approved direct slice/);
+  assert.match(prompt.message, /publish a spec, split tickets, or pause/);
+});
+
+test("dispatcher authorization records an explicit matt-tdd confirmation", async () => {
+  const authorized = await authorizeWorkflowDispatch("matt-tdd", undefined, {
+    hasUI: true,
+    ui: { confirm: async () => true },
+  });
+  assert.equal(authorized, true);
+});
 
 test("dispatcher verifies package resources separately from the target project", async () => {
   const packageRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-package-"));
