@@ -186,7 +186,7 @@ test("dispatcher builds one guarded fresh child for research", async () => {
   assert.equal(items[0].context, "fresh");
   assert.deepEqual(items[0].skill, ["research-executor"]);
   assert.equal(items[0].output, false);
-  assert.deepEqual(items[0].turnBudget, { maxTurns: 8, graceTurns: 2 });
+  assert.equal("turnBudget" in items[0], false);
   assert.equal(items[0].outputSchema.type, "object");
   assert.match(plan.rpcParams.workflowScript, /completed without valid structuredOutput/);
   assert.deepEqual(
@@ -272,7 +272,7 @@ test("dispatcher builds two independent guarded review lanes", async () => {
     { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
   ]);
   assert.ok(items.every((item) => item.timeoutMs === 600000));
-  assert.ok(items.every((item) => item.turnBudget.maxTurns === 12 && item.turnBudget.graceTurns === 2));
+  assert.ok(items.every((item) => !("turnBudget" in item)));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
   assert.deepEqual(plan.lanes.map((lane) => lane.gate), [
     { field: "verdict", equals: "PASS" },
@@ -294,7 +294,11 @@ test("dispatcher builds two independent guarded review lanes", async () => {
 
 test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "已确认 seams 的实现任务", ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "已确认 seams 的实现任务", ROOT, {
+    implement: "已确认 seams 的实现任务；执行 RED/GREEN",
+    standards: "按当前 worktree diff 执行 Standards 复核",
+    spec: "读取 ticket/spec 后按当前 worktree diff 执行 Spec 复核",
+  });
   const stages = parsePipelineStages(plan.rpcParams.workflowScript);
 
   assert.deepEqual(plan.lanes.map(({ key, stage, agent, skills }) => ({ key, stage, agent, skills })), [
@@ -389,6 +393,38 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   assert.equal(calls, 2);
 });
 
+test("dispatcher supports complete per-lane task replacements", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(
+    registry,
+    registry.skills["matt-tdd"],
+    "共享任务不应覆盖显式 lane task",
+    ROOT,
+    {
+      implement: "只执行 report-only 结构化恢复",
+      standards: "只按当前 worktree diff 执行 Standards 复核",
+      spec: "先读取 ticket/spec，再按当前 worktree diff 执行 Spec 复核",
+    },
+  );
+  const stages = parsePipelineStages(plan.rpcParams.workflowScript);
+
+  assert.match(stages[0][0].task, /只执行 report-only 结构化恢复/);
+  assert.doesNotMatch(stages[0][0].task, /Standards 复核/);
+  assert.match(stages[1][0].task, /只按当前 worktree diff 执行 Standards 复核/);
+  assert.doesNotMatch(stages[1][0].task, /report-only 结构化恢复/);
+  assert.match(stages[1][1].task, /先读取 ticket\/spec/);
+  assert.doesNotMatch(stages[1][1].task, /report-only 结构化恢复/);
+
+  assert.throws(
+    () => buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, { unknown: "task" }),
+    /unknown lane 'unknown'/,
+  );
+  assert.throws(
+    () => buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, { implement: "task" }),
+    /requires complete laneTasks for \[standards, spec\]/,
+  );
+});
+
 test("dispatcher workflow guard rejects missing structured output", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
@@ -440,11 +476,57 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
   assert.deepEqual(result[0].structuredOutput, structuredOutput);
 });
 
+test("dispatcher resumes a retained child once for structured-output settlement", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  const failures = [
+    { error: "Missing structured_output call; this step has outputSchema and must finish by calling structured_output." },
+    { error: "Subagent timed out after 300000ms.", timedOut: true },
+  ];
+
+  for (const failure of failures) {
+    let calls = 0;
+    const results = await execute({ all: async (items) => {
+      calls += 1;
+      if (calls === 1) {
+        return [{
+          key: "research",
+          ok: false,
+          runId: "retained-run",
+          resumability: { state: "resumable" },
+          ...failure,
+        }];
+      }
+      assert.equal(items.length, 1);
+      assert.equal(items[0].key, "research-settlement");
+      assert.equal(items[0].resume, "retained-run");
+      assert.equal(items[0].timeoutMs, 180000);
+      assert.match(items[0].task, /立即调用 structured_output/);
+      assert.match(items[0].task, /不得编造 COMPLETE 或 PASS/);
+      return [{
+        key: "research-settlement",
+        ok: true,
+        structuredOutput: { question: "q", summary: "done", findings: [], sources: [], gaps: [] },
+      }];
+    } });
+
+    assert.equal(calls, 2);
+    assert.equal(results[0].key, "research");
+    assert.equal(results[0].structuredOutput.summary, "done");
+  }
+});
+
 test("dispatcher fails closed on malformed lanes and cross-agent grants", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const duplicate = structuredClone(registry.skills["matt-code-review"]);
   duplicate.workflow.lanes[1].key = duplicate.workflow.lanes[0].key;
   assert.throws(() => buildDispatchRequest(registry, duplicate, "review", ROOT), /duplicate lane/);
+
+  const reserved = structuredClone(registry.skills["matt-code-review"]);
+  reserved.workflow.lanes[0].key = "standards-settlement";
+  assert.throws(() => buildDispatchRequest(registry, reserved, "review", ROOT), /reserved settlement suffix/);
 
   const crossAgentRegistry = structuredClone(registry);
   crossAgentRegistry.skills["review-spec"].agent = "matt-worker";

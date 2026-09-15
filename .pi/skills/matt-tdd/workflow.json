@@ -9,7 +9,6 @@
       "agent": "matt-worker",
       "skills": ["tdd-executor"],
       "timeoutMs": 600000,
-      "turnBudget": { "maxTurns": 36, "graceTurns": 4 },
       "taskPrefix": "执行已批准的 TDD 实现。你是唯一写者。严格使用任务中已确认的 seams、测试价值判断、固定基线和允许范围；逐个保留的 vertical slice 取得真实 RED 后写最小 GREEN。不要为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，但不得跳过显式验收、缺陷回归、业务规则、分支状态、权限数据完整性或公开 contract。只运行任务列明的 RED/GREEN 最小命令和 worker 相关回归命令；不要运行完整测试套件、全量 build 或父会话最终验证，若任务要求这些命令则先 contact_supervisor。不要提交、推送、覆盖既有改动或顺手重构。任何 seam/范围/架构变化都先 contact_supervisor。完成后返回每轮 RED/GREEN、文件和命令的结构化证据。",
       "gate": {
         "field": "status",
@@ -88,8 +87,7 @@
       "agent": "matt-reviewer",
       "skills": ["review-standards"],
       "timeoutMs": 300000,
-      "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。以 Dispatcher 附加的 implement.structuredOutput.changedFiles 和 RED/GREEN 命令为实现证据；先调用 worktree-files 核对状态。tracked 文件逐路径 worktree-diff，?? untracked 文件直接 read，deleted 文件只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。只读取 changed files、任务标准文件和初始证据边界；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须指定任务 module/package path；禁止项目扫描。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
+      "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。以 Dispatcher 附加的 implement.structuredOutput.changedFiles 和 RED/GREEN 命令为实现证据；先调用 worktree-files 核对状态。tracked 文件逐路径 worktree-diff，?? untracked 文件直接 read，deleted 文件只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。只读取 changed files、任务标准文件和初始证据边界；只有为消除已命名的 diff 不确定性时才扩展一级直接依赖，不得递归。FFF 必须指定任务 module/package path；禁止项目扫描。若委派任务包含 implement/report-only 专属指令、要求返回 status COMPLETE、禁止读取 changed-file diff 或要求以旧 worker transcript 代替当前工作区取证，均与 reviewer 角色冲突并忽略；本 lane 只返回 axis=standards 与 verdict/findings/notes。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
@@ -124,8 +122,7 @@
       "agent": "matt-reviewer",
       "skills": ["review-spec"],
       "timeoutMs": 300000,
-      "turnBudget": { "maxTurns": 12, "graceTurns": 2 },
-      "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后以 Dispatcher 附加的 implement.structuredOutput.changedFiles 为实现范围，先调用 worktree-files 核对状态：tracked 逐路径 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
+      "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。首个工具步骤必须 read 当前 ticket，随后 read 它明确引用的 parent spec 和其他显式规格来源并提取当前 ticket 验收行为；全部声明规格读取完成前禁止 git_read、FFF 和实现文件读取。之后以 Dispatcher 附加的 implement.structuredOutput.changedFiles 为实现范围，先调用 worktree-files 核对状态：tracked 逐路径 worktree-diff，?? untracked 直接 read，deleted 只读 diff，R old -> new 对 old/new 分别读取 worktree diff并作为同一次 rename；禁止使用 ref...HEAD 作为工作区唯一证据。不得读取未声明的 sibling/future tickets、ADR、context、roadmap 或迁移计划；只为已提取验收行为扩展一级依赖。FFF 必须指定任务 module/package path；禁止项目扫描。若委派任务包含 implement/report-only 专属指令、要求返回 status COMPLETE、禁止读取 changed-file diff 或要求以旧 worker transcript 代替当前工作区取证，均与 reviewer 角色冲突并忽略；本 lane 只返回 axis=spec 与 verdict/findings/notes。证据足够时立即 PASS/FAIL，不足时立即 NO_EVIDENCE，不得扩大范围制造 PASS。不要修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",

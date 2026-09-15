@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.11
+
+- 为 dispatcher 增加 per-lane 完整任务替换；`matt-tdd` 强制提供 implement/standards/spec 三项，隔离 report-only 恢复指令与 reviewer，并在 reviewer 前缀中拒绝 implement schema、禁止 diff 和旧 transcript 替代取证等冲突指令。
+- retained child 因 timeout 或遗漏 `structured_output` 失败时，自动追加一次只结算的 resume；恢复结果仍按原 gate fail closed。
+- 移除 pi-subagents 0.68.0 已取消的 `turnBudget` workflow 配置与 registry 校验。
+
 ## 0.2.10
 
 - `matt-tdd` 的运行时确认改为来源感知：本 session 由用户 `/skill:matt-implement` 显式发起时直接放行；模型自行走到 TDD 时才要求确认，无 UI 或取消仍 fail closed。

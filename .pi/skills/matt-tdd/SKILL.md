@@ -29,7 +29,8 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `task`: 必须包含需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确声明完整测试套件、全量 build 与最终验证由父会话在 workflow 完成后执行，worker 不得运行
+- `task`: 只放三条 lane 都可安全读取的共享事实：需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、module/package 搜索边界和停止条件。不得把仅适用于 implement 的 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等指令放入共享 task。
+- `laneTasks`: 必须同时为 `implement`、`standards`、`spec` 提供完整的 lane 专属任务替换；替换不会自动继承 `task`，所以每项必须复制该 lane 所需的共享事实。`implement` 写明 RED/GREEN 最小命令、worker 相关回归命令，并明确完整测试套件/全量 build/最终验证由父会话执行、worker 不得运行；`standards` 与 `spec` 分别写明各自可读证据和输出轴，禁止要求 reviewer 返回 implement 的 `status COMPLETE` 或以旧 worker transcript 代替当前 diff。report-only、resume 或失败恢复仍必须提供完整三项，不得退回共享 task。
 
 Dispatcher 只在无法确认用户显式发起实现时才拦截：本 session 由用户执行 `/skill:matt-implement` 启动时直接放行；模型自行走到 TDD 时会要求用户确认当前调用来自已核验的 ticket/direct-slice handoff。用户取消或当前 mode 没有可响应的 UI 时必须拒绝调度；不得把失败解释为已经授权，也不得绕过 `pi_matt_dispatch`。
 

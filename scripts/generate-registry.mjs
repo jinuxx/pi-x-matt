@@ -135,6 +135,9 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames, write
     if (typeof lane.key !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(lane.key)) {
       throw new Error(`${sourcePath}: lane ${index} has an invalid key`);
     }
+    if (lane.key.endsWith("-settlement")) {
+      throw new Error(`${sourcePath}: lane '${lane.key}' uses reserved settlement suffix`);
+    }
     if (laneKeys.has(lane.key)) throw new Error(`${sourcePath}: duplicate lane key '${lane.key}'`);
     laneKeys.add(lane.key);
     if (typeof lane.agent !== "string" || !agentNames.has(lane.agent)) {
@@ -166,11 +169,8 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames, write
     if (!Number.isInteger(lane.timeoutMs) || lane.timeoutMs <= 0) {
       throw new Error(`${sourcePath}: lane '${lane.key}' requires a positive timeoutMs`);
     }
-    if (!isObject(lane.turnBudget) || !Number.isInteger(lane.turnBudget.maxTurns) || lane.turnBudget.maxTurns <= 0) {
-      throw new Error(`${sourcePath}: lane '${lane.key}' requires turnBudget.maxTurns`);
-    }
-    if (lane.turnBudget.graceTurns !== undefined && (!Number.isInteger(lane.turnBudget.graceTurns) || lane.turnBudget.graceTurns < 0)) {
-      throw new Error(`${sourcePath}: lane '${lane.key}' has invalid turnBudget.graceTurns`);
+    if (lane.turnBudget !== undefined) {
+      throw new Error(`${sourcePath}: lane '${lane.key}' uses unsupported turnBudget; pi-subagents 0.68 removed assistant turn budgets`);
     }
 
     let stage;
@@ -219,10 +219,6 @@ async function loadWorkflow(projectRoot, skillPath, skillName, agentNames, write
       agent: lane.agent,
       skills: [...new Set(lane.skills.map((name) => name.trim()))],
       timeoutMs: lane.timeoutMs,
-      turnBudget: {
-        maxTurns: lane.turnBudget.maxTurns,
-        ...(lane.turnBudget.graceTurns !== undefined ? { graceTurns: lane.turnBudget.graceTurns } : {}),
-      },
       taskPrefix: lane.taskPrefix.trim(),
       ...(gate ? { gate } : {}),
       outputSchema: lane.outputSchema,

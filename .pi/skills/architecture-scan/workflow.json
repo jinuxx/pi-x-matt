@@ -8,7 +8,6 @@
       "agent": "matt-worker",
       "skills": ["architecture-scan-executor"],
       "timeoutMs": 600000,
-      "turnBudget": { "maxTurns": 24, "graceTurns": 4 },
       "taskPrefix": "只在父任务固定 scope 内扫描 architecture friction。repository 全程只读；唯一允许的写入是 OS temp 中的新 HTML report。每个 candidate 必须有真实文件证据、dependency category 与 deletion test；不要设计具体 interface，不要强行制造 candidate。",
       "gate": {
         "field": "status",

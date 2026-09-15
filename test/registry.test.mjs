@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.10");
+  assert.equal(manifest.version, "0.2.11");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -500,6 +500,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /一个 ticket/);
   assert.match(implement, /workflow`: `matt-tdd`/);
   assert.match(implement, /workflow`: `matt-code-review`/);
+  assert.match(implement, /`laneTasks`: 必须同时提供 `implement`、`standards`、`spec`/);
+  assert.match(implement, /旧 worker transcript 代替 diff/);
   assert.match(implement, /当前 branch/);
   assert.match(implement, /不 push/);
   assert.match(implement, /只处理一个 ticket/);
@@ -638,8 +640,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI\/RPC 授权/);
   assert.match(readme, /本 session 以 `\/skill:matt-implement` 启动时直接放行/);
   assert.match(readme, /取消或 print\/JSON mode 没有 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.10/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.10/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.11/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.11/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
@@ -694,6 +696,8 @@ test("reviewers stay inside a bounded evidence envelope", async () => {
   assert.ok(tddReviewers.every((lane) => /\?\? untracked/.test(lane.taskPrefix)));
   assert.ok(tddReviewers.every((lane) => /禁止项目扫描/.test(lane.taskPrefix)));
   assert.ok(tddReviewers.every((lane) => /不得扩大范围制造 PASS/.test(lane.taskPrefix)));
+  assert.ok(tddReviewers.every((lane) => /implement\/report-only 专属指令/.test(lane.taskPrefix)));
+  assert.ok(tddReviewers.every((lane) => /旧 worker transcript 代替当前工作区取证/.test(lane.taskPrefix)));
   assert.match(tddReviewers.find((lane) => lane.key === "spec").taskPrefix, /首个工具步骤必须 read 当前 ticket/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
@@ -709,7 +713,7 @@ test("workflow schemas require structured output and distinct review axes", asyn
 
   const prototypeLane = registry.skills["matt-prototype"].workflow.lanes[0];
   assert.equal(prototypeLane.outputSchema.properties.status.enum.join(","), "BUILT,BLOCKED");
-  assert.deepEqual(prototypeLane.turnBudget, { maxTurns: 24, graceTurns: 4 });
+  assert.equal("turnBudget" in prototypeLane, false);
   assert.deepEqual(prototypeLane.gate, {
     field: "status",
     equals: "BUILT",
@@ -736,14 +740,14 @@ test("workflow schemas require structured output and distinct review axes", asyn
   assert.deepEqual(spec.outputSchema.properties.axis.enum, ["spec"]);
   for (const lane of [standards, spec]) {
     assert.equal(lane.timeoutMs, 600000);
-    assert.deepEqual(lane.turnBudget, { maxTurns: 12, graceTurns: 2 });
+    assert.equal("turnBudget" in lane, false);
     assert.deepEqual(lane.outputSchema.required, ["axis", "verdict", "summary", "findings", "notes"]);
     assert.equal(lane.outputSchema.properties.findings.items.properties.severity.enum.join(","), "P0,P1,P2");
   }
 
   const [implement, tddStandards, tddSpec] = registry.skills["matt-tdd"].workflow.lanes;
   assert.equal(implement.outputSchema.properties.status.enum.join(","), "COMPLETE,BLOCKED");
-  assert.deepEqual(implement.turnBudget, { maxTurns: 36, graceTurns: 4 });
+  assert.equal("turnBudget" in implement, false);
   assert.deepEqual(implement.gate, {
     field: "status",
     equals: "COMPLETE",
@@ -914,6 +918,22 @@ test("registry generation rejects weak workflow schemas and invalid leaf dispatc
 });
 
 test("registry generation rejects malformed pipeline stages and gates", async () => {
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "matt-tdd", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[0].turnBudget = { maxTurns: 36, graceTurns: 4 };
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /uses unsupported turnBudget/);
+  });
+
+  await withTempProject(async (temp) => {
+    const path = join(temp, ".pi", "skills", "matt-tdd", "workflow.json");
+    const workflow = JSON.parse(await readFile(path, "utf8"));
+    workflow.lanes[0].key = "implement-settlement";
+    await write(path, `${JSON.stringify(workflow, null, 2)}\n`);
+    await assert.rejects(() => buildRegistry(temp), /reserved settlement suffix/);
+  });
+
   await withTempProject(async (temp) => {
     const path = join(temp, ".pi", "skills", "matt-tdd", "workflow.json");
     const workflow = JSON.parse(await readFile(path, "utf8"));

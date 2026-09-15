@@ -31,7 +31,8 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
+- `task`: 只包含三条 lane 都可安全读取的共享事实：单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、reviewer 初始证据边界、module/package 搜索边界和停止条件。不得放入 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等 implement 专属指令。
+- `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整任务替换，并在每项复制该 lane 所需的共享事实。`implement` 才包含 RED/GREEN 最小命令、worker 相关回归命令，并明确完整测试套件与最终验证属于父会话、worker 不得运行；`standards` 与 `spec` 只包含各自的当前工作区取证与输出要求，不得要求 reviewer 返回 implement schema 或以旧 worker transcript 代替 diff。
 
 `pi_matt_dispatch` 只在无法确认本次实现由你显式发起时才要求运行时确认：当你在本 session 用 `/skill:matt-implement` 显式启动时直接放行；模型自行走到 TDD、或本 session 没有该显式调用记录时，会要求你确认当前入口是一个已核验 ticket 或已批准 direct slice。取消、无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能排队 workflow，也不能改用其他调度入口绕过。
 

@@ -101,10 +101,16 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; do not bypass its registry validation with a direct subagent launch.",
+      "Keep task safe for every lane. matt-tdd requires complete implement, standards, and spec laneTasks replacements so implement instructions never reach reviewers.",
     ],
     parameters: Type.Object({
       workflow: Type.String({ description: "Parent workflow skill name, for example research" }),
-      task: Type.String({ minLength: 1, description: "Concrete delegated task, evidence requirements, output contract, and stop conditions" }),
+      task: Type.String({ minLength: 1, description: "Shared/default delegated task. Keep it safe for every lane; matt-tdd uses complete laneTasks replacements." }),
+      laneTasks: Type.Optional(Type.Record(
+        Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
+        Type.String({ minLength: 1 }),
+        { description: "Complete per-lane task replacements. Omitted lanes use task; matt-tdd requires implement, standards, and spec." },
+      )),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       signal?.throwIfAborted();
@@ -115,7 +121,7 @@ export default function (pi: ExtensionAPI) {
       const workflow = registry.skills[params.workflow];
       if (!workflow) throw new Error(`Unknown Pi-native workflow '${params.workflow}'`);
 
-      const plan = buildDispatchRequest(registry, workflow, params.task, projectRoot);
+      const plan = buildDispatchRequest(registry, workflow, params.task, projectRoot, params.laneTasks);
       const authorizationReason = await authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization);
       pendingDispatches.push({
         workflow: workflow.name,
