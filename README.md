@@ -12,7 +12,7 @@
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.9
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.10
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
@@ -41,7 +41,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.9
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.9
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.10
 ```
 
 ## 架构
@@ -126,7 +126,7 @@ npm run pack:check     # 检查 package 文件清单
 
 生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema`、正数 `timeoutMs` 与 `turnBudget`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；工具调用只把已验证 plan 放入内存队列，随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。`matt-tdd` 还会在入队前要求用户通过 TUI/RPC 明确授权；用户取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；工具调用只把已验证 plan 放入内存队列，随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI/RPC 授权：本 session 以 `/skill:matt-implement` 启动时直接放行，模型自行进入 TDD 时才要求确认；取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -171,7 +171,7 @@ npm run pack:check     # 检查 package 文件清单
 
 代码评审使用 `workflow: "matt-code-review"`。父会话必须在 task 中声明 `reviewKind=worktree|committed|files`，并提供具体 changed-file/目标文件路径、对应逐文件证据方法、初始证据 allowlist、标准文件路径、当前 ticket/parent spec 路径、允许的一层依赖扩展和 module/package 搜索边界。`worktree` 先读取状态：tracked 文件逐路径 `worktree-diff`，`??` untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new；禁止使用 `ref...HEAD` 作为工作区唯一证据。`committed` 才使用 `diff-files ref` 和逐文件 `diff ref path`；`files` 不调用 Git diff。Spec reviewer 必须先读取 ticket/parent spec 并提取验收行为，完成前禁止 diff、FFF 和实现文件读取。两轴只能为已命名风险读取一级依赖，使用路径限定 FFF，禁止项目扫描；限定证据不足时立即返回 `NO_EVIDENCE`，不得扩大范围制造 `PASS`。`matt-reviewer` 使用 soft 12、hard 20 的只读工具预算，达到 hard 后仍可返回结构化结果。
 
-TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。即使模型直接请求该 workflow，dispatcher 也会在入队前再次要求用户确认当前确实要实现一个已核验 ticket 或已批准 direct slice；取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
+TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。该 workflow 只在用户于本 session 以 `/skill:matt-implement` 显式发起时直接放行；模型自行请求时，dispatcher 会在入队前要求用户确认当前确实要实现一个已核验 ticket 或已批准 direct slice，取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
 
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
 

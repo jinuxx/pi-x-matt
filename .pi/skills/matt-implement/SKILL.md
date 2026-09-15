@@ -33,7 +33,7 @@ metadata:
 - `workflow`: `matt-tdd`
 - `task`: 包含单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确写出完整测试套件与最终验证属于父会话，worker 不得运行；不要把它们混入 worker 命令列表。
 
-`pi_matt_dispatch` 在真正排队 `matt-tdd` 前会要求一次运行时用户确认；只有用户确认当前入口确实是一个已核验 ticket 或已批准 direct slice 才能继续。取消、无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能排队 workflow，也不能改用其他调度入口绕过。
+`pi_matt_dispatch` 只在无法确认本次实现由你显式发起时才要求运行时确认：当你在本 session 用 `/skill:matt-implement` 显式启动时直接放行；模型自行走到 TDD、或本 session 没有该显式调用记录时，会要求你确认当前入口是一个已核验 ticket 或已批准 direct slice。取消、无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能排队 workflow，也不能改用其他调度入口绕过。
 
 只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。若阻塞原因是缺少 Git baseline、spec、ticket、acceptance criteria 或其他规划 artifact，禁止父会话直接创建或改写 `.x-matt/work/` 来解阻；应停止并提示用户显式进入 `matt-to-spec`、`matt-to-tickets` 或修正已有 artifact。
 

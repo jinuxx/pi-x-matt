@@ -31,7 +31,7 @@ metadata:
 - `workflow`: `matt-tdd`
 - `task`: 必须包含需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 具体路径、reviewer 初始证据边界、module/package 搜索边界和停止条件。明确声明完整测试套件、全量 build 与最终验证由父会话在 workflow 完成后执行，worker 不得运行
 
-Dispatcher 会在排队前要求用户运行时确认当前调用来自已核验的 `matt-implement` ticket/direct-slice handoff。用户取消或当前 mode 没有可响应的 UI 时必须拒绝调度；不得把失败解释为已经授权，也不得绕过 `pi_matt_dispatch`。
+Dispatcher 只在无法确认用户显式发起实现时才拦截：本 session 由用户执行 `/skill:matt-implement` 启动时直接放行；模型自行走到 TDD 时会要求用户确认当前调用来自已核验的 ticket/direct-slice handoff。用户取消或当前 mode 没有可响应的 UI 时必须拒绝调度；不得把失败解释为已经授权，也不得绕过 `pi_matt_dispatch`。
 
 工作流按代码强制的阶段执行：
 

@@ -1066,7 +1066,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "d2ee3fc87c9f4bad38e013e89dec9626ec9d311f86e0a7212384b3b7c5410bd7",
+      "sourceDigest": "3c1d39370ad5601a192f694c219d7514666c24fa155e8737571f2f749c6dc55e",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1407,7 +1407,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "684d404559d316dfa61af676db534299f1757e2cc77542f0fd7b22c455414b2b",
+      "sourceDigest": "e1d8484396cb432daeb6f74d1a5b0b3e28b868d665f98d0f9959c2f8095054d1",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "426ffc76692d32213a08b784da7198551d6b5cda067543ee1749ca47da937430",
       "workflow": {

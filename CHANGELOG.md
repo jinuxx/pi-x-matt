@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.10
+
+- `matt-tdd` 的运行时确认改为来源感知：本 session 由用户 `/skill:matt-implement` 显式发起时直接放行；模型自行走到 TDD 时才要求确认，无 UI 或取消仍 fail closed。
+
 ## 0.2.9
 
 - 在 grilling 确认 shared understanding 后强制交还控制权，由用户显式选择 `matt-to-spec`、单 slice `matt-implement` 或暂停；`pi_matt_dispatch` 在 `matt-tdd` 入队前增加 TUI/RPC 用户确认，无 UI 或取消时 fail closed。

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { authorizeWorkflowDispatch } from "../lib/dispatch-authorization.mjs";
+import { authorizeWorkflowDispatch, createDispatchAuthorization, parseInvokedSkill } from "../lib/dispatch-authorization.mjs";
 import {
   buildDispatchRequest,
   findProjectRoot,
@@ -57,19 +57,74 @@ function completeWorkerOutput() {
 
 test("dispatcher authorization allows ordinary workflows without prompting", async () => {
   let prompted = false;
-  const authorized = await authorizeWorkflowDispatch("matt-research", undefined, {
+  const reason = await authorizeWorkflowDispatch("matt-research", undefined, {
     hasUI: false,
     ui: { confirm: async () => { prompted = true; return true; } },
-  });
+  }, createDispatchAuthorization());
 
-  assert.equal(authorized, false);
+  assert.equal(reason, "not-required");
   assert.equal(prompted, false);
+});
+
+test("dispatcher parses explicit skill invocations like Pi does", () => {
+  assert.equal(parseInvokedSkill("/skill:matt-implement"), "matt-implement");
+  assert.equal(parseInvokedSkill("/skill:matt-implement 处理 ticket 003"), "matt-implement");
+  assert.equal(parseInvokedSkill("/skill:matt-grilling"), "matt-grilling");
+  assert.equal(parseInvokedSkill("请运行 /skill:matt-implement"), null);
+  assert.equal(parseInvokedSkill("/template:foo"), null);
+  assert.equal(parseInvokedSkill("/skill:"), null);
+  assert.equal(parseInvokedSkill(undefined), null);
+});
+
+test("dispatcher skips the matt-tdd prompt for a user-invoked implement session", async () => {
+  for (const source of ["interactive", "rpc"]) {
+    const authorization = createDispatchAuthorization();
+    let prompted = false;
+    authorization.observeInput("/skill:matt-implement 003-modular-python-worker", source);
+
+    const reason = await authorizeWorkflowDispatch("matt-tdd", undefined, {
+      hasUI: false,
+      ui: { confirm: async () => { prompted = true; return true; } },
+    }, authorization);
+
+    assert.equal(reason, "user-invoked-implement", source);
+    assert.equal(prompted, false, source);
+  }
+});
+
+test("dispatcher still prompts when implement was not user-invoked", async () => {
+  const extensionInjected = createDispatchAuthorization();
+  extensionInjected.observeInput("/skill:matt-implement", "extension");
+  assert.equal(extensionInjected.userInvokedImplement(), false);
+
+  const otherSkill = createDispatchAuthorization();
+  otherSkill.observeInput("/skill:matt-implement", "interactive");
+  assert.equal(otherSkill.userInvokedImplement(), true);
+  otherSkill.observeInput("/skill:matt-grilling", "interactive");
+  assert.equal(otherSkill.userInvokedImplement(), false, "a later explicit skill invocation revokes the grant");
+
+  const plainText = createDispatchAuthorization();
+  plainText.observeInput("实现 ticket 003", "interactive");
+  assert.equal(plainText.userInvokedImplement(), false);
+
+  const reset = createDispatchAuthorization();
+  reset.observeInput("/skill:matt-implement", "interactive");
+  reset.reset();
+  assert.equal(reset.userInvokedImplement(), false);
+
+  let prompted = false;
+  const reason = await authorizeWorkflowDispatch("matt-tdd", undefined, {
+    hasUI: true,
+    ui: { confirm: async () => { prompted = true; return true; } },
+  }, extensionInjected);
+  assert.equal(reason, "user-confirmed");
+  assert.equal(prompted, true);
 });
 
 test("dispatcher authorization fails closed for matt-tdd without UI or confirmation", async () => {
   await assert.rejects(
-    () => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false, ui: {} }),
-    /requires explicit user authorization in TUI or RPC mode/,
+    () => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false, ui: {} }, createDispatchAuthorization()),
+    /requires explicit user authorization outside an explicit \/skill:matt-implement session/,
   );
 
   let prompt;
@@ -82,20 +137,21 @@ test("dispatcher authorization fails closed for matt-tdd without UI or confirmat
           return false;
         },
       },
-    }),
+    }, createDispatchAuthorization()),
     /was not authorized by the user; no workflow was queued/,
   );
   assert.equal(prompt.title, "Authorize matt-tdd?");
-  assert.match(prompt.message, /verified ready ticket or approved direct slice/);
+  assert.match(prompt.message, /No explicit \/skill:matt-implement invocation was seen/);
+  assert.match(prompt.message, /verified one ready ticket or approved a direct slice/);
   assert.match(prompt.message, /publish a spec, split tickets, or pause/);
 });
 
 test("dispatcher authorization records an explicit matt-tdd confirmation", async () => {
-  const authorized = await authorizeWorkflowDispatch("matt-tdd", undefined, {
+  const reason = await authorizeWorkflowDispatch("matt-tdd", undefined, {
     hasUI: true,
     ui: { confirm: async () => true },
-  });
-  assert.equal(authorized, true);
+  }, createDispatchAuthorization());
+  assert.equal(reason, "user-confirmed");
 });
 
 test("dispatcher verifies package resources separately from the target project", async () => {

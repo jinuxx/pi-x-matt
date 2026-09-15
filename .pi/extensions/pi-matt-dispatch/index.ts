@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { authorizeWorkflowDispatch } from "../../../lib/dispatch-authorization.mjs";
+import { createDispatchAuthorization, authorizeWorkflowDispatch } from "../../../lib/dispatch-authorization.mjs";
 import {
   buildDispatchRequest,
   findProjectRoot,
@@ -67,6 +67,17 @@ function requestRpc(pi: ExtensionAPI, method: string, params: unknown): Promise<
 
 export default function (pi: ExtensionAPI) {
   const pendingDispatches: PendingDispatch[] = [];
+  const authorization = createDispatchAuthorization();
+
+  // A matt-tdd dispatch only skips the runtime confirmation while the user
+  // themself opened this session with `/skill:matt-implement`.
+  pi.on("session_start", () => {
+    authorization.reset();
+  });
+
+  pi.on("input", (event) => {
+    authorization.observeInput(event.text, event.source);
+  });
 
   pi.on("turn_end", async () => {
     const pending = pendingDispatches.splice(0);
@@ -105,7 +116,7 @@ export default function (pi: ExtensionAPI) {
       if (!workflow) throw new Error(`Unknown Pi-native workflow '${params.workflow}'`);
 
       const plan = buildDispatchRequest(registry, workflow, params.task, projectRoot);
-      const userAuthorized = await authorizeWorkflowDispatch(workflow.name, signal, ctx);
+      const authorizationReason = await authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization);
       pendingDispatches.push({
         workflow: workflow.name,
         mode: workflow.workflow.mode,
@@ -126,7 +137,7 @@ export default function (pi: ExtensionAPI) {
           mode: workflow.workflow.mode,
           lanes: plan.lanes,
           queued: true,
-          authorization: userAuthorized ? "user-confirmed" : "not-required",
+          authorization: authorizationReason,
         },
       };
     },

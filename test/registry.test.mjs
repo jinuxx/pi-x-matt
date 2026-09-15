@@ -215,7 +215,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.9");
+  assert.equal(manifest.version, "0.2.10");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -261,9 +261,15 @@ test("project dispatcher defers pi-subagents RPC until turn_end", async () => {
 
 test("project dispatcher requires runtime user authorization before queuing matt-tdd", async () => {
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
-  assert.match(extension, /import \{ authorizeWorkflowDispatch \} from "\.\.\/\.\.\/\.\.\/lib\/dispatch-authorization\.mjs"/);
-  assert.match(extension, /authorization: userAuthorized \? "user-confirmed" : "not-required"/);
-  const authorizationIndex = extension.indexOf("await authorizeWorkflowDispatch(workflow.name, signal, ctx)");
+  assert.match(extension, /import \{ createDispatchAuthorization, authorizeWorkflowDispatch \} from "\.\.\/\.\.\/\.\.\/lib\/dispatch-authorization\.mjs"/);
+  assert.match(extension, /createDispatchAuthorization\(\)/);
+  assert.match(extension, /pi\.on\("input"/);
+  assert.match(extension, /authorization\.observeInput\(event\.text, event\.source\)/);
+  assert.match(extension, /pi\.on\("session_start"/);
+  assert.match(extension, /authorization\.reset\(\)/);
+  assert.match(extension, /await authorizeWorkflowDispatch\(workflow\.name, signal, ctx, authorization\)/);
+  assert.match(extension, /authorization: authorizationReason/);
+  const authorizationIndex = extension.indexOf("await authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization)");
   const queueIndex = extension.indexOf("pendingDispatches.push");
   assert.notEqual(authorizationIndex, -1);
   assert.notEqual(queueIndex, -1);
@@ -510,7 +516,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /依赖用户提供且不能安全压缩的事实、说明、样例或约束/);
   assert.match(implement, /材料类型不限于技术 contract/);
   assert.match(implement, /禁止父会话直接创建或改写 `\.x-matt\/work\/` 来解阻/);
-  assert.match(implement, /真正排队 `matt-tdd` 前会要求一次运行时用户确认/);
+  assert.match(implement, /无法确认本次实现由你显式发起时才要求运行时确认/);
+  assert.match(implement, /本 session 用 `\/skill:matt-implement` 显式启动时直接放行/);
   assert.match(implement, /无 UI 的 print\/JSON mode.*fail closed/);
 
   const diagnosing = await readFile(join(ROOT, ".pi", "skills", "matt-diagnosing-bugs", "SKILL.md"), "utf8");
@@ -599,7 +606,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(tdd, /`matt-implement` 使用的内部执行 parent/);
   assert.match(tdd, /不得使用 `write`\/`edit` 创建 spec 或 ticket 解阻/);
   assert.match(tdd, /没有明确 spec\/验收行为.*时停止/);
-  assert.match(tdd, /排队前要求用户运行时确认/);
+  assert.match(tdd, /只在无法确认用户显式发起实现时才拦截/);
+  assert.match(tdd, /本 session 由用户执行 `\/skill:matt-implement` 启动时直接放行/);
   assert.match(tdd, /没有可响应的 UI 时必须拒绝调度/);
 
   const research = await readFile(join(ROOT, ".pi", "skills", "matt-research", "SKILL.md"), "utf8");
@@ -627,10 +635,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /shared understanding 确认后必须停止并把控制权交还给用户/);
   assert.match(readme, /`Reference Inputs`/);
   assert.match(readme, /TDD 使用内部 `workflow: "matt-tdd"`/);
-  assert.match(readme, /`matt-tdd` 还会在入队前要求用户通过 TUI\/RPC 明确授权/);
-  assert.match(readme, /取消或无 UI 时不会启动/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.9/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.9/);
+  assert.match(readme, /`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI\/RPC 授权/);
+  assert.match(readme, /本 session 以 `\/skill:matt-implement` 启动时直接放行/);
+  assert.match(readme, /取消或 print\/JSON mode 没有 UI 时 fail closed/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.10/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.10/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
 });
 
