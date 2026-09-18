@@ -12,7 +12,7 @@
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.12
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.13
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
@@ -41,7 +41,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.12
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.12
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.13
 ```
 
 ## 架构
@@ -156,7 +156,7 @@ npm run pack:check     # 检查 package 文件清单
 
 `matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得 artifact branch pointer 与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
 
-需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次调用内部 `matt-tdd`、完整验证和双轴 code-review，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。当前没有实现批量 ticket 或 push/PR 的自动化。
+需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次执行带内置双轴复核的 `matt-tdd` 和父会话完整验证，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。当前没有实现批量 ticket 或 push/PR 的自动化。
 
 具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
 

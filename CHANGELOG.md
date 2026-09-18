@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.13
+
+- `matt-implement` 复用 `matt-tdd` 内置的 fresh Standards/Spec 双轴结果作为最终评审，不再对同一 worktree 默认追加重复的 standalone code review。
+- 同一轮 review findings 合并后只请求一次授权；获批修复使用聚焦 `matt-tdd`，只复核修复增量、原 finding 与必要的一层依赖。
+- 明确只有有证据的验收、标准、正确性、安全、数据完整性或必需测试问题阻断提交；非阻断建议保留在 notes。
+
 ## 0.2.12
 
 - 移除 `matt-reviewer` 会催促提前收尾的 soft 工具预算，只保留 hard 50 的只读工具上限，避免复杂 diff 复核在完成取证前过早结束，同时保留失控保护。
