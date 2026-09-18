@@ -1033,7 +1033,7 @@
     },
     "matt-implement": {
       "name": "matt-implement",
-      "description": "根据已确认的 ticket 或当前会话单 slice 计划实现一个工作切片，依次执行 TDD、验证、独立 code review，并提交当前分支。",
+      "description": "根据已确认的 ticket 或当前会话单 slice 计划实现一个工作切片，执行带双轴复核的 TDD、父会话验证，并提交当前分支。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
@@ -1042,7 +1042,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "524027a9e428edf7d368d3c07deb3fff09b651064e1f3a371e98a88b9fd171e0",
+      "sourceDigest": "4b2c3f8d788b8c312f1d47df601371c36ce953569026361525a72fa40781cf56",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"

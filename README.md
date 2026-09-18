@@ -175,6 +175,8 @@ npm run pack:check     # 检查 package 文件清单
 
 TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。该 workflow 只在用户于本 session 以 `/skill:matt-implement` 显式发起时直接放行；模型自行请求时，dispatcher 会在入队前要求用户确认当前确实要实现一个已核验 ticket 或已批准 direct slice，取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
 
+`matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。review finding 会按同一轮合并请求一次授权；获批修复使用聚焦 `matt-tdd`，只复核修复增量、原 finding 与必要的一层依赖，不重新裁决未变化且已通过的文件。
+
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
 
 ## 已验证行为

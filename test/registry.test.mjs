@@ -498,7 +498,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   const implement = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
   assert.match(implement, /一个 ticket/);
   assert.match(implement, /workflow`: `matt-tdd`/);
-  assert.match(implement, /workflow`: `matt-code-review`/);
+  assert.match(implement, /不要再调用 `matt-code-review` 重复评审同一 worktree/);
+  assert.match(implement, /只有以下任一条件成立时才额外调用 `matt-code-review`/);
+  assert.match(implement, /同一轮全部 findings/);
+  assert.match(implement, /聚焦 `matt-tdd`/);
+  assert.match(implement, /不再追加 standalone code review/);
   assert.match(implement, /`laneTasks`: 必须同时提供 `implement`、`standards`、`spec`/);
   assert.match(implement, /旧 worker transcript 代替 diff/);
   assert.match(implement, /当前 branch/);
