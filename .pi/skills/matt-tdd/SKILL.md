@@ -17,7 +17,7 @@ metadata:
 
 ## 调度前
 
-1. 复用 `matt-implement` 已核验的上下文，按 [Context Pack 契约](context-packs.md) 生成 Implementation Context Pack。必须获得 ticket、相关 spec 验收/decision/out-of-scope 与适用项目说明；已取得内容不重复读取。相关源码、词汇与测试按精确 manifest 分级；架构全文、全部 ADR 和整个模块调用者仅按需读取。
+1. 复用 `matt-implement` 已核验的上下文，按 [Context Pack 契约](context-packs.md) 生成 Implementation Context Pack。必须获得 ticket、相关 spec 验收/decision/out-of-scope 与适用项目说明；已取得内容不重复读取。ticket、parent、blocker 或 manifest 规格来源只要位于 `.x-matt/work/shipped/` 就立即 fail closed，不读取、不调度任何 lane；归档内容即使被用户点名也只能作为历史依据，不能进入 TDD。相关源码、词汇与测试按精确 manifest 分级；架构全文、全部 ADR 和整个模块调用者仅按需读取。
 2. 写出建议测试的公开 **seam**、每个 seam 的 **interface** 与待验证行为。测试只能穿过公开 interface，不测试实现细节。
 3. 对每个候选测试执行测试价值 gate：显式验收行为、缺陷回归、业务规则、分支/状态转换、权限/数据完整性或公开 contract 必须保留；仅重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、验证框架本身、不可达或规格明确排除的假设性边缘情况可以省略独立测试。代码行数少本身不是省略理由；多个紧密相关的简单断言可以合并进一个行为级测试。记录省略项和理由，避免 worker 机械地为每个字段或边缘情况创建测试方法。
 4. 若用户尚未明确批准这些 seams 与测试价值判断，使用 `ask_user_question` 请求一次聚焦确认。确认前不得调用 TDD workflow。

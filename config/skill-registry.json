@@ -768,6 +768,20 @@
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2c20617f87ec8af6a434859f381b2f061a69b530444e74eb39e78bb016a6d1e2"
     },
+    "matt-archive": {
+      "name": "matt-archive",
+      "description": "在用户显式指定 Local Markdown feature slug 后，核验完成条件，把 parent spec 标记为 shipped 并以独立提交移入归档目录。",
+      "scope": "parent",
+      "class": "interaction",
+      "agent": null,
+      "dispatch": "none",
+      "dependsOn": [],
+      "sourcePath": ".pi/skills/matt-archive/SKILL.md",
+      "sourceDigest": "a290f434662873b8d9ddd51ea54858ac57406ed924de9b487f16deca0e5b179d",
+      "upstreamPath": "docs/engineering/to-spec.md",
+      "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
+      "upstreamDigest": "47dbcde3e8ba381dc6650206bf36c64336c91f2d9de86ab1898355155081fe5a"
+    },
     "matt-code-review": {
       "name": "matt-code-review",
       "description": "沿 Standards 与 Spec 两个相互独立的轴评审固定范围内的代码变化。用于评审分支、PR、工作区变更、计划实现结果或指定文件。",
@@ -780,7 +794,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "7a71eb6e6dae2b9a0f1352b9382221a9916badb187b2a2ee0f1c5f905ea314b4",
+      "sourceDigest": "ecc40039b98f65976f2d1f3e7ca76e28c23ec5b429ed2926f559169fd1d6e40f",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
       "workflowDigest": "07511aff0564caf8851fd1b1240aa88b72ce22ec2473f48ec3b34e6d80ac8993",
       "workflow": {
@@ -981,7 +995,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-diagnosing-bugs/SKILL.md",
-      "sourceDigest": "b5c17a0b7af62c8e24f4182e96d6f38fedc6fe85ebba0bf319d39aaab95f8282",
+      "sourceDigest": "e90e6c40f831ae76092bb43017f08caf230c41ea261af2dad7805fb618cdaf02",
       "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "77f3cf31bc99b2f49af943222526531fcc9fc41d047626d3640e875e85af3e84"
@@ -1042,7 +1056,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "49aa8f0f323d40f3fb4b5d1271ca37ba3bfc613c9e148edf8c65cc3b94c1c5ea",
+      "sourceDigest": "e826fb7b888eae52edc6d50b720aab9fe2c6a88ddc924606b624b1f41e4ca6a6",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1357,7 +1371,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-setup/SKILL.md",
-      "sourceDigest": "593f40c9a916b120ac77f2e6d5cd51112dc78975a4d7662f9559112c57104cd4",
+      "sourceDigest": "b18aca3fabdc4d378b68d3445802c46a53929e7e21b9a6522e9ee480660b138b",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
@@ -1375,7 +1389,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "21137893123eb68d5f02762f468914b6627bc5d4fcb68245b5398ea43af3041d",
+      "sourceDigest": "245c3a68d158f5e81e7ee732fb859a9f02c9c1de7a4d50894f65a4745bcf3831",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "a8b004363c0a728e9232194b10f76b362960e39a80ce0e915f90750ec54b8fdc",
       "workflow": {
@@ -1746,7 +1760,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-spec/SKILL.md",
-      "sourceDigest": "e107e2c1c2b9ad77e39acf0ca7cee966f64d67854d2dea2f117b1e5b2c9895b0",
+      "sourceDigest": "869cc94001009a61065ffa38eb1c53825b09cbb064f7da90b34f7c2cc3cfb66c",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
@@ -1760,7 +1774,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-tickets/SKILL.md",
-      "sourceDigest": "22608528985ffe57bc82ae4ca54b66672c2dda6136fc9efe00cf4d4b88486a3b",
+      "sourceDigest": "0302f7b3bae77d7a9167bdf0b98247b918992c3783279041a4873ac803e62f56",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
@@ -1778,7 +1792,7 @@
         "matt-to-spec"
       ],
       "sourcePath": ".pi/skills/matt-wayfinder/SKILL.md",
-      "sourceDigest": "60015b33c3b8ac04aa7d17bc6755dbc68ccd3af9f4bd47b9d2756fb98c9b8761",
+      "sourceDigest": "84004e49772e14f215278b48ebff9f3d68098073e024e4d015766c8fb368645d",
       "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"

@@ -2,7 +2,7 @@
 
 `pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
 
-当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、throwaway prototype、hard-bug 诊断与 architecture deepening survey，以及 10 个交互式 parent：`matt-setup`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`；另有 6 个执行型 parent：`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、双轴 `matt-code-review` 与分阶段 `matt-tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `matt-prototype` 与 architecture workflows 的用户选择仍留在父会话。
+当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、完成规格归档、throwaway prototype、hard-bug 诊断与 architecture deepening survey，以及 11 个交互式 parent：`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`；另有 6 个执行型 parent：`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、双轴 `matt-code-review` 与分阶段 `matt-tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `matt-prototype` 与 architecture workflows 的用户选择仍留在父会话。
 
 ## 安装
 
@@ -12,7 +12,7 @@
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.14
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.15
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
@@ -43,14 +43,14 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.14
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.15
 ```
 
 ## 架构
 
 系统分为三个边界：
 
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`matt-setup`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、`matt-code-review`、`matt-tdd`）通过 registry workflow 调度子代理。
+1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、`matt-code-review`、`matt-tdd`）通过 registry workflow 调度子代理。
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
@@ -68,7 +68,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.14
   → 父会话核验并综合结果
 ```
 
-`matt-research`、`matt-prototype` 与 `architecture-scan` 使用单 lane；`architecture-design` 使用 minimal/flexible/common-caller 三个 fresh 只读 lane；`matt-prototype` 只把 artifact 构建交给唯一 `matt-worker`，`architecture-scan` 的 worker 只写 OS temp report；`matt-code-review` 使用相互独立的 `standards` 与 `spec` reviewer lanes；`matt-tdd` 先由唯一 `matt-worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`matt-setup`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，可以在父会话中调用执行型 workflow。`matt-improve-codebase-architecture` 先调用 `architecture-scan` 生成 temp report，用户选择 candidate 并 grilling 后，只有明确需要 alternative interfaces 才调用 `architecture-design`；它不修改生产代码。`matt-implement` 仍在父会话中调用 `matt-tdd` 和 `matt-code-review`，负责单 ticket 的实现、验证、review 与提交。
+`matt-research`、`matt-prototype` 与 `architecture-scan` 使用单 lane；`architecture-design` 使用 minimal/flexible/common-caller 三个 fresh 只读 lane；`matt-prototype` 只把 artifact 构建交给唯一 `matt-worker`，`architecture-scan` 的 worker 只写 OS temp report；`matt-code-review` 使用相互独立的 `standards` 与 `spec` reviewer lanes；`matt-tdd` 先由唯一 `matt-worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，可以在父会话中调用执行型 workflow。`matt-archive` 不调用 workflow，只在用户给出准确 feature slug 后执行本地归档 gate 与独立提交。`matt-improve-codebase-architecture` 先调用 `architecture-scan` 生成 temp report，用户选择 candidate 并 grilling 后，只有明确需要 alternative interfaces 才调用 `architecture-design`；它不修改生产代码。`matt-implement` 仍在父会话中调用 `matt-tdd` 和 `matt-code-review`，负责单 ticket 的实现、验证、review 与提交。
 
 ## pi-subagents 最小加载
 
@@ -147,10 +147,12 @@ npm run pack:check     # 检查 package 文件清单
 ├── agents/   # tracker、label 和 domain 契约
 ├── context/  # CONTEXT.md、CONTEXT-MAP.md 与多 context glossary
 ├── adr/      # single-context ADR；多 context 时按子目录分组
-└── work/     # Local Markdown spec、tickets、map 和 decisions
+└── work/     # active Local Markdown spec/tickets/map/decisions；shipped/ 是唯一归档子目录
 ```
 
-未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，spec 与 tickets 写入 `.x-matt/work/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成后由 `matt-implement` 在最终提交中写为 `resolved`。
+未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，active spec 与 tickets 写入 `.x-matt/work/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`，完成后由 `matt-implement` 在最终提交中写为 `resolved`。全部 tickets 为 `resolved` / `out-of-scope`、相关提交已在当前 branch、持久知识已沉淀后，用户可在独立步骤显式运行 `matt-archive <feature-slug>`：它把 parent 改为 `shipped`，整体移动到 `.x-matt/work/shipped/<feature-slug>/`，改写 Parent/Blocked by 路径并创建一个独立归档提交；`matt-implement` 不得代做归档。
+
+所有 skills 默认把 `.x-matt/work/shipped/` 视为不存在：feature 枚举、Wayfinder frontier、`matt-to-spec` / `matt-to-tickets` 输入、`matt-implement` 入口与 `matt-code-review` Spec 轴都跳过归档内容，找不到 active spec 时返回“无可用 spec”，不回退到 shipped。只有用户在同一会话明确点名某个归档标题或路径时，才可只读对应对象作为历史依据；授权不允许重开 ticket、改状态、生成新 ticket、进入 frontier/implement 或成为 Spec 轴。
 
 需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。shared understanding 确认后必须停止并把控制权交还给用户，由用户显式选择 `/skill:matt-to-spec`、一个 `/skill:matt-implement` 单 slice 或暂停；不得在同一连续流程中直接确认测试 seam 或启动 TDD。greenfield、多业务流程、多个 seam、部署/迁移、跨 session，或依赖用户提供且不能安全压缩的事实、说明、样例与约束的工作默认进入 spec → tickets；这些材料不限于任何项目或技术格式。目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
 

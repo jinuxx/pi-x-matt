@@ -149,6 +149,82 @@ test("accepts a ready ticket whose blocker ticket is resolved", async () => {
   });
 });
 
+test("rejects an archived ticket before reading it as an implementation entry", async () => {
+  await withTempRepo(async (repo) => {
+    const ticketPath = ".x-matt/work/shipped/example/issues/01-archived.md";
+    await writeFixture(
+      repo,
+      ticketPath,
+      `# 01: Archived\n\nType: ticket\nParent: .x-matt/work/shipped/example/spec.md\nStatus: resolved\nBlocked by: None\n`,
+    );
+
+    const result = runChecker(repo, ticketPath);
+
+    assert.equal(result.status, 1);
+    assertEnvelope(result, ticketPath, false);
+    assert.deepEqual(result.json.blockers, []);
+    assert.deepEqual(result.json.errors, [
+      "Ticket path under .x-matt/work/shipped is archived and cannot be an implementation entry",
+    ]);
+  });
+});
+
+test("rejects an active ticket whose parent is archived", async () => {
+  await withTempRepo(async (repo) => {
+    const parents = [
+      ".x-matt/work/shipped/example/spec.md",
+      join(repo, ".x-matt/work/shipped/example/spec.md"),
+    ];
+
+    for (const [index, parent] of parents.entries()) {
+      const ticketPath = `.x-matt/work/example/issues/0${index + 1}-archived-parent.md`;
+      await writeFixture(
+        repo,
+        ticketPath,
+        `# 0${index + 1}: Archived parent\n\nType: ticket\nParent: ${parent}\nStatus: ready-for-agent\nBlocked by: None\n`,
+      );
+
+      const result = runChecker(repo, ticketPath);
+
+      assert.equal(result.status, 1);
+      assertEnvelope(result, ticketPath, false);
+      assert.deepEqual(result.json.errors, [
+        index === 0
+          ? "Parent under .x-matt/work/shipped is archived and cannot authorize implementation"
+          : "Parent must be None or a repository-relative path under active .x-matt/work",
+      ]);
+    }
+  });
+});
+
+test("rejects an archived blocker without reading shipped content", async () => {
+  await withTempRepo(async (repo) => {
+    const blockerPath = ".x-matt/work/shipped/example/issues/01-resolved.md";
+    const ticketPath = ".x-matt/work/active/issues/02-ready.md";
+    await writeFixture(
+      repo,
+      blockerPath,
+      `# 01: Resolved\n\nType: ticket\nParent: .x-matt/work/shipped/example/spec.md\nStatus: resolved\nBlocked by: None\n`,
+    );
+    await writeFixture(
+      repo,
+      ticketPath,
+      `# 02: Ready\n\nType: ticket\nParent: .x-matt/work/active/spec.md\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`,
+    );
+
+    const result = runChecker(repo, ticketPath);
+
+    assert.equal(result.status, 1);
+    assertEnvelope(result, ticketPath, false);
+    assert.deepEqual(result.json.blockers, [
+      { ticket: blockerPath, type: null, status: null, ok: false },
+    ]);
+    assert.deepEqual(result.json.errors, [
+      `Blocker ${JSON.stringify(blockerPath)} is archived under .x-matt/work/shipped and cannot unlock an active ticket`,
+    ]);
+  });
+});
+
 test("reports missing, unresolved, and non-ticket blockers", async () => {
   await withTempRepo(async (repo) => {
     const fixtures = [

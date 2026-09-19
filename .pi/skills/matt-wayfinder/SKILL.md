@@ -19,7 +19,7 @@ metadata:
 
 ## Tracker gate
 
-先按根 `AGENTS.md` 指针读取 `.x-matt/agents/issue-tracker.md`、`.x-matt/agents/triage-labels.md` 和 `.x-matt/agents/domain.md`。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。
+先按根 `AGENTS.md` 指针读取 `.x-matt/agents/issue-tracker.md`、`.x-matt/agents/triage-labels.md` 和 `.x-matt/agents/domain.md`。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。Local Markdown 的任何 map 枚举与 frontier 计算都必须从 active effort 精确路径开始，并默认跳过整个 `.x-matt/work/shipped/`；不得输出其中路径/标题或把归档 spec/ticket/map 当作 map、child、blocker、linked decision 或回退来源。用户点名归档 spec 的同会话授权仍只允许历史只读，不能把它放回 frontier。
 
 所有 tracker 写入使用配置中的真实操作。外部 tracker 的 create/edit/assign/close 属外部写入，执行前必须取得明确授权；Local Markdown 是当前仓库内写入，可在用户明确调用本 skill 后按已确认 draft 执行。写后必须重新读取目标并核验。
 

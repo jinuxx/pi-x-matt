@@ -95,7 +95,7 @@ Root-cause gate 通过且存在正确 seam 后，形成当前会话单 slice han
 - regression test 在正确 seam 上通过；
 - 相关测试、typecheck 和完整 suite 按 `matt-implement` 通过；
 - `grep` 确认所有 `[DEBUG-<id>]` instrumentation 已删除；
-- throwaway harness/artifact 已删除，或按用户批准保存在明确的 `.x-matt/work/` 诊断路径且不含敏感数据；
+- throwaway harness/artifact 已删除，或按用户批准保存在明确的 active `.x-matt/work/` 诊断路径且不含敏感数据；不得写入、枚举或把 `.x-matt/work/shipped/` 用作诊断路径，用户点名归档对象也只允许历史只读；
 - Standards 与 Spec review 均 PASS，提交可核验；
 - 完成报告明确写出正确假设、根因、命令证据、commit 与 residual risks。
 

@@ -49,6 +49,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     "architecture-scan-executor",
     "architecture-vocabulary-reader",
     "codebase-design",
+    "matt-archive",
     "matt-code-review",
     "matt-diagnosing-bugs",
     "matt-domain-modeling",
@@ -156,7 +157,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     assert.equal(registry.skills[name].agent, "matt-reader");
   }
 
-  for (const name of ["matt-setup", "matt-grilling", "matt-domain-modeling", "matt-grill-with-docs"]) {
+  for (const name of ["matt-setup", "matt-archive", "matt-grilling", "matt-domain-modeling", "matt-grill-with-docs"]) {
     const interaction = registry.skills[name];
     assert.equal(interaction.scope, "parent");
     assert.equal(interaction.class, "interaction");
@@ -166,6 +167,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     assert.equal(interaction.workflowPath, undefined);
   }
   assert.deepEqual(registry.skills["matt-grill-with-docs"].dependsOn, ["matt-grilling", "matt-domain-modeling"]);
+  assert.deepEqual(registry.skills["matt-archive"].dependsOn, []);
   assert.equal(registry.skills["matt-to-spec"].scope, "parent");
   assert.match(registry.skills["matt-to-spec"].description, /parent spec.*spec-ready/);
   assert.equal(registry.skills["matt-to-spec"].class, "interaction");
@@ -215,11 +217,12 @@ test("project package filter keeps only the pi-subagents extension", async () =>
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.14");
+  assert.equal(manifest.version, "0.2.15");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
   assert.deepEqual(manifest.pi.skills, [
+    "./.pi/skills/matt-archive",
     "./.pi/skills/matt-code-review",
     "./.pi/skills/matt-diagnosing-bugs",
     "./.pi/skills/matt-domain-modeling",
@@ -294,6 +297,12 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(tracker, /issues\/<NN>-<slug>\.md/);
   assert.match(tracker, /Type: spec/);
   assert.match(tracker, /Status: spec-ready/);
+  assert.match(tracker, /Status.*`spec-ready`.*`shipped`/);
+  assert.match(tracker, /\.x-matt\/work\/shipped\/<feature-slug>\//);
+  assert.match(tracker, /Parent spec 归档/);
+  assert.match(tracker, /独立步骤中显式调用 `matt-archive`/);
+  assert.match(tracker, /默认对模型不可见/);
+  assert.match(tracker, /同一会话明确点名/);
   assert.match(tracker, /Type: ticket/);
   assert.match(tracker, /Parent:/);
   assert.match(tracker, /Status: ready-for-agent/);
@@ -324,6 +333,7 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   const labels = await readFile(join(ROOT, ".x-matt", "agents", "triage-labels.md"), "utf8");
   assert.match(labels, /`ready-for-agent` \| `ready-for-agent`/);
   assert.match(labels, /`spec-ready`/);
+  assert.match(labels, /`shipped`/);
   assert.match(labels, /`resolved`/);
   assert.match(labels, /`active` \/ `cleared`/);
   assert.match(labels, /`open` \/ `claimed` \/ `resolved` \/ `out-of-scope`/);
@@ -393,7 +403,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(setup, /\.x-matt\/work\/<feature-slug>\//);
   assert.match(setup, /不创建远端 issue、label/);
   assert.match(setup, /Pi-only/);
-  assert.match(setup, /`spec-ready`、`ready-for-agent` 与 `resolved`/);
+  assert.match(setup, /`spec-ready`、`shipped`、`ready-for-agent`、`resolved` 与 `out-of-scope`/);
   assert.match(setup, /`ready-for-agent` 是 canonical triage role/);
   assert.match(setup, /使用 Pi 为已加载 `matt-setup` 提供的绝对 skill `location`/);
   assert.match(setup, /从该 `SKILL\.md` 所在目录逐级向上/);
@@ -402,7 +412,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(setup, /`config\/skill-registry\.json` 为 skill 存在性和 `scope` \/ `class` \/ `dispatch` metadata 的权威来源/);
   assert.match(setup, /`package\.json#pi\.skills` 只交叉核验对应 skill 路径已作为 package resource 暴露/);
   assert.match(setup, /不能用它推导 metadata/);
-  assert.match(setup, /本版本 invariant 是 `triage` 未登记、`matt-wayfinder` 已登记为 `parent` \/ `interaction` \/ `dispatch: none`/);
+  assert.match(setup, /本版本 invariant 是 `triage` 未登记，`matt-wayfinder` 与 `matt-archive` 都已登记为 `parent` \/ `interaction` \/ `dispatch: none`/);
   assert.match(setup, /Wayfinding operations/);
   assert.match(setup, /claim、release、resolve、out-of-scope、fog graduation/);
   assert.match(setup, /\.x-matt\/work\/<effort>\/map\.md/);
@@ -422,6 +432,21 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.doesNotMatch(setup, /尚未移植的 wayfinder/);
   assert.match(setup, /setup 所需的 tracker、label、domain 和 Wayfinding 行为契约内置/);
   assert.doesNotMatch(setup, /vendor\/mattpocock-skills/);
+
+  const archive = await readFile(join(ROOT, ".pi", "skills", "matt-archive", "SKILL.md"), "utf8");
+  assert.match(archive, /disable-model-invocation:\s*true/);
+  assert.match(archive, /pi-class:\s*interaction/);
+  assert.match(archive, /pi-dispatch:\s*none/);
+  assert.match(archive, /准确的 `<feature-slug>`/);
+  assert.match(archive, /Status: spec-ready.*Status: shipped/s);
+  assert.match(archive, /resolved` 或 `out-of-scope/);
+  assert.match(archive, /跨 feature blocker 时拒绝/);
+  assert.match(archive, /Commits landed/);
+  assert.match(archive, /Durable knowledge settled/);
+  assert.match(archive, /git diff --check/);
+  assert.match(archive, /chore: 归档 <feature-slug> 规格/);
+  assert.match(archive, /普通会话必须把 `\.x-matt\/work\/shipped\/` 视为不存在/);
+  assert.doesNotMatch(archive, /workflow\.json/);
 
   const grilling = await readFile(join(ROOT, ".pi", "skills", "matt-grilling", "SKILL.md"), "utf8");
   assert.match(grilling, /ask_user_question/);
@@ -475,6 +500,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toSpec, /用户提供且后续实现、验证或运维需要依赖的事实、说明性内容、样例和约束/);
   assert.match(toSpec, /不以特定项目或材料类型为限/);
   assert.match(toSpec, /不得.*静默跳过到 implement/);
+  assert.match(toSpec, /默认跳过 `\.x-matt\/work\/shipped\/`/);
 
   assert.match(toSpec, /不要为了“完整”发明用户未确认的需求/);
 
@@ -499,6 +525,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(toTickets, /每次只处理一个 ticket/);
   assert.match(toTickets, /Source session: pi:<PI_SESSION_ID>/);
   assert.match(toTickets, /不得.*静默跳过到 implement/);
+  assert.match(toTickets, /active `\.x-matt\/work\/<feature-slug>\/spec\.md`/);
+  assert.match(toTickets, /不能重新拆 tickets/);
 
   const implement = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
   assert.match(implement, /一个 ticket/);
@@ -521,7 +549,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /spec-ready.*必须先进入 `matt-to-tickets`/);
   assert.match(implement, /Parent: None.*当前会话单 slice/);
   assert.match(implement, /Parent.*Type: spec.*Status: spec-ready/);
-  assert.match(implement, /只做 Parent 字段存在性 preflight/);
+  assert.match(implement, /只做 Parent 字段存在性与 shipped 非入口 preflight/);
   assert.match(implement, /缺少 ticket 本身不构成 direct-slice 授权/);
   assert.match(implement, /依赖用户提供且不能安全压缩的事实、说明、样例或约束/);
   assert.match(implement, /材料类型不限于技术 contract/);
@@ -529,6 +557,9 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /无法确认本次实现由你显式发起时才要求运行时确认/);
   assert.match(implement, /本 session 用 `\/skill:matt-implement` 显式启动时直接放行/);
   assert.match(implement, /无 UI 的 print\/JSON mode.*fail closed/);
+  assert.match(implement, /ticket 路径、Parent 或任何待读取 blocker.*`\.x-matt\/work\/shipped\/`/);
+  assert.match(implement, /已随 spec 归档/);
+  assert.match(implement, /独立步骤显式运行 `matt-archive`/);
 
   const diagnosing = await readFile(join(ROOT, ".pi", "skills", "matt-diagnosing-bugs", "SKILL.md"), "utf8");
   assert.doesNotMatch(diagnosing, /disable-model-invocation:\s*true/);
@@ -546,6 +577,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(diagnosing, /没有正确 regression seam.*停止/);
   assert.match(diagnosing, /已移植的 `matt-improve-codebase-architecture`/);
   assert.match(diagnosing, /不得在诊断阶段自动开始 refactor/);
+  assert.match(diagnosing, /不得写入、枚举或把 `\.x-matt\/work\/shipped\/` 用作诊断路径/);
   assert.doesNotMatch(diagnosing, /workflow\.json/);
 
   const improve = await readFile(join(ROOT, ".pi", "skills", "matt-improve-codebase-architecture", "SKILL.md"), "utf8");
@@ -592,6 +624,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(wayfinder, /prototype.*workflow.*artifact.*verdict.*context pointer/);
   assert.match(wayfinder, /Cleared-map gate/);
   assert.match(wayfinder, /不要直接进入 `matt-to-tickets` 或 `matt-implement`/);
+  assert.match(wayfinder, /默认跳过整个 `\.x-matt\/work\/shipped\/`/);
   assert.doesNotMatch(wayfinder, /workflow\.json/);
 
   const prototype = await readFile(join(ROOT, ".pi", "skills", "matt-prototype", "SKILL.md"), "utf8");
@@ -619,16 +652,17 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(tdd, /只在无法确认用户显式发起实现时才拦截/);
   assert.match(tdd, /本 session 由用户执行 `\/skill:matt-implement` 启动时直接放行/);
   assert.match(tdd, /没有可响应的 UI 时必须拒绝调度/);
+  assert.match(tdd, /位于 `\.x-matt\/work\/shipped\/` 就立即 fail closed/);
 
   const research = await readFile(join(ROOT, ".pi", "skills", "matt-research", "SKILL.md"), "utf8");
   assert.match(research, /跨会话证据/);
   assert.match(research, /research note/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /10 个交互式 parent/);
+  assert.match(readme, /11 个交互式 parent/);
   assert.match(readme, /6 个执行型 parent.*`architecture-scan`.*`architecture-design`/);
-  assert.match(readme, /交互式 parent（`matt-setup`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）/);
-  assert.match(readme, /`matt-setup`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none`/);
+  assert.match(readme, /交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）/);
+  assert.match(readme, /`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none`/);
   assert.match(readme, /首次使用发布链前运行 `matt-setup`/);
   assert.match(readme, /spec-ready.*ready-for-agent.*resolved/);
   assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);
@@ -648,9 +682,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI\/RPC 授权/);
   assert.match(readme, /本 session 以 `\/skill:matt-implement` 启动时直接放行/);
   assert.match(readme, /取消或 print\/JSON mode 没有 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.14/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.14/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.15/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.15/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
+  assert.match(readme, /`matt-archive <feature-slug>`/);
+  assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);
 });
 
 test("parent workflows require structured completion results", async () => {

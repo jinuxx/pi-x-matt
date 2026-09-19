@@ -23,6 +23,7 @@ metadata:
 4. 检查 `.x-matt/agents/issue-tracker.md` 和 `.x-matt/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `matt-setup`，不要自行猜测 GitHub、GitLab 或 local-markdown。
 5. `matt-to-spec` 不负责搜索重复 issue、创建 tracker 配置、拆 tickets、实现代码或启动 subagent。
 6. Local Markdown 发布前读取非空 `PI_SESSION_ID`，用于写入 `Source session: pi:<PI_SESSION_ID>`。缺少 session identity 时停止发布，不使用模型名、时间戳或工作区路径代替。
+7. 解析 Local Markdown 输入、Wayfinder reference 或可能的历史规格时，默认跳过 `.x-matt/work/shipped/`，不得枚举其中 feature、标题或路径，也不得把其中内容当作当前输入的近似回退。只有用户在同一会话明确点名准确归档标题或路径时，才可只读对应对象作为历史依据；它不能作为 active Wayfinder map、待发布 parent、ticket 来源或任何状态改写目标。
 
 ## Seam gate
 

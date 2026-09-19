@@ -27,6 +27,13 @@ function metadata(content, field) {
   return undefined;
 }
 
+function isShippedPath(pathFromRoot) {
+  return (
+    pathFromRoot === ".x-matt/work/shipped" ||
+    pathFromRoot.startsWith(`.x-matt/work/shipped${sep}`)
+  );
+}
+
 try {
   if (typeof ticket !== "string" || isAbsolute(ticket)) {
     result.errors.push("Ticket path must be repository-relative");
@@ -39,6 +46,10 @@ try {
 
     if (outsideRoot || outsideWork) {
       result.errors.push("Ticket path must be under .x-matt/work");
+    } else if (isShippedPath(pathFromRoot)) {
+      result.errors.push(
+        "Ticket path under .x-matt/work/shipped is archived and cannot be an implementation entry",
+      );
     } else {
       const realRoot = await realpath(root);
       const realTarget = await realpath(target);
@@ -58,6 +69,21 @@ try {
 
         if (type !== "ticket") result.errors.push("Type must be ticket");
         if (!parent) result.errors.push("Parent is required");
+        if (parent && parent !== "None") {
+          if (isAbsolute(parent)) {
+            result.errors.push(
+              "Parent must be None or a repository-relative path under active .x-matt/work",
+            );
+          } else {
+            const parentTarget = resolve(root, parent);
+            const parentPathFromRoot = relative(root, parentTarget);
+            if (isShippedPath(parentPathFromRoot)) {
+              result.errors.push(
+                "Parent under .x-matt/work/shipped is archived and cannot authorize implementation",
+              );
+            }
+          }
+        }
         if (status !== "ready-for-agent") result.errors.push("Status must be ready-for-agent");
         if (blockedBy === undefined) {
           result.errors.push("Blocked by must be None");
@@ -87,6 +113,12 @@ try {
             ) {
               result.errors.push(
                 `Blocker ${JSON.stringify(blockerReference)} must be a repository-relative path under .x-matt/work`,
+              );
+              continue;
+            }
+            if (isShippedPath(blockerPathFromRoot)) {
+              result.errors.push(
+                `Blocker ${JSON.stringify(blockerReference)} is archived under .x-matt/work/shipped and cannot unlock an active ticket`,
               );
               continue;
             }

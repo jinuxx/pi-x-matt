@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.15
+
+- 新增用户显式触发的 `matt-archive` interaction parent：核验 terminal tickets、当前分支提交与持久知识后，将 parent spec 标记为 `shipped`，整体移入 `.x-matt/work/shipped/` 并创建独立提交。
+- 所有相关 Local Markdown 入口默认跳过 shipped 内容；仅允许同会话点名后的单对象历史只读，`matt-implement` 与本地 ticket checker 对 archived 路径 fail closed。
+
 ## 0.2.14
 
 - `matt-worker` 改为消费结构化 Implementation Context Pack，从精确 manifest/change points 开始，仅在上下文不一致时定向扩展一层依赖，不再因 fresh context 重扫模块。
