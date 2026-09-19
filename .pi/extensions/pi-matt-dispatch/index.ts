@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { registerWorkflowResource } from "pi-subagents/workflow-resources";
+import { prepareTddEvidence, resolveReviewWorkflow } from "../../../lib/review-workflow.mjs";
 import { createDispatchAuthorization, authorizeWorkflowDispatch } from "../../../lib/dispatch-authorization.mjs";
 import {
   buildDispatchRequest,
@@ -68,11 +70,30 @@ function requestRpc(pi: ExtensionAPI, method: string, params: unknown): Promise<
 export default function (pi: ExtensionAPI) {
   const pendingDispatches: PendingDispatch[] = [];
   const authorization = createDispatchAuthorization();
+  const reviewPlans = new Map<string, ReturnType<typeof buildDispatchRequest>>();
+  let resource: { dispose(): void } | undefined;
 
   // A matt-tdd dispatch only skips the runtime confirmation while the user
   // themself opened this session with `/skill:matt-implement`.
-  pi.on("session_start", () => {
+  pi.on("session_start", (_event, ctx) => {
     authorization.reset();
+    reviewPlans.clear();
+    resource?.dispose();
+    resource = registerWorkflowResource({
+      sessionId: ctx.sessionManager.getSessionId(),
+      definition: {
+        name: "pi-x-matt.tdd",
+        version: 1,
+        resolve: (args) => resolveReviewWorkflow(reviewPlans, args),
+      },
+    });
+  });
+
+  pi.on("session_shutdown", () => {
+    resource?.dispose();
+    resource = undefined;
+    reviewPlans.clear();
+    pendingDispatches.splice(0);
   });
 
   pi.on("input", (event) => {
@@ -101,15 +122,15 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; do not bypass its registry validation with a direct subagent launch.",
-      "Keep task safe for every lane. matt-tdd requires complete implement, standards, and spec laneTasks replacements so implement instructions never reach reviewers.",
+      "Keep task safe for every lane. matt-tdd and matt-code-review require complete laneTasks replacements so writer instructions and axis-specific evidence never cross roles.",
     ],
     parameters: Type.Object({
       workflow: Type.String({ description: "Parent workflow skill name, for example research" }),
-      task: Type.String({ minLength: 1, description: "Shared/default delegated task. Keep it safe for every lane; matt-tdd uses complete laneTasks replacements." }),
+      task: Type.String({ minLength: 1, description: "Shared/default delegated task. Keep it safe for every lane; matt-tdd and matt-code-review use complete laneTasks replacements." }),
       laneTasks: Type.Optional(Type.Record(
         Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
         Type.String({ minLength: 1 }),
-        { description: "Complete per-lane task replacements. Omitted lanes use task; matt-tdd requires implement, standards, and spec." },
+        { description: "Complete per-lane task replacements. Omitted lanes use task except matt-tdd and matt-code-review, which require every lane." },
       )),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -121,13 +142,24 @@ export default function (pi: ExtensionAPI) {
       const workflow = registry.skills[params.workflow];
       if (!workflow) throw new Error(`Unknown Pi-native workflow '${params.workflow}'`);
 
-      const plan = buildDispatchRequest(registry, workflow, params.task, projectRoot, params.laneTasks);
+      // Validate task/lane routing before authorization or artifact creation.
+      let plan = buildDispatchRequest(registry, workflow, params.task, projectRoot, params.laneTasks);
       const authorizationReason = await authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization);
+      let rpcParams: Record<string, unknown> = plan.rpcParams;
+      if (workflow.name === "matt-tdd") {
+        const evidence = await prepareTddEvidence(projectRoot, PACKAGE_ROOT);
+        signal?.throwIfAborted();
+        plan = buildDispatchRequest(registry, workflow, params.task, projectRoot, params.laneTasks, evidence);
+        const dispatchId = randomUUID();
+        reviewPlans.set(dispatchId, plan);
+        const { workflowScript: _script, ...options } = plan.rpcParams;
+        rpcParams = { ...options, workflow: "pi-x-matt.tdd", args: { dispatchId } };
+      }
       pendingDispatches.push({
         workflow: workflow.name,
         mode: workflow.workflow.mode,
         lanes: plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })),
-        rpcParams: plan.rpcParams,
+        rpcParams,
       });
       const laneSummary = plan.lanes
         .map((lane) => `${lane.key}:${lane.agent}[${lane.skills.join(",")}]`)
@@ -144,6 +176,7 @@ export default function (pi: ExtensionAPI) {
           lanes: plan.lanes,
           queued: true,
           authorization: authorizationReason,
+          ...(plan.reviewEvidencePath ? { reviewEvidencePath: plan.reviewEvidencePath } : {}),
         },
       };
     },

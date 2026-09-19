@@ -18,10 +18,10 @@ metadata:
 ## 开始前
 
 1. 确认当前 branch 是用户希望写入的 branch；读取 `git status`、`git log` 和当前 fixed point。不要改写或归因用户既有工作区改动。
-2. 读取完整 ticket/spec/当前已确认计划、`.x-matt/context/`、`.x-matt/adr/`、项目说明和直接调用者。使用已确认的领域词汇。
+2. 必须获得完整 ticket/当前已确认计划和 parent spec 中相关 acceptance、decision、out-of-scope；内容已在会话中且来源/基线可核验时不重复读取。提取本次适用的 AGENTS/README 条款与领域词汇；相关源码、测试和一层直接调用者列入精确 manifest。架构全文、全部 ADR 和整个模块调用者仅按需读取，不把所有材料全文下发。
 3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。没有 ticket 时，必须在当前会话中找到 grilling/diagnosis 等上游流程留下的明确 direct-slice handoff 和用户授权；greenfield、多业务流程、多个独立 seam、部署或迁移工作，以及依赖用户提供且不能安全压缩的事实、说明、样例或约束的工作，不得作为无 ticket 单 slice 开始。材料类型不限于技术 contract。
 4. 从 ticket 或当前会话单 slice 计划中提取候选 seams，并先做测试价值判断。显式 acceptance criterion、缺陷回归、业务规则、分支/状态转换、权限/数据完整性和公开 contract 必须有测试；不要仅因代码行数少而跳过。纯机械且已被现有行为测试覆盖的映射、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格明确排除的假设性边缘情况，不必新增独立测试方法；多个紧密相关的简单字段优先由一个行为级测试覆盖，而不是一字段一测试。把保留的测试行为和省略项的理由都写入 TDD task。若没有可执行的公开 seam、行为或聚焦测试命令，停止并报告缺口；不要在 implement 中重新设计。
-5. 固定实现前基线和调度前工作区状态，并把验证命令明确分为三类：每轮 RED/GREEN 使用的最小命令、所有 slices 完成后由 worker 运行的相关回归命令、以及只由父会话运行的最终验证命令（完整测试套件与必要的全量 typecheck/build）。同时明确允许修改的范围和停止条件。不得把父会话最终验证命令作为 worker 执行项下发。
+5. 按 [Context Pack 契约](../matt-tdd/context-packs.md) 生成明确的 Implementation Context Pack：ticket 内容/准确摘要、parent/blocker 核验、acceptance matrix、known code map、expected change points、fixed point、文件 hash、精确 manifest（关系与必须/按需读取）、允许修改范围、定向搜索的一层边界和停止条件。验证命令分为 RED/GREEN、worker 相关回归、parent-only final validation；完整测试套件与全量 typecheck/build 仅由父会话保留和执行，不得把父会话最终验证命令作为 worker 执行项下发。
 6. 完整读取并应用 [domain-modeling](../matt-domain-modeling/SKILL.md) 的写入边界。worker 若在实现中发现值得持久化的新术语或 ADR 级决定，必须通过 `contact_supervisor` 报告而不是写共享文档；当前 TDD run 随即停止为 `BLOCKED`。run 退出后由父会话按 domain-modeling gate 取得用户决定并写入，再以新基线重新调度，确保父会话与 worker 不并行写同一工作区。
 
 ## 执行顺序
@@ -32,7 +32,7 @@ metadata:
 
 - `workflow`: `matt-tdd`
 - `task`: 只包含三条 lane 都可安全读取的共享事实：单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、reviewer 初始证据边界、module/package 搜索边界和停止条件。不得放入 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等 implement 专属指令。
-- `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整任务替换，并在每项复制该 lane 所需的共享事实。`implement` 才包含 RED/GREEN 最小命令、worker 相关回归命令，并明确完整测试套件与最终验证属于父会话、worker 不得运行；`standards` 与 `spec` 只包含各自的当前工作区取证与输出要求，不得要求 reviewer 返回 implement schema 或以旧 worker transcript 代替 diff。reviewer 取证仍须明确：tracked 文件逐文件读取 worktree diff，`??` untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new 路径。
+- `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换。`implement` 接收 Implementation Context Pack、RED/GREEN 与相关回归命令，明确不执行父会话最终验证；`standards` 接收适用工程规范摘录和安全/正确性边界；`spec` 接收 ticket acceptance matrix 与 parent spec 相关条款。两条 reviewer lane 先消费 workflow 独立采集的 Review Evidence Pack（完整 combined diff、新文件全文/hash、deleted/rename old/new），不再逐文件重复取证，不返回 implement schema，也不以旧 worker transcript 代替 diff。默认只读 manifest；仅在具体证据不足时定向补读一层直接依赖。
 
 `pi_matt_dispatch` 只在无法确认本次实现由你显式发起时才要求运行时确认：当你在本 session 用 `/skill:matt-implement` 显式启动时直接放行；模型自行走到 TDD、或本 session 没有该显式调用记录时，会要求你确认当前入口是一个已核验 ticket 或已批准 direct slice。取消、无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能排队 workflow，也不能改用其他调度入口绕过。
 
@@ -57,7 +57,7 @@ TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成�
 - TDD 结束后代码、测试、配置、迁移或业务文档又发生变化；
 - 当前实现不是由包含 fresh Standards/Spec lanes 的 `matt-tdd` 产生。
 
-额外 review 若确有必要，使用 `workflow`: `matt-code-review`，task 仍须包含 `reviewKind`、fixed point、具体 changed-file 状态、逐文件证据方式、ticket/spec/标准路径和搜索边界。任一轴失败时合并报告全部 findings，并取得一次新的范围授权；不得让 reviewer 修复，也不得逐 finding 启动完整工作区复审。
+额外 review 若确有必要，使用 `workflow`: `matt-code-review`，提供当前 Review Evidence Pack 或精确取证范围：`reviewKind`、fixed point、完整 changed-file manifest、完整 combined diff/新文件内容与 hash、lane-specific ticket/spec/标准条款及一层搜索边界。任一轴失败时合并报告全部 findings，并取得一次新的范围授权；不得让 reviewer 修复，也不得逐 finding 启动完整工作区复审。
 
 ### 4. 提交
 

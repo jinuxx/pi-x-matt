@@ -18,17 +18,11 @@ metadata:
 
 ## 证据顺序
 
-1. 读取任务给出的 `reviewKind`、fixed point、changed-file 路径列表、标准文件路径（若有）和初始证据 allowlist。Git 评审缺少 `reviewKind=worktree|committed`、逐文件 diff 方式或初始证据边界时返回 `NO_EVIDENCE`，不要自行扫描项目补齐；非 Git 指定文件评审使用 `reviewKind=files`。
-2. 按 `reviewKind` 获取目标材料；不要使用 shell：
-   - `worktree`：先用 `git_read worktree-files` 取得状态。tracked 修改逐文件使用 `worktree-diff path=<file>`；`??` untracked 文件直接 `read`；deleted 文件只读 diff，不读取已删除路径；`R old -> new` 对 old 与 new 两个路径分别读取 worktree diff，并作为同一次 rename 判断。禁止用 `diff ref...HEAD` 作为工作区唯一证据。
-   - `committed`：先用 `diff-files ref=<fixed-point>` 取得文件列表，再逐文件使用 `diff ref=<fixed-point> path=<file>`；rename 同时核验 old 与 new 路径。
-   - `files`：只读取任务列出的具体文件，不调用 Git diff。
-   不要使用无 `path` 的大范围 diff。
-3. 先检查 changed files 是否违反明确规则、引入正确性问题、可达回归或验证缺口。
-4. 只有为消除一个已命名的 diff 不确定性时，才允许读取一级直接调用者、被调用者、配置、映射或对应聚焦测试。每次扩展前必须能说明“这个文件用于验证哪个 hunk 的什么风险”；不得继续递归到二级依赖。
-5. 再用异味启发式补充判断：神秘命名、重复、Feature Envy、Data Clumps、Primitive Obsession、重复分支、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest。
-
-`ffgrep`/`fffind` 只用于定位已命名的 symbol、配置项或测试，且必须把 `path` 限定到任务中的 module/package。禁止扫描整个 `src/main`、`src/test`、`resources` 或仓库根目录。大文件只读取与目标 hunk 或 symbol 相关的范围；截断后不要为了“读完整”而连续扩展 offset。
+1. 先读取 **Review Evidence Pack**，获得 `reviewKind`、fixed point/current HEAD、git status、完整 changed-file manifest、全部 tracked diff、新文件完整内容/hash，以及本 lane 适用工程规范摘录和安全/正确性边界。来源、hash 和完整性必须明确；不要求重复读取规范全文或 parent spec 全文。测试记录区分 workflow/runner 原始证据与 worker-reported 结果，后者不能替代真实 diff。缺少 reviewKind、精确 manifest 或可核验来源时返回 `NO_EVIDENCE`，不自行扫描补齐。
+2. 对 Pack 内容独立判断，而非采纳 writer 的结论。已提供完整证据时不再执行 status/diff 或逐文件 read。没有 Pack 的 standalone 评审可按父任务给定范围一次取证：`worktree-files` 后使用完整、未截断的 combined `worktree-diff`；`committed` 使用 `diff-files ref` 与 combined `diff ref`；`files` 只读取精确目标文件且不调用 Git。tracked 必须获得全部 diff；untracked 必须获得全文；deleted 只读 diff；rename 核对 old/new。禁止用 `ref...HEAD` 作为工作区唯一证据。
+3. 默认只能读取 manifest 内文件。仅在 diff/新文件内容被截断、引用 symbol 无法判断、需要核验一层直接依赖、Pack 与工作区 hash 不一致，或发现潜在安全/数据完整性问题时补读。每次先说明“哪个 hunk 缺少什么证据”；截断只补缺失部分，不能把大文件截断当作无需完整 diff/新文件的理由。基线/hash 失效且无法在限定范围核验时返回 `NO_EVIDENCE`，请父会话刷新 Pack。
+4. 额外搜索只定位已命名 symbol、配置项或测试，必须限定到任务 module/package，最多扩展一层直接调用者、被调用者、配置、映射或聚焦测试，不递归。禁止无证据扫描整个 module、源码/测试/资源目录或仓库根目录。
+5. 检查明确规则、正确性、可达回归和测试缺口；再以神秘命名、重复、Feature Envy、Data Clumps、Primitive Obsession、重复分支、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest 补充有证据的判断。
 
 仓库明确标准覆盖通用异味。自动化工具已经可靠检查的格式问题不重复报告。异味必须标明为 judgement call。
 

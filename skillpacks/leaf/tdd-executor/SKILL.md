@@ -18,9 +18,10 @@ metadata:
 
 ## 开始前
 
-1. 读取父任务中的需求、固定基线、既有工作区状态、允许范围、RED/GREEN 最小命令、相关回归命令和已确认 seams。
-2. 读取 `.x-matt/context/`、`.x-matt/adr/`、项目说明、调用者与现有测试，使用项目领域词汇。
-3. 若 seams 未明确确认、范围会覆盖既有改动、聚焦测试命令不可确定，或必须改变批准的 interface，先 `contact_supervisor`；不要猜测。若任务把完整测试套件、全量 build 或父会话最终验证列为 worker 命令，也先联系 supervisor，不要执行。
+1. 先获得父会话的 **Implementation Context Pack**：ticket 全文或保留全部验收约束的准确摘要、parent/blocker 核验结果、acceptance matrix、已确认 seams 与测试价值判断、fixed point、既有工作区状态、适用标准摘录、known code map、expected change points、精确文件 manifest 和命令分层。获得内容不等于必须由本 lane 再次调用 `read`；已内联且来源明确的内容不重复读取。
+2. 从 Pack 标记为“必须读取”的源码/测试开始，核对关键 symbol、调用关系和文件 hash，使用 Pack 中的领域词汇。架构全文、全部 ADR、README/AGENTS 全文和模块调用者均为按需材料，不得重新扫描整个 module。默认只读取 manifest 内文件。
+3. 只有发现 symbol 缺失、调用关系不一致或 Pack 与工作区不符，才说明具体缺失证据并执行一次定向搜索；限定到给定 module/package 的已命名 symbol，最多扩展一层直接依赖，不递归。基线、授权或验收内容失效时停止，请父会话刷新 Pack，不得自行重建上下文。
+4. 若 Pack 缺失、seams 未明确确认、范围会覆盖既有改动、聚焦测试命令不可确定，或必须改变批准的 interface，先 `contact_supervisor`；不要猜测。完整测试套件、全量 build 或父会话最终验证不得作为 worker 执行项；发现冲突先联系 supervisor。
 
 ## Red → Green
 
@@ -46,7 +47,7 @@ Refactor 不属于当前 red→green 循环。除了为当前 GREEN 必需的最
 - `confirmedSeams[]`：任务中已批准的 seam、interface 与 behaviors
 - `cycles[]`：每轮测试名、真实 RED 证据、GREEN 证据和涉及文件
 - `changedFiles[]`：本次实际修改文件
-- `commands[]`：执行的命令与 outcome
+- `commands[]`：每个 RED/GREEN/related-regression 命令、phase、真实 exitCode、testCount（runner 不提供时为 null，禁止猜测）与 outcome；保留能核验数量和失败原因的输出摘要。这些是 worker-reported 测试记录，不得冒充 workflow 独立采集的 Git 证据
 - `residualRisks[]`：未覆盖行为、环境限制或待决事项
 
 缺少任一保留行为的真实 RED 证据、测试仍失败、无理由省略显式验收行为或改动超出批准范围时不得返回 `COMPLETE`。

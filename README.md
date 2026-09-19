@@ -6,13 +6,13 @@
 
 ## 安装
 
-要求已安装 Pi 与 Node.js 20 或更高版本。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi、Node.js 20 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime（当前按 0.69.0 验证）。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
 pi install -l npm:pi-subagents
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.13
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.14
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
@@ -38,10 +38,12 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.13
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.69.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local `npm:pi-subagents` 仍是实际 workflow runtime，必须保留并至少兼容该 v1 resource contract。
+
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.13
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.14
 ```
 
 ## 架构
@@ -126,7 +128,7 @@ npm run pack:check     # 检查 package 文件清单
 
 生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema` 与正数 `timeoutMs`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`laneTasks` 可为指定 lane 提供完整任务替换；`matt-tdd` 强制同时提供 implement/standards/spec 三项，避免实现或恢复指令跨角色泄漏。工具调用只把已验证 plan 放入内存队列，随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。缺少结构化结果的 timeout 或正常漏调用会在 retained child 可恢复时自动追加一次只结算、不继续工作的 structured-output resume。`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI/RPC 授权：本 session 以 `/skill:matt-implement` 启动时直接放行，模型自行进入 TDD 时才要求确认；取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`laneTasks` 可为指定 lane 提供完整任务替换；`matt-tdd` 强制同时提供 implement/standards/spec 三项，`matt-code-review` 强制提供 standards/spec 两项，避免实现、恢复指令或轴专属证据跨角色泄漏。工具调用把已验证 plan 放入内存队列，TDD 另保存调度前 Git 快照；随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。TDD 使用 session-scoped trusted workflow resource，只授予包内 collector 的固定命令；其他 workflow 继续使用无 host 权限的原始脚本。缺少结构化结果的 timeout 或正常漏调用会在 retained child 可恢复时自动追加一次只结算、不继续工作的 structured-output resume。`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI/RPC 授权：本 session 以 `/skill:matt-implement` 启动时直接放行，模型自行进入 TDD 时才要求确认；取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -169,7 +171,9 @@ npm run pack:check     # 检查 package 文件清单
 }
 ```
 
-代码评审使用 `workflow: "matt-code-review"`。父会话必须在 task 中声明 `reviewKind=worktree|committed|files`，并提供具体 changed-file/目标文件路径、对应逐文件证据方法、初始证据 allowlist、标准文件路径、当前 ticket/parent spec 路径、允许的一层依赖扩展和 module/package 搜索边界。`worktree` 先读取状态：tracked 文件逐路径 `worktree-diff`，`??` untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new；禁止使用 `ref...HEAD` 作为工作区唯一证据。`committed` 才使用 `diff-files ref` 和逐文件 `diff ref path`；`files` 不调用 Git diff。Spec reviewer 必须先读取 ticket/parent spec 并提取验收行为，完成前禁止 diff、FFF 和实现文件读取。两轴只能为已命名风险读取一级依赖，使用路径限定 FFF，禁止项目扫描；限定证据不足时立即返回 `NO_EVIDENCE`，不得扩大范围制造 `PASS`。`matt-reviewer` 不设置会催促提前收尾的 soft 限制，只保留 hard 50 的只读工具预算；达到 hard 后仍可返回结构化结果。
+代码评审使用 `workflow: "matt-code-review"`。父会话声明 `reviewKind=worktree|committed|files`，优先提供 Review Evidence Pack：fixed point/current HEAD、状态、完整 manifest、完整 combined diff、新文件全文/hash、deleted/rename old/new 和注明来源的测试记录。Standards lane 只接收适用工程规范与安全/正确性边界；Spec lane 只接收 ticket acceptance matrix 和 parent spec 相关条款。独立评审指独立判断，不是重复发现上下文；已内联内容无需再次 `read`。没有 Pack 的 standalone review 按精确 allowlist 取证，允许一次完整、未截断的 combined diff，仅截断或需要深入检查时按文件补读；`worktree` 禁止以 `ref...HEAD` 替代当前工作区，`files` 不调用 Git。默认只读 manifest，仅在截断、symbol 不明、一层依赖待核验、hash 不符或安全/数据完整性风险时，说明缺口后定向扩展一层，不递归、不扫描整个 module。证据不足返回 `NO_EVIDENCE`。`matt-reviewer` 只保留 hard 50 的只读工具预算，不通过提高上限掩盖重复扫描。
+
+TDD 调度前，父会话按 [Context Pack 契约](.pi/skills/matt-tdd/context-packs.md) 提供 Implementation Context Pack：ticket/parent/blocker 核验、acceptance matrix、适用条款、known code map、expected change points、固定点/文件 hash、精确 manifest 与命令分层。源码通常给路径和 symbol，不全文内联；worker 从必须读取文件开始，只有 symbol 缺失、调用关系不一致或 Pack 与工作区不符时才定向搜索一次、一层。dispatcher 在入队前保存真实基线，implement gate 通过后由受信任的 `pi-x-matt.tdd` named resource 执行固定 collector 命令，在 OS temp 生成只读 Review Evidence Pack，再启动两个 fresh reviewer。采集失败或基线漂移会停止工作流，不回退到原始脚本执行 host 命令。测试 phase/exitCode/testCount/outcome 仍标为 worker-reported，不冒充独立验证；父会话最终检查 Pack 新鲜度并运行最终验证。
 
 执行型 workflow 按角色保留运行余量：worker lane 为 20 分钟，reviewer lane 为 15 分钟，reader/researcher lane 为 10 分钟；timeout 或漏交结构化结果后的 settlement-only resume 为 5 分钟。预算只限制单个 lane，不替代任务范围、最小验证和 fail-closed gate。
 

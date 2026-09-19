@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { authorizeWorkflowDispatch, createDispatchAuthorization, parseInvokedSkill } from "../lib/dispatch-authorization.mjs";
+import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 import {
   buildDispatchRequest,
   findProjectRoot,
@@ -13,6 +14,7 @@ import {
 } from "../lib/dispatcher-core.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const REVIEW_LANE_TASKS = { standards: "Standards evidence only", spec: "Spec evidence only" };
 
 async function withTempDispatcherProject(run) {
   const temp = await mkdtemp(join(tmpdir(), "pi-x-matt-dispatcher-"));
@@ -48,8 +50,8 @@ function completeWorkerOutput() {
     cycles: [{ test: "works", redEvidence: "failed first", greenEvidence: "passed next", files: ["file.mjs"] }],
     changedFiles: ["file.mjs"],
     commands: [
-      { command: "test red", outcome: "failed as expected" },
-      { command: "test green", outcome: "passed" },
+      { command: "test red", phase: "RED", exitCode: 1, testCount: 1, outcome: "failed as expected" },
+      { command: "test green", phase: "GREEN", exitCode: 0, testCount: 1, outcome: "passed" },
     ],
     residualRisks: [],
   };
@@ -264,13 +266,17 @@ test("dispatcher builds three guarded read-only architecture design lanes", asyn
 test("dispatcher builds two independent guarded review lanes", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills["matt-code-review"];
-  const plan = buildDispatchRequest(registry, workflow, "评审固定范围", ROOT);
+  const plan = buildDispatchRequest(registry, workflow, "评审固定范围", ROOT, REVIEW_LANE_TASKS);
   const items = parseWorkflowItems(plan.rpcParams.workflowScript);
 
   assert.deepEqual(items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
     { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
     { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
   ]);
+  assert.match(items[0].task, /Standards evidence only/);
+  assert.doesNotMatch(items[0].task, /Spec evidence only/);
+  assert.match(items[1].task, /Spec evidence only/);
+  assert.doesNotMatch(items[1].task, /Standards evidence only/);
   assert.ok(items.every((item) => item.timeoutMs === 900000));
   assert.ok(items.every((item) => !("turnBudget" in item)));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
@@ -395,6 +401,50 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   assert.equal(calls, 2);
 });
 
+test("TDD host evidence is captured once after implement and before both reviewers, failing closed", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const evidence = { command: "trusted-collector", path: "/tmp/workflow-owned/review.md" };
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, {
+    implement: "Implementation Context Pack", standards: "Applicable standards", spec: "Acceptance matrix",
+  }, evidence);
+  assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: evidence.command }]);
+  const plans = new Map([["validated-id", plan]]);
+  assert.equal(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).script, plan.rpcParams.workflowScript);
+  assert.match(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).error, /expired/, "validated plans are one-shot");
+  assert.match(resolveReviewWorkflow(plans, { dispatchId: "unknown" }).error, /Unknown/);
+  assert.match(resolveReviewWorkflow(plans, { dispatchId: "validated-id", command: "untrusted" }).error, /Expected only/);
+
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction("runs", "emit", plan.rpcParams.workflowScript);
+  const order = [];
+  const emitted = [];
+  const runs = {
+    all: async (items) => {
+      order.push(items.map(item => item.key).join(","));
+      if (items[0].key === "standards") {
+        assert.ok(items.every(item => item.task.includes(evidence.path)));
+        assert.ok(items.every(item => item.task.includes("worker-reported")));
+        assert.ok(items.every(item => item.task.includes('"exitCode":1')));
+        assert.ok(items.every(item => !item.task.includes('"summary":"done"')), "do not inject the writer's completion narrative");
+      }
+      return items.map(item => ({ key: item.key, structuredOutput: item.key === "implement"
+        ? completeWorkerOutput() : { axis: item.key, verdict: "PASS" } }));
+    },
+    host: async (key, options) => {
+      order.push(key);
+      assert.equal(options.command, evidence.command);
+      assert.equal(options.kind, "command");
+    },
+  };
+  const results = await execute(runs, value => emitted.push(value));
+  assert.ok(results.slice(1).every(result => result.artifactPaths.includes(evidence.path)));
+  assert.deepEqual(order, ["implement", "review-evidence", "standards,spec"]);
+  assert.deepEqual(emitted, [{ reviewEvidencePath: evidence.path }]);
+  order.length = 0;
+  await assert.rejects(() => execute({ ...runs, host: async () => { throw new Error("capture failed"); } }, () => {}), /capture failed/);
+  assert.deepEqual(order, ["implement"], "no reviewer can launch without current Git evidence");
+});
+
 test("dispatcher supports complete per-lane task replacements", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(
@@ -424,6 +474,10 @@ test("dispatcher supports complete per-lane task replacements", async () => {
   assert.throws(
     () => buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, { implement: "task" }),
     /requires complete laneTasks for \[standards, spec\]/,
+  );
+  assert.throws(
+    () => buildDispatchRequest(registry, registry.skills["matt-code-review"], "shared", ROOT, { standards: "task" }),
+    /matt-code-review.*requires complete laneTasks for \[spec\]/,
   );
 });
 
@@ -524,16 +578,16 @@ test("dispatcher fails closed on malformed lanes and cross-agent grants", async 
   const registry = await loadCurrentRegistry(ROOT);
   const duplicate = structuredClone(registry.skills["matt-code-review"]);
   duplicate.workflow.lanes[1].key = duplicate.workflow.lanes[0].key;
-  assert.throws(() => buildDispatchRequest(registry, duplicate, "review", ROOT), /duplicate lane/);
+  assert.throws(() => buildDispatchRequest(registry, duplicate, "review", ROOT, REVIEW_LANE_TASKS), /duplicate lane/);
 
   const reserved = structuredClone(registry.skills["matt-code-review"]);
   reserved.workflow.lanes[0].key = "standards-settlement";
-  assert.throws(() => buildDispatchRequest(registry, reserved, "review", ROOT), /reserved settlement suffix/);
+  assert.throws(() => buildDispatchRequest(registry, reserved, "review", ROOT, REVIEW_LANE_TASKS), /reserved settlement suffix/);
 
   const crossAgentRegistry = structuredClone(registry);
   crossAgentRegistry.skills["review-spec"].agent = "matt-worker";
   assert.throws(
-    () => buildDispatchRequest(crossAgentRegistry, crossAgentRegistry.skills["matt-code-review"], "review", ROOT),
+    () => buildDispatchRequest(crossAgentRegistry, crossAgentRegistry.skills["matt-code-review"], "review", ROOT, REVIEW_LANE_TASKS),
     /cannot grant 'review-spec' to agent 'matt-reviewer'/,
   );
 });

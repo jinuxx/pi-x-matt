@@ -15,18 +15,19 @@ metadata:
 ## 调度前
 
 1. 明确评审对象：优先使用用户给出的 fixed point、diff、文件或计划。没有明确范围时必须先收敛范围。
-2. 明确 `reviewKind`：有未提交或未跟踪变化时为 `worktree`；只评审已提交的 fixed-point 到 `HEAD` 时为 `committed`；非 Git 的计划或指定文件评审为 `files`。Git 评审先确认 ref/工作区状态可核验并取得具体 changed-file 路径列表；把 `reviewKind`、fixed point、逐文件证据方式和初始证据 allowlist 写入 task。不要只给目录或笼统的“相关代码”。
-3. 为 `worktree` 明确：先 `worktree-files`；tracked 修改使用逐文件 `worktree-diff`，`??` untracked 文件直接读取，deleted 文件只读 diff，rename 同时核验 old/new 路径；禁止用 `ref...HEAD` 作为工作区唯一证据。为 `committed` 明确使用 `diff-files ref` 后逐文件 `diff ref path`。为 `files` 列出精确文件路径且不调用 Git diff。
-4. 列出仓库标准文件的具体路径，例如 `AGENTS.md`、`CONTRIBUTING.md` 或项目约定文件。
-5. 列出当前 ticket、其明确引用的 parent spec 和其他规格来源的具体路径，或明确写 `无可用 spec`。默认不把 sibling/future tickets、ADR、context 或 roadmap 交给 Spec reviewer；不要伪造需求。
-6. 为 Standards reviewer 写明允许的一层依赖扩展规则，为 Spec reviewer 写明 module/package 搜索边界。初始证据不足且无法在该边界内核验时，reviewer 应返回 `NO_EVIDENCE`，父会话不得期待它扫描项目补齐材料。
+2. 明确 `reviewKind`：未提交或未跟踪变化为 `worktree`；只评审 fixed-point 到 `HEAD` 的已提交变化为 `committed`；非 Git 计划/指定文件为 `files`。优先准备 [Review Evidence Pack](../matt-tdd/context-packs.md)：fixed point/current HEAD、状态、完整 manifest、完整 diff、新文件全文/hash、测试证据来源。不要只给目录或笼统的“相关代码”，不采用 writer 自述替代原始证据。
+3. 必须取得所有 tracked 文件完整 diff；允许一次完整、未截断的 combined diff，不强制逐文件调用。`worktree` 使用 `worktree-files` 与 `worktree-diff`，untracked 获得全文，deleted 只读 diff，rename 核验 old/new，禁止以 `ref...HEAD` 代替工作区证据。`committed` 使用 `diff-files ref` 与 `diff ref`；`files` 精确列出文件且不调用 Git。已有完整 Pack 不要求 reviewer 再执行以上步骤；截断或需深入时才补读。
+4. 给 Standards 提供本次适用工程规范摘录及来源路径/章节/hash、安全与正确性边界，不要求完整 parent spec。
+5. 给 Spec 提供当前 ticket 内容或准确摘要、acceptance matrix、parent spec 相关 acceptance/decision/out-of-scope 及来源，或明确 `无可用 spec`；不要求无关工程规范。默认不把 sibling/future tickets、ADR、context 或 roadmap 作为规格，不伪造需求。
+6. 默认只读 manifest。仅在截断、symbol 不明、直接依赖待核验、hash 不符或安全/数据完整性风险时，先说明具体缺失证据，再在给定 module/package 定向补读最多一层，不递归、不扫描整个 module。限定证据不足返回 `NO_EVIDENCE`，而不是扩大范围制造 PASS。
 
 ## 调度
 
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-code-review`
-- `task`: 包含目标、`reviewKind=worktree|committed|files`、具体 changed-file/目标文件路径、对应的逐文件证据方法、fixed point（若适用）、初始证据 allowlist、标准文件路径、当前 ticket/parent spec 路径、允许的一层依赖扩展、module/package 搜索边界、已知约束和停止条件
+- `task`: 只放两条 lane 共用的目标、`reviewKind`、Review Evidence Pack 路径或内联原始证据、fixed point、完整 manifest、条件式一层扩展边界和停止条件。
+- `laneTasks`: 为 `standards` 和 `spec` 分别提供完整替换，复制各自需要的共同证据，并只附该轴适用的标准或验收条款。已内联且来源可核验的内容无需重复 `read`。
 
 Dispatcher 会并行启动两个 fresh-context reviewer：
 

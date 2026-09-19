@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.14
+
+- `matt-worker` 改为消费结构化 Implementation Context Pack，从精确 manifest/change points 开始，仅在上下文不一致时定向扩展一层依赖，不再因 fresh context 重扫模块。
+- `matt-tdd` 在 implement gate 后通过受信任的 named workflow host step 独立生成只读 Review Evidence Pack，完整记录 combined diff、untracked 内容/hash、rename/deletion、固定点与调度前状态；采集失败或基线漂移时不启动 reviewer。
+- Standards/Spec reviewer 改为独立判断共享真实证据而非重复取证，分别只接收适用规范或验收矩阵；`matt-code-review` 同样强制完整 lane-specific tasks，工具 hard budget 保持不变。
+- TDD 命令证据增加 phase、真实 exit code 与可空 test count，并明确区分 worker-reported 过程记录和独立 Git/父会话验证。
+
 ## 0.2.13
 
 - `matt-implement` 复用 `matt-tdd` 内置的 fresh Standards/Spec 双轴结果作为最终评审，不再对同一 worktree 默认追加重复的 standalone code review。
