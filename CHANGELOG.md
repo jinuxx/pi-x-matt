@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.16
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 npm latest `0.77.0`；npm extension filter 使用 `index.js`，Node 最低版本同步为 `22.19.0`，升级 runtime 后要求重启 Pi。
 - Dispatcher 使用新 RPC `script` 参数，同步 TDD resource resolver 与 named workflow 参数拆分；所有 lane 必须 `ok === true`，不能以失败后保留的 `structuredOutput` 通过 gate。
