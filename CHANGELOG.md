@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 npm latest `0.77.0`；npm extension filter 使用 `index.js`，Node 最低版本同步为 `22.19.0`，升级 runtime 后要求重启 Pi。
+- Dispatcher 使用新 RPC `script` 参数，同步 TDD resource resolver 与 named workflow 参数拆分；所有 lane 必须 `ok === true`，不能以失败后保留的 `structuredOutput` 通过 gate。
+- 六个执行型 parent 共用完整结构化结果读取契约：Preview 可能被截断，需读取通知指向的 retention-managed `status.json` 的完整 `workflow.value`；不得用 prose、`outputReference` 或 receipt 重建结果。
+- 增加已安装 runtime 的离线兼容测试，覆盖发布入口、脚本 sandbox、失败 stage、resource 注册与结构化 completion 截断。
+
 ## 0.2.15
 
 - 新增用户显式触发的 `matt-archive` interaction parent：核验 terminal tickets、当前分支提交与持久知识后，将 parent spec 标记为 `shipped`，整体移入 `.x-matt/work/shipped/` 并创建独立提交。

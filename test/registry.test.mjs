@@ -205,13 +205,30 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.equal(settings.subagents.agentOverrides, undefined);
   assert.deepEqual(settings.packages, [{
-    source: "npm:pi-subagents",
+    source: "npm:pi-subagents@0.77.0",
     autoload: false,
-    extensions: ["+index.ts"],
+    extensions: ["+index.js"],
     skills: [],
     prompts: [],
     themes: [],
   }]);
+});
+
+test("execution parents require complete structured results rather than completion previews", async () => {
+  const registry = await buildRegistry(ROOT);
+  const contract = await readFile(join(ROOT, ".pi/skills/matt-tdd/results.md"), "utf8");
+  assert.match(contract, /Preview.*不是完整 JSON/);
+  assert.match(contract, /workflow\.value/);
+  assert.match(contract, /按 lane key/);
+  assert.match(contract, /retention-managed async dir/);
+  assert.match(contract, /workflow receipt 重建结构化结果/);
+  assert.match(contract, /来源缺失.*fail closed/);
+  assert.match(contract, /不得自动重派发/);
+  for (const workflow of Object.values(registry.skills)) {
+    if (workflow.class !== "orchestration") continue;
+    const source = await readFile(join(ROOT, workflow.sourcePath), "utf8");
+    assert.match(source, /\[Workflow Result Reading\]\([^)]*results\.md\)/, workflow.name);
+  }
 });
 
 test("package manifest exposes namespaced resources", async () => {
@@ -239,7 +256,8 @@ test("package manifest exposes namespaced resources", async () => {
     "./.pi/skills/matt-wayfinder",
   ]);
   assert.deepEqual(manifest.pi.subagents.agents, ["./.pi/agents"]);
-  assert.equal(manifest.dependencies["pi-subagents"], "0.69.0");
+  assert.equal(manifest.engines.node, ">=22.19.0");
+  assert.equal(manifest.dependencies["pi-subagents"], "0.77.0");
   assert.deepEqual(manifest.bundledDependencies, ["pi-subagents"]);
   assert.equal(manifest.peerDependencies["pi-subagents"], undefined);
   assert.equal(manifest.repository.url, "git+https://github.com/jinuxx/pi-x-matt.git");
@@ -253,6 +271,7 @@ test("dispatcher keeps the package root in the extension", async () => {
   assert.match(extension, /const PACKAGE_ROOT = resolve\(dirname\(fileURLToPath\(import\.meta\.url\)\), "\.\.\/\.\.\/\.\."\)/);
   assert.match(extension, /loadCurrentRegistry\(PACKAGE_ROOT\)/);
   assert.match(extension, /registerWorkflowResource/);
+  assert.match(extension, /const \{ script: _script, \.\.\.options \} = plan\.rpcParams/);
   assert.match(extension, /workflow: "pi-x-matt\.tdd"/);
 });
 

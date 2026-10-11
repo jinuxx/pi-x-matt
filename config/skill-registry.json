@@ -32,7 +32,7 @@
         "architecture-interface-design"
       ],
       "sourcePath": ".pi/skills/architecture-design/SKILL.md",
-      "sourceDigest": "29ed501fa7d062db52c724d9b75dca4fcbb076a33d8508305f5c39e3297fdfd9",
+      "sourceDigest": "1e489b4153b759feb5dc2f7acecc23a99c04f4ba16adcc11f060c3c5de3965e3",
       "workflowPath": ".pi/skills/architecture-design/workflow.json",
       "workflowDigest": "a7e12a84767b3e2712f3d09645f7c2738aed4ca8e606bad16c082cce2535728a",
       "workflow": {
@@ -520,7 +520,7 @@
         "architecture-scan-executor"
       ],
       "sourcePath": ".pi/skills/architecture-scan/SKILL.md",
-      "sourceDigest": "ad38346cd47d9859a2f075fffcc7295f773605949b439802674a64c76790b1e3",
+      "sourceDigest": "12a47586dc01965188c7472de6382223a3ed3b041d565b2188c7e9744a09439f",
       "workflowPath": ".pi/skills/architecture-scan/workflow.json",
       "workflowDigest": "15d022da43c04d6b50a4f3482fdaa827fec863111e7d8ae5774d0f05d060f5a5",
       "workflow": {
@@ -794,7 +794,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "ecc40039b98f65976f2d1f3e7ca76e28c23ec5b429ed2926f559169fd1d6e40f",
+      "sourceDigest": "9f9bba858fda2236383038530aad260ce97bd21db201b7010f02b378b3462419",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
       "workflowDigest": "07511aff0564caf8851fd1b1240aa88b72ce22ec2473f48ec3b34e6d80ac8993",
       "workflow": {
@@ -1089,7 +1089,7 @@
         "prototype-executor"
       ],
       "sourcePath": ".pi/skills/matt-prototype/SKILL.md",
-      "sourceDigest": "971c040bb5f402346bd3ca6359239da438886528cc4f58cdbc5c907af76593fd",
+      "sourceDigest": "4da42672966ac18e4faa8075c03e0422f21abd6d5a3fab625fd110d8051f96be",
       "workflowPath": ".pi/skills/matt-prototype/workflow.json",
       "workflowDigest": "96e373948522323f6c149123ee2285094099adbb7f75f6a5990a14e7da8e6b0d",
       "workflow": {
@@ -1263,7 +1263,7 @@
         "research-executor"
       ],
       "sourcePath": ".pi/skills/matt-research/SKILL.md",
-      "sourceDigest": "3c97807727e7d4f77651caed786e6edf736388dc7e55e4bc6ffb2a31d02a617e",
+      "sourceDigest": "191fb51b84ae03440945faa01f24043959bd5e25a60eb71740480449c65c21be",
       "workflowPath": ".pi/skills/matt-research/workflow.json",
       "workflowDigest": "2bc068668a306589d091ece62dc0ae86bf646fa95e321ca101dbeccc7744d6bd",
       "workflow": {
@@ -1389,7 +1389,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "245c3a68d158f5e81e7ee732fb859a9f02c9c1de7a4d50894f65a4745bcf3831",
+      "sourceDigest": "1631250b6a1758ae058ebf3526a7827631ae4b3738c30d5a056abce126bffb8d",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "a8b004363c0a728e9232194b10f76b362960e39a80ce0e915f90750ec54b8fdc",
       "workflow": {

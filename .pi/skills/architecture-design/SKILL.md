@@ -15,4 +15,4 @@ metadata:
 
 父会话先展示中立的问题空间、约束、依赖类别和仅用于 grounding 的粗略 sketch，不把 sketch 当提案。然后调用 `pi_matt_dispatch` 的 `architecture-design` workflow。三个 fresh `matt-reader` lane 分别优化 minimal interface、flexibility 与 common caller；全部只读，不修改 repository。
 
-只消费三个 lane 的 `structuredOutput`。结果数量、lane key、status、entries/tradeoffs 缺失或任一 lane 失败时 fail closed，不用两个方案冒充 design-it-twice。父会话顺序展示三个方案，以 depth、locality、seam placement 比较，再给出有立场的推荐或 hybrid；最终选择仍由用户确认。
+先按 [Workflow Result Reading](../matt-tdd/results.md) 核对终态并读取完整 JSON，再只消费三个 lane 的 `structuredOutput`。结果数量、lane key、status、entries/tradeoffs 缺失或任一 lane 失败时 fail closed，不用两个方案冒充 design-it-twice。父会话顺序展示三个方案，以 depth、locality、seam placement 比较，再给出有立场的推荐或 hybrid；最终选择仍由用户确认。

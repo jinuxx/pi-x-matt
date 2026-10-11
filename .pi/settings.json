@@ -1,9 +1,9 @@
 {
   "packages": [
     {
-      "source": "npm:pi-subagents",
+      "source": "npm:pi-subagents@0.77.0",
       "autoload": false,
-      "extensions": ["+index.ts"],
+      "extensions": ["+index.js"],
       "skills": [],
       "prompts": [],
       "themes": []

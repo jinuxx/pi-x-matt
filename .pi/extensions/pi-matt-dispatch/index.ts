@@ -152,7 +152,7 @@ export default function (pi: ExtensionAPI) {
         plan = buildDispatchRequest(registry, workflow, params.task, projectRoot, params.laneTasks, evidence);
         const dispatchId = randomUUID();
         reviewPlans.set(dispatchId, plan);
-        const { workflowScript: _script, ...options } = plan.rpcParams;
+        const { script: _script, ...options } = plan.rpcParams;
         rpcParams = { ...options, workflow: "pi-x-matt.tdd", args: { dispatchId } };
       }
       pendingDispatches.push({

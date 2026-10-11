@@ -156,6 +156,22 @@ test("dispatcher authorization records an explicit matt-tdd confirmation", async
   assert.equal(reason, "user-confirmed");
 });
 
+test("dispatcher uses the inline script RPC contract for every workflow mode", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const modes = new Set();
+  for (const workflow of Object.values(registry.skills)) {
+    if (workflow.scope !== "parent" || workflow.class !== "orchestration") continue;
+    const laneTasks = Object.fromEntries(workflow.workflow.lanes.map((lane) => [lane.key, "Lane-specific task"]));
+    const { rpcParams } = buildDispatchRequest(registry, workflow, "Shared task", ROOT, laneTasks);
+
+    assert.deepEqual(Object.keys(rpcParams).sort(), ["async", "cwd", "mission", "script"], workflow.name);
+    assert.equal(typeof rpcParams.script, "string", workflow.name);
+    assert.ok(rpcParams.script.trim(), workflow.name);
+    modes.add(workflow.workflow.mode);
+  }
+  assert.deepEqual([...modes].sort(), ["parallel", "pipeline", "single"]);
+});
+
 test("dispatcher verifies package resources separately from the target project", async () => {
   const packageRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-package-"));
   const targetRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-target-"));
@@ -168,7 +184,7 @@ test("dispatcher verifies package resources separately from the target project",
 
     assert.equal(plan.rpcParams.cwd, targetRoot);
     assert.deepEqual(plan.lanes.map(({ key, agent }) => ({ key, agent })), [{ key: "research", agent: "matt-researcher" }]);
-    assert.match(plan.rpcParams.workflowScript, /research-executor/);
+    assert.match(plan.rpcParams.script, /research-executor/);
   } finally {
     await rm(packageRoot, { recursive: true, force: true });
     await rm(targetRoot, { recursive: true, force: true });
@@ -179,7 +195,7 @@ test("dispatcher builds one guarded fresh child for research", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills["matt-research"];
   const plan = buildDispatchRequest(registry, workflow, "调查一个明确问题", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+  const items = parseWorkflowItems(plan.rpcParams.script);
 
   assert.equal(plan.lanes.length, 1);
   assert.equal(items.length, 1);
@@ -190,7 +206,7 @@ test("dispatcher builds one guarded fresh child for research", async () => {
   assert.equal(items[0].output, false);
   assert.equal("turnBudget" in items[0], false);
   assert.equal(items[0].outputSchema.type, "object");
-  assert.match(plan.rpcParams.workflowScript, /completed without valid structuredOutput/);
+  assert.match(plan.rpcParams.script, /completed without valid structuredOutput/);
   assert.deepEqual(
     { async: plan.rpcParams.async, mission: plan.rpcParams.mission, cwd: plan.rpcParams.cwd },
     { async: true, mission: false, cwd: ROOT },
@@ -201,7 +217,7 @@ test("dispatcher builds one guarded prototype writer with private branch skills"
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills["matt-prototype"];
   const plan = buildDispatchRequest(registry, workflow, "构建一个已确认问题的 logic prototype", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+  const items = parseWorkflowItems(plan.rpcParams.script);
 
   assert.equal(plan.lanes.length, 1);
   assert.deepEqual(plan.lanes[0].skills, ["prototype-logic", "prototype-ui", "prototype-executor"]);
@@ -220,14 +236,14 @@ test("dispatcher builds one guarded prototype writer with private branch skills"
     equals: "BUILT",
     nonEmpty: ["artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan"],
   });
-  assert.match(plan.rpcParams.workflowScript, /prototype\.status/);
-  assert.match(plan.rpcParams.workflowScript, /completed without valid structuredOutput/);
+  assert.match(plan.rpcParams.script, /prototype\.status/);
+  assert.match(plan.rpcParams.script, /completed without valid structuredOutput/);
 });
 
 test("dispatcher builds a temp-only architecture scan writer", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["architecture-scan"], "扫描固定 scope", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+  const items = parseWorkflowItems(plan.rpcParams.script);
 
   assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [{
     key: "scan",
@@ -241,13 +257,13 @@ test("dispatcher builds a temp-only architecture scan writer", async () => {
     equals: "REPORTED",
     nonEmpty: ["scopeEvidence", "commands"],
   });
-  assert.match(plan.rpcParams.workflowScript, /scan\.status/);
+  assert.match(plan.rpcParams.script, /scan\.status/);
 });
 
 test("dispatcher builds three guarded read-only architecture design lanes", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["architecture-design"], "为固定 candidate 设计 interfaces", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+  const items = parseWorkflowItems(plan.rpcParams.script);
   const closure = ["architecture-vocabulary-reader", "architecture-deepening-reader", "architecture-interface-design"];
 
   assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [
@@ -258,16 +274,16 @@ test("dispatcher builds three guarded read-only architecture design lanes", asyn
   assert.deepEqual(items.map((item) => item.context), ["fresh", "fresh", "fresh"]);
   assert.ok(items.every((item) => item.agent === "matt-reader" && item.output === false));
   assert.deepEqual(items.map((item) => item.outputSchema.properties.strategy.enum[0]), ["minimal", "flexible", "common-caller"]);
-  assert.match(plan.rpcParams.workflowScript, /minimal\.status/);
-  assert.match(plan.rpcParams.workflowScript, /flexible\.status/);
-  assert.match(plan.rpcParams.workflowScript, /common-caller\.status/);
+  assert.match(plan.rpcParams.script, /minimal\.status/);
+  assert.match(plan.rpcParams.script, /flexible\.status/);
+  assert.match(plan.rpcParams.script, /common-caller\.status/);
 });
 
 test("dispatcher builds two independent guarded review lanes", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const workflow = registry.skills["matt-code-review"];
   const plan = buildDispatchRequest(registry, workflow, "评审固定范围", ROOT, REVIEW_LANE_TASKS);
-  const items = parseWorkflowItems(plan.rpcParams.workflowScript);
+  const items = parseWorkflowItems(plan.rpcParams.script);
 
   assert.deepEqual(items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
     { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
@@ -284,14 +300,15 @@ test("dispatcher builds two independent guarded review lanes", async () => {
     { field: "verdict", equals: "PASS" },
     { field: "verdict", equals: "PASS" },
   ]);
-  assert.match(plan.rpcParams.workflowScript, /standards\.verdict/);
-  assert.match(plan.rpcParams.workflowScript, /spec\.verdict/);
+  assert.match(plan.rpcParams.script, /standards\.verdict/);
+  assert.match(plan.rpcParams.script, /spec\.verdict/);
 
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  const execute = new AsyncFunction("runs", plan.rpcParams.script);
   await assert.rejects(
     () => execute({ all: async (lanes) => lanes.map((lane) => ({
       key: lane.key,
+      ok: true,
       structuredOutput: { axis: lane.key, verdict: lane.key === "standards" ? "FAIL" : "PASS" },
     })) }),
     /standards\.verdict/,
@@ -305,7 +322,7 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
     standards: "按当前 worktree diff 执行 Standards 复核",
     spec: "读取 ticket/spec 后按当前 worktree diff 执行 Spec 复核",
   });
-  const stages = parsePipelineStages(plan.rpcParams.workflowScript);
+  const stages = parsePipelineStages(plan.rpcParams.script);
 
   assert.deepEqual(plan.lanes.map(({ key, stage, agent, skills }) => ({ key, stage, agent, skills })), [
     { key: "implement", stage: 1, agent: "matt-worker", skills: ["codebase-design", "tdd-executor"] },
@@ -322,17 +339,17 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   ]);
   assert.equal(stages[0][0].timeoutMs, 1200000);
   assert.ok(stages[1].every((item) => item.timeoutMs === 900000));
-  assert.match(plan.rpcParams.workflowScript, /Workflow gate 'implement\.status' did not equal 'COMPLETE'/);
-  assert.match(plan.rpcParams.workflowScript, /Workflow gate 'standards\.verdict' did not equal 'PASS'/);
-  assert.match(plan.rpcParams.workflowScript, /前序阶段结构化结果/);
+  assert.match(plan.rpcParams.script, /Workflow gate 'implement\.status' did not equal 'COMPLETE'/);
+  assert.match(plan.rpcParams.script, /Workflow gate 'standards\.verdict' did not equal 'PASS'/);
+  assert.match(plan.rpcParams.script, /前序阶段结构化结果/);
 
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  const execute = new AsyncFunction("runs", plan.rpcParams.script);
   let calls = 0;
   await assert.rejects(
     () => execute({ all: async () => {
       calls += 1;
-      return [{ key: "implement", structuredOutput: { status: "BLOCKED" } }];
+      return [{ key: "implement", ok: true, structuredOutput: { status: "BLOCKED" } }];
     } }),
     /implement\.status/,
   );
@@ -344,6 +361,7 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
       calls += 1;
       return [{
         key: "implement",
+        ok: true,
         structuredOutput: {
           status: "COMPLETE",
           summary: "",
@@ -368,6 +386,7 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
     }
     return items.map((item) => ({
       key: item.key,
+      ok: true,
       structuredOutput: item.key === "implement" ? completeWorkerOutput() : { axis: item.key, verdict: "PASS" },
     }));
   } });
@@ -380,6 +399,7 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
       calls += 1;
       return items.map((item) => ({
         key: item.key,
+        ok: true,
         structuredOutput: item.key === "implement"
           ? completeWorkerOutput()
           : { axis: item.key, verdict: item.key === "standards" ? "FAIL" : "PASS" },
@@ -393,8 +413,8 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   await assert.rejects(
     () => execute({ all: async (items) => {
       calls += 1;
-      if (calls === 1) return [{ key: "implement", structuredOutput: completeWorkerOutput() }];
-      return [{ key: items[0].key, structuredOutput: { axis: items[0].key, verdict: "PASS" } }];
+      if (calls === 1) return [{ key: "implement", ok: true, structuredOutput: completeWorkerOutput() }];
+      return [{ key: items[0].key, ok: true, structuredOutput: { axis: items[0].key, verdict: "PASS" } }];
     } }),
     /expected 2 lane result/,
   );
@@ -409,13 +429,13 @@ test("TDD host evidence is captured once after implement and before both reviewe
   }, evidence);
   assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: evidence.command }]);
   const plans = new Map([["validated-id", plan]]);
-  assert.equal(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).script, plan.rpcParams.workflowScript);
+  assert.equal(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).script, plan.rpcParams.script);
   assert.match(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).error, /expired/, "validated plans are one-shot");
   assert.match(resolveReviewWorkflow(plans, { dispatchId: "unknown" }).error, /Unknown/);
   assert.match(resolveReviewWorkflow(plans, { dispatchId: "validated-id", command: "untrusted" }).error, /Expected only/);
 
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit", plan.rpcParams.workflowScript);
+  const execute = new AsyncFunction("runs", "emit", plan.rpcParams.script);
   const order = [];
   const emitted = [];
   const runs = {
@@ -427,7 +447,7 @@ test("TDD host evidence is captured once after implement and before both reviewe
         assert.ok(items.every(item => item.task.includes('"exitCode":1')));
         assert.ok(items.every(item => !item.task.includes('"summary":"done"')), "do not inject the writer's completion narrative");
       }
-      return items.map(item => ({ key: item.key, structuredOutput: item.key === "implement"
+      return items.map(item => ({ key: item.key, ok: true, structuredOutput: item.key === "implement"
         ? completeWorkerOutput() : { axis: item.key, verdict: "PASS" } }));
     },
     host: async (key, options) => {
@@ -458,7 +478,7 @@ test("dispatcher supports complete per-lane task replacements", async () => {
       spec: "先读取 ticket/spec，再按当前 worktree diff 执行 Spec 复核",
     },
   );
-  const stages = parsePipelineStages(plan.rpcParams.workflowScript);
+  const stages = parsePipelineStages(plan.rpcParams.script);
 
   assert.match(stages[0][0].task, /只执行 report-only 结构化恢复/);
   assert.doesNotMatch(stages[0][0].task, /Standards 复核/);
@@ -485,7 +505,7 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  const execute = new AsyncFunction("runs", plan.rpcParams.script);
 
   await assert.rejects(
     () => execute({ all: async () => [] }),
@@ -532,11 +552,37 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
   assert.deepEqual(result[0].structuredOutput, structuredOutput);
 });
 
+test("dispatcher rejects failed children even when structured output passes the gate", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  for (const name of ["matt-research", "matt-code-review", "matt-tdd"]) {
+    const workflow = registry.skills[name];
+    const laneTasks = Object.fromEntries(workflow.workflow.lanes.map((lane) => [lane.key, "Bounded task"]));
+    const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks);
+    const execute = new AsyncFunction("runs", plan.rpcParams.script);
+    for (const ok of [false, undefined]) {
+      let calls = 0;
+      await assert.rejects(() => execute({ all: async (items) => {
+        calls += 1;
+        return items.map((item, index) => ({
+          key: item.key,
+          ok: index === 0 ? ok : true,
+          error: index === 0 ? "provider failed after structured_output" : undefined,
+          structuredOutput: item.key === "implement"
+            ? completeWorkerOutput()
+            : { verdict: "PASS", question: "q" },
+        }));
+      } }), /provider failed after structured_output/, `${name}: ok=${ok}`);
+      assert.equal(calls, 1, "a failed stage must not start reviewers or settlement");
+    }
+  }
+});
+
 test("dispatcher resumes a retained child once for structured-output settlement", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.workflowScript);
+  const execute = new AsyncFunction("runs", plan.rpcParams.script);
   const failures = [
     { error: "Missing structured_output call; this step has outputSchema and must finish by calling structured_output." },
     { error: "Subagent timed out after 300000ms.", timedOut: true },

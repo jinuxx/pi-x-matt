@@ -6,18 +6,18 @@
 
 ## 安装
 
-要求已安装 Pi、Node.js 20 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime（当前按 0.69.0 验证）。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 npm latest `0.77.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.77.0 未声明强制最低 Pi host 版本（peer 为 `*`、无 `engines`），其文档化支持基线与 CI clean-install 覆盖为 Pi `0.86.1`/`1.0.0`；Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
-pi install -l npm:pi-subagents
+pi install -l npm:pi-subagents@0.77.0
 pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.15
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
 
-然后重启或 reload Pi：
+安装或升级 pi-subagents 后退出并重新启动 Pi；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。未改变 runtime 版本、只修改本 package 的 skills/dispatcher 时，可使用：
 
 ```text
 /reload
@@ -27,9 +27,9 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.15
 
 ```json
 {
-  "source": "npm:pi-subagents",
+  "source": "npm:pi-subagents@0.77.0",
   "autoload": false,
-  "extensions": ["+index.ts"],
+  "extensions": ["+index.js"],
   "skills": [],
   "prompts": [],
   "themes": []
@@ -38,7 +38,9 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.15
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.69.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local `npm:pi-subagents` 仍是实际 workflow runtime，必须保留并至少兼容该 v1 resource contract。
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.77.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。npm 发布包入口是 `index.js`，不是 source checkout 的 `index.ts`；最小加载过滤必须与发布包 manifest 一致。
+
+本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
 
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
@@ -78,9 +80,9 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.15
 {
   "packages": [
     {
-      "source": "npm:pi-subagents",
+      "source": "npm:pi-subagents@0.77.0",
       "autoload": false,
-      "extensions": ["+index.ts"],
+      "extensions": ["+index.js"],
       "skills": [],
       "prompts": [],
       "themes": []
@@ -128,7 +130,7 @@ npm run pack:check     # 检查 package 文件清单
 
 生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema` 与正数 `timeoutMs`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`laneTasks` 可为指定 lane 提供完整任务替换；`matt-tdd` 强制同时提供 implement/standards/spec 三项，`matt-code-review` 强制提供 standards/spec 两项，避免实现、恢复指令或轴专属证据跨角色泄漏。工具调用把已验证 plan 放入内存队列，TDD 另保存调度前 Git 快照；随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。TDD 使用 session-scoped trusted workflow resource，只授予包内 collector 的固定命令；其他 workflow 继续使用无 host 权限的原始脚本。缺少结构化结果的 timeout 或正常漏调用会在 retained child 可恢复时自动追加一次只结算、不继续工作的 structured-output resume。`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI/RPC 授权：本 session 以 `/skill:matt-implement` 启动时直接放行，模型自行进入 TDD 时才要求确认；取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；workflowScript 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，缺失、错序或 gate 不满足时整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`laneTasks` 可为指定 lane 提供完整任务替换；`matt-tdd` 强制同时提供 implement/standards/spec 三项，`matt-code-review` 强制提供 standards/spec 两项，避免实现、恢复指令或轴专属证据跨角色泄漏。工具调用把已验证 plan 放入内存队列，TDD 另保存调度前 Git 快照；随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。TDD 使用 session-scoped trusted workflow resource，只授予包内 collector 的固定命令；其他 workflow 继续使用无 host 权限的原始脚本。缺少结构化结果的 timeout 或正常漏调用会在 retained child 可恢复时自动追加一次只结算、不继续工作的 structured-output resume。`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI/RPC 授权：本 session 以 `/skill:matt-implement` 启动时直接放行，模型自行进入 TDD 时才要求确认；取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；生成的 workflow script 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，在 `ok !== true`、缺失、错序或 gate 不满足时让整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -183,11 +185,13 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 `matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。review finding 会按同一轮合并请求一次授权；获批修复使用聚焦 `matt-tdd`，只复核修复增量、原 finding 与必要的一层依赖，不重新裁决未变化且已通过的文件。
 
-把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。父会话只消费 completion result 中每个 lane 的 `structuredOutput`，不解析普通 `output` 或 `outputReference`。
+把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。RPC 使用 inline `script`，TDD 使用 named `workflow`，两者不能同时发送。每条 lane 必须 `ok === true`，失败后保留的结构化结果不能通过 gate 或启动后续 stage。
+
+父会话按 [Workflow Result Reading](.pi/skills/matt-tdd/results.md) 读取每个 lane 的 `structuredOutput`：completion/targeted status 的 Preview 有界且可能被截断，必须读取通知指向的 retention-managed `status.json` 中完整 `workflow.value`；不解析普通 `output`、`outputReference`，也不把 receipt 元数据当作完整结果。
 
 ## 已验证行为
 
-以下异步冒烟来自开发阶段的手工运行，不属于 `npm run check` 的离线测试；仓库内可复现的是 registry、dispatcher、权限与 gate 的聚焦测试。
+以下异步冒烟来自旧版开发阶段的手工运行，不构成 0.77.0 真实子代理启动证明。仓库内可复现的是 registry、dispatcher、权限与 gate，以及已安装 0.77.0 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。
 
 - Research 单 lane 异步冒烟：成功加载私有 `research-executor`，调用 `web_search`/`web_fetch` 并生成 artifact。
 - Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化结果，且未修改项目文件。

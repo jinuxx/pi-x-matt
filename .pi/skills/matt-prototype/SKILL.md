@@ -50,7 +50,7 @@ Prototype 是**回答一个设计问题的 throwaway code**。只有问题无法
 - `workflow`: `matt-prototype`
 - `task`: 包含已确认 question、`logic`/`ui` branch、fixed HEAD、原 branch、caller-owned 改动、允许文件、host route/module、现有依赖、最小运行/加载命令、review targets、禁止范围和停止条件。
 
-只消费 `matt-prototype` lane 的 `structuredOutput`。lane 缺失、status 不是 `BUILT`、artifactPaths/runInstructions/reviewTargets/changedFiles/commands/cleanupPlan 任一为空或普通 prose 冒充结构化结果时 fail closed；不要把 worker 自评当成用户 verdict。
+先按 [Workflow Result Reading](../matt-tdd/results.md) 核对终态并读取完整 JSON，再只消费 `prototype` lane 的 `structuredOutput`。lane 失败或缺失、status 不是 `BUILT`、artifactPaths/runInstructions/reviewTargets/changedFiles/commands/cleanupPlan 任一为空或普通 prose 冒充结构化结果时 fail closed；不要把 worker 自评当成用户 verdict。
 
 ## Runnable verification
 
