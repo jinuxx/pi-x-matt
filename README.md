@@ -6,12 +6,12 @@
 
 ## 安装
 
-要求已安装 Pi、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 npm latest `0.77.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.77.0 未声明强制最低 Pi host 版本（peer 为 `*`、无 `engines`），其文档化支持基线与 CI clean-install 覆盖为 Pi `0.86.1`/`1.0.0`；Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 npm latest `0.78.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.78.0 未声明强制最低 Pi host 版本（peer 为 `*`、无 `engines`），其文档化支持基线与 CI clean-install 覆盖为 Pi `0.86.1`/`1.0.0`；Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@vanillagreen/pi-codex-minimal-tools
-pi install -l npm:pi-subagents@0.77.0
+pi install -l npm:pi-subagents@0.78.0
 pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.16
 ```
 
@@ -27,7 +27,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.16
 
 ```json
 {
-  "source": "npm:pi-subagents@0.77.0",
+  "source": "npm:pi-subagents@0.78.0",
   "autoload": false,
   "extensions": ["+index.js"],
   "skills": [],
@@ -38,7 +38,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.16
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.77.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。npm 发布包入口是 `index.js`，不是 source checkout 的 `index.ts`；最小加载过滤必须与发布包 manifest 一致。
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.78.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。npm 发布包入口是 `index.js`，不是 source checkout 的 `index.ts`；最小加载过滤必须与发布包 manifest 一致。
 
 本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
 
@@ -80,7 +80,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.16
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.77.0",
+      "source": "npm:pi-subagents@0.78.0",
       "autoload": false,
       "extensions": ["+index.js"],
       "skills": [],
@@ -191,7 +191,7 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 ## 已验证行为
 
-以下异步冒烟来自旧版开发阶段的手工运行，不构成 0.77.0 真实子代理启动证明。仓库内可复现的是 registry、dispatcher、权限与 gate，以及已安装 0.77.0 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。
+以下异步冒烟来自旧版开发阶段的手工运行，不构成 0.78.0 真实子代理启动证明。仓库内可复现的是 registry、dispatcher、权限与 gate，以及已安装 0.78.0 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。
 
 - Research 单 lane 异步冒烟：成功加载私有 `research-executor`，调用 `web_search`/`web_fetch` 并生成 artifact。
 - Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化结果，且未修改项目文件。
