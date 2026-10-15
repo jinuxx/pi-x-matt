@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- 修正 `pi_matt_dispatch` 的 `workflow` 参数示例：dispatcher 按 registry skill key 查表，示例从不可用的 `research` 改为 `matt-research`，避免照抄示例时得到 `Unknown Pi-native workflow`。
+- README 记录 0.78.0 + Pi 1.2.0 重启后实跑的真实子代理冒烟（`matt-research` 单 lane，`state=complete`、lane `ok=true`），并把上游 CI clean-install 覆盖同步为 Pi `0.86.1`/`1.0.0`/`1.2.0`。
+
 ## 0.2.17
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 npm latest `0.78.0`。该版本修复了 Pi 1.2.0 下后台子代理无法启动的问题（不再无条件要求已被 Pi 1.2.0 移除的 `@earendil-works/chord`），并让父代理被 `Esc` 停止后不再被后续 completion 唤醒。

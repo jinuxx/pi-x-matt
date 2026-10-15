@@ -6,7 +6,7 @@
 
 ## 安装
 
-要求已安装 Pi、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 npm latest `0.78.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.78.0 未声明强制最低 Pi host 版本（peer 为 `*`、无 `engines`），其文档化支持基线与 CI clean-install 覆盖为 Pi `0.86.1`/`1.0.0`；Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 npm latest `0.78.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.78.0 未声明强制最低 Pi host 版本（peer 为 `*`、无 `engines`），其文档化支持基线与 CI clean-install 覆盖为 Pi `0.86.1`/`1.0.0`/`1.2.0`；Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
@@ -191,9 +191,9 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 ## 已验证行为
 
-以下异步冒烟来自旧版开发阶段的手工运行，不构成 0.78.0 真实子代理启动证明。仓库内可复现的是 registry、dispatcher、权限与 gate，以及已安装 0.78.0 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。
+以下冒烟分两类：升级到 0.78.0 并重启 Pi 后实跑的真实子代理冒烟，以及旧版开发阶段的手工运行。仓库内可复现的是 registry、dispatcher、权限与 gate，以及已安装 0.78.0 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。
 
-- Research 单 lane 异步冒烟：成功加载私有 `research-executor`，调用 `web_search`/`web_fetch` 并生成 artifact。
+- Research 单 lane 异步冒烟（0.78.0 + Pi 1.2.0，重启后实跑）：workflow `state=complete`、lane `ok=true`，真实 child 加载私有 `research-executor`，调用 `web_search`/`web_fetch` 完成契约核验并生成 artifact。
 - Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化结果，且未修改项目文件。
 - TDD pipeline 真实冒烟：worker 加载 `codebase-design` + `tdd-executor`，取得一轮真实 RED/GREEN；随后两个 fresh reviewer 只读复核。registry、依赖闭包、唯一写者、lane gate、stage 顺序与前序证据传递另有聚焦测试覆盖。
 

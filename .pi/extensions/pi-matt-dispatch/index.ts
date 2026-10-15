@@ -125,7 +125,7 @@ export default function (pi: ExtensionAPI) {
       "Keep task safe for every lane. matt-tdd and matt-code-review require complete laneTasks replacements so writer instructions and axis-specific evidence never cross roles.",
     ],
     parameters: Type.Object({
-      workflow: Type.String({ description: "Parent workflow skill name, for example research" }),
+      workflow: Type.String({ description: "Parent workflow skill name from the registry, for example matt-research" }),
       task: Type.String({ minLength: 1, description: "Shared/default delegated task. Keep it safe for every lane; matt-tdd and matt-code-review use complete laneTasks replacements." }),
       laneTasks: Type.Optional(Type.Record(
         Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
