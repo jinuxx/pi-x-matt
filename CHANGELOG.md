@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.17
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 npm latest `0.78.0`。该版本修复了 Pi 1.2.0 下后台子代理无法启动的问题（不再无条件要求已被 Pi 1.2.0 移除的 `@earendil-works/chord`），并让父代理被 `Esc` 停止后不再被后续 completion 唤醒。
 - `src/extension/rpc.js` 与 `src/api/workflow-resources.js` 的契约面与 0.77.0 完全一致；`scripted-workflow.js` 仅调整 sandbox 的 Promise proxy 与停止提示文案，completion Preview 加完整 JSON 路径的契约不变，因此 dispatcher 与结果读取契约无需改动。
