@@ -10,12 +10,12 @@
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
-pi install -l npm:@vanillagreen/pi-codex-minimal-tools
+pi install -l npm:@xl0/pi-lovely-codex
 pi install -l npm:pi-subagents@0.78.0
 pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.18
 ```
 
-`@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@vanillagreen/pi-codex-minimal-tools` 为 `matt-worker` 提供 `apply_patch`。后者仅在 OpenAI/Codex-like 模型上激活；其他模型仍使用原有 `edit`/`write`。
+`@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@xl0/pi-lovely-codex` 为 `matt-worker` 提供 `apply_patch`。
 
 安装或升级 pi-subagents 后退出并重新启动 Pi；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。未改变 runtime 版本、只修改本 package 的 skills/dispatcher 时，可使用：
 
@@ -95,7 +95,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.18
 }
 ```
 
-因此本地开发配置不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。package manifest 只加载本 package 的 dispatcher，并只暴露四个 `matt-*` 自定义 agents；reviewer 默认继承用户当前模型，不要求 DeepSeek provider。`pi-subagents` 由上面的 project-local package 配置提供：
+因此本地开发配置不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。package manifest 只加载本 package 的 dispatcher，并只暴露四个 `matt-*` 自定义 agents；reviewer 默认继承用户当前模型，不要求 DeepSeek provider（可按角色覆盖，见[为子代理指定模型](#为子代理指定模型)）。`pi-subagents` 由上面的 project-local package 配置提供：
 
 | Agent | 权限 | 当前用途 |
 | --- | --- | --- |
@@ -105,6 +105,38 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.18
 | `matt-worker` | 单写者工具集 | `matt-tdd` 实现、`matt-prototype` artifact 与 OS temp architecture report |
 
 `matt-researcher` 依赖父环境中已经注册的 `web_search` 与 `web_fetch` provider。显式 allowlist 不会自动加载 provider；若工具未注册，pi-subagents 应在 child 启动阶段失败，而不是生成无来源回答。
+
+## 为子代理指定模型
+
+pi-x-matt 不参与选模型：dispatcher 下发的 lane item 只包含 `key/agent/task/context/skill/timeoutMs/turnBudget/outputSchema/output`，没有 `model`。模型完全由 pi-subagents 的解析链决定，配置写在 **pi-subagents 的 settings**，而不是 package 文件里：
+
+```text
+<项目>/.pi/settings.json      ← 优先
+~/.pi/agent/settings.json     ← 兜底
+```
+
+四个 agent 没有 `package:` frontmatter，因此名称固定为 `matt-worker`、`matt-reviewer`、`matt-researcher`、`matt-reader`。按角色钉模型时在同一 `subagents` 块里写 `agentOverrides`；下例的模型 id 只是分层示意，实际取值以本机 registry 为准：
+
+```json
+{
+  "subagents": {
+    "agentOverrides": {
+      "matt-worker": { "model": "<provider>/<workhorse-model>", "thinking": "max" },
+      "matt-reviewer": { "model": "<provider>/<reasoning-model>", "thinking": "high" },
+      "matt-researcher": { "model": "<provider>/<fast-model>" },
+      "matt-reader": { "model": "<provider>/<fast-model>", "thinking": "low" }
+    }
+  }
+}
+```
+
+`agentOverrides` 是逐字段替换：只写 `model` 或 `thinking` 时，其余定义（tools、skillPath、默认 context、toolBudget）仍取自 `.pi/agents/*.md` 的 frontmatter。也可以只用 `subagents.defaultModel` / `subagents.defaultThinking` 统一兜底，它只填补没有自己 `model` 的 agent。角色需要随父会话 provider 变化时用 `subagents.agentOverridesByProvider.<provider>.<name>` 分层；`subagents.modelScope` 只做拦截，不做选择。
+
+解析优先级（强 → 弱）：单次 launch 覆盖 → `agentOverridesByProvider` → `agentOverrides.<name>.model` → agent frontmatter `model` → `subagents.defaultModel` → 父会话模型。`model: "inherit"` 表示显式跟随父会话模型。单次 launch 可用 `/run <agent>[model=<provider>/<model>:<thinking>]`。
+
+每次 launch 只解析一个模型：provider、鉴权、配额、限流（含 HTTP 429）、流与空响应错误会直接返回，不会自动换模型重试，需要父会话显式重发。
+
+修改 settings 后需要 `/reload`，再用 `/subagents-models`（或 `/subagents-models matt-worker`）核对实时映射，因为磁盘配置与运行中进程可能不一致。完整说明见已安装的 `pi-subagents/docs/models.md`。
 
 ## Registry 与代码边界
 
