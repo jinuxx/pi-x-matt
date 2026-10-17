@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.19
+
+- 加强 TDD 测试价值判断：`matt-implement`/`matt-tdd` 要求参数化案例按独立行为、字段映射和共享校验等价类选取，同一等价类只保留一个代表输入，默认不生成字段×状态×错误值全排列；`tdd-executor` 不自行扩张未批准的用例矩阵，也不靠循环或表格压低报告案例数；`review-standards` 只在缺少独立行为、分支/状态转换、权限或数据完整性保护时报告测试缺口。安全、状态、完整性与真实缺陷回归仍必须保留，且不设任意案例数上限。
+- `matt-tdd` 的 Acceptance matrix 增加代表输入、预计展开次数与昂贵准备成本记录项。
+- README 新增“为子代理指定模型”：记录 pi-subagents settings 的配置位置、`agentOverrides`/`defaultModel` 分层示例与解析优先级，并说明 `/subagents-models` 校验方式。
+
 ## 0.2.18
 
 - 修正 `pi_matt_dispatch` 的 `workflow` 参数示例：dispatcher 按 registry skill key 查表，示例从不可用的 `research` 改为 `matt-research`，避免照抄示例时得到 `Unknown Pi-native workflow`。
