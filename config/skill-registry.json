@@ -1056,7 +1056,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "e826fb7b888eae52edc6d50b720aab9fe2c6a88ddc924606b624b1f41e4ca6a6",
+      "sourceDigest": "068d21f2dadadf9550d769ad9239dd94e23b03c0fdfc23ec103fefabe2ae439f",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1389,7 +1389,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "1631250b6a1758ae058ebf3526a7827631ae4b3738c30d5a056abce126bffb8d",
+      "sourceDigest": "0bbdb2927301f97f9d5052e2520afb0250da5eb791e0aebd339b69f39bf15b06",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "a8b004363c0a728e9232194b10f76b362960e39a80ce0e915f90750ec54b8fdc",
       "workflow": {
@@ -1879,7 +1879,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "31d3b5ca086dba8bdc92777445e91c0a201734135b0fc3c3910e340c74cd7eb3",
+      "sourceDigest": "4ea0595714512dcfae49db6461ffc67660686b57360bc236bde7202f800922c8",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
@@ -1895,7 +1895,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "510263bdb45d92bb414951caf4c6a9db534207d2db0783ee31a2770122ed1707",
+      "sourceDigest": "e3315185ef7b013e0b783f2e94e569c875eff4eab23dcd5bfb77a23064345f1b",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"

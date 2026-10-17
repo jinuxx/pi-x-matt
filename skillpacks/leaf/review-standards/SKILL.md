@@ -22,7 +22,7 @@ metadata:
 2. 对 Pack 内容独立判断，而非采纳 writer 的结论。已提供完整证据时不再执行 status/diff 或逐文件 read。没有 Pack 的 standalone 评审可按父任务给定范围一次取证：`worktree-files` 后使用完整、未截断的 combined `worktree-diff`；`committed` 使用 `diff-files ref` 与 combined `diff ref`；`files` 只读取精确目标文件且不调用 Git。tracked 必须获得全部 diff；untracked 必须获得全文；deleted 只读 diff；rename 核对 old/new。禁止用 `ref...HEAD` 作为工作区唯一证据。
 3. 默认只能读取 manifest 内文件。仅在 diff/新文件内容被截断、引用 symbol 无法判断、需要核验一层直接依赖、Pack 与工作区 hash 不一致，或发现潜在安全/数据完整性问题时补读。每次先说明“哪个 hunk 缺少什么证据”；截断只补缺失部分，不能把大文件截断当作无需完整 diff/新文件的理由。基线/hash 失效且无法在限定范围核验时返回 `NO_EVIDENCE`，请父会话刷新 Pack。
 4. 额外搜索只定位已命名 symbol、配置项或测试，必须限定到任务 module/package，最多扩展一层直接调用者、被调用者、配置、映射或聚焦测试，不递归。禁止无证据扫描整个 module、源码/测试/资源目录或仓库根目录。
-5. 检查明确规则、正确性、可达回归和测试缺口；再以神秘命名、重复、Feature Envy、Data Clumps、Primitive Obsession、重复分支、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest 补充有证据的判断。
+5. 检查明确规则、正确性、可达回归和测试缺口；再以神秘命名、重复、Feature Envy、Data Clumps、Primitive Obsession、重复分支、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest 补充有证据的判断。测试缺口只在缺少某个独立行为、分支/状态转换、权限或数据完整性保护时成立：同一共享校验等价类已有代表案例时，不因缺少字段×状态×错误值的其余组合而报告缺口，也不要求穷举等价组合。
 
 仓库明确标准覆盖通用异味。自动化工具已经可靠检查的格式问题不重复报告。异味必须标明为 judgement call。
 
