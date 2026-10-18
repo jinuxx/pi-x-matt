@@ -38,7 +38,7 @@
     "typebox": "*"
   },
   "dependencies": {
-    "pi-subagents": "0.78.0"
+    "pi-subagents": "0.79.1"
   },
   "bundledDependencies": ["pi-subagents"],
   "pi": {
