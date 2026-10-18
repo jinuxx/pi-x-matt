@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.20
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 npm latest `0.79.1`。
+- 0.79.x 未移除或收紧本 package 依赖的契约：`workflow-resources` 注册 API 与 `spawn` RPC 参数不变，`scripted-workflow` sandbox 未改动；`reuseFrom`、`workflowChildren.launches`、异步状态 `agent`/`model`/`thinking` 与 inspect `resolvedModel` 均为增量字段。RPC 侧只把 run 归属判定改为 `ownsRun`/`ownerSessionIds`，同 session 的 dispatch 行为不变。
+- 0.79.1 起，未启用委派的 session 不再每次请求下发 `bg_wait` 与 `subagent_supervisor` 定义；本 package 走 `pi_matt_dispatch` → `spawn` RPC，不依赖这两个工具声明。
+- 运行时下限未变：`engines` 与 bundled dependency 版本一致（`undici@8.10.2` → Node `22.19.0`），`@earendil-works/pi-coding-agent` peer 仍为 `*`。
+- 契约测试已针对已安装的 `0.79.1` 运行；真实子代理冒烟最近一次记录仍是 `0.78.0`，尚未在 0.79.1 上重跑。
+
 ## 0.2.19
 
 - 加强 TDD 测试价值判断：`matt-implement`/`matt-tdd` 要求参数化案例按独立行为、字段映射和共享校验等价类选取，同一等价类只保留一个代表输入，默认不生成字段×状态×错误值全排列；`tdd-executor` 不自行扩张未批准的用例矩阵，也不靠循环或表格压低报告案例数；`review-standards` 只在缺少独立行为、分支/状态转换、权限或数据完整性保护时报告测试缺口。安全、状态、完整性与真实缺陷回归仍必须保留，且不设任意案例数上限。
