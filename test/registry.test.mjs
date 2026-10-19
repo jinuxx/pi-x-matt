@@ -332,7 +332,9 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(tracker, /Type: spec.*Status: spec-ready/);
   assert.match(tracker, /Status: resolved/);
   assert.match(tracker, /## Comments/);
-  assert.match(tracker, /同一个最终提交/);
+  assert.match(tracker, /不被 Git 跟踪，不暂存、不提交/);
+  assert.match(tracker, /提交成功后.*Status: resolved.*Implementation commit/);
+  assert.match(tracker, /代码已提交、tracker 待修复/);
   assert.match(tracker, /重新读取目标文件/);
   assert.match(tracker, /## Wayfinding operations/);
   assert.match(tracker, /\.x-matt\/work\/<effort>\/map\.md/);
@@ -409,6 +411,51 @@ test("all project agents are leaf-only and use the private skill path", async ()
   assert.doesNotMatch(researcher, /^output:/m);
 });
 
+test("Local Markdown publishing and planning keep ignored tracker files accessible without staging them", async () => {
+  for (const name of ["matt-to-spec", "matt-to-tickets", "matt-wayfinder"]) {
+    const skill = await readFile(join(ROOT, ".pi/skills", name, "SKILL.md"), "utf8");
+    assert.match(skill, /本机 exclude/, name);
+    assert.match(skill, /未被.*跟踪|未跟踪状态/, name);
+    assert.match(skill, /不暂存、不提交/, name);
+    assert.match(skill, /直接读取|直接读写/, name);
+  }
+  const pack = await readFile(join(ROOT, ".pi/skills/matt-tdd/context-packs.md"), "utf8");
+  assert.match(pack, /按精确路径直接读取并计算 hash/);
+  assert.match(pack, /不加入实现提交/);
+});
+
+test("canonical resolved clauses agree on local completion and commit ancestry", async () => {
+  for (const [path, prefix] of [
+    [".x-matt/agents/triage-labels.md", "- `resolved`："],
+    [".pi/skills/matt-setup/SKILL.md", "Local Markdown 的 tracker 与 triage-labels 的 `resolved` 定义必须一致："],
+  ]) {
+    const content = await readFile(join(ROOT, path), "utf8");
+    const clause = content.split("\n").find((line) => line.startsWith(prefix));
+    assert.ok(clause, `${path}: resolved definition is required`);
+    assert.match(clause, /通过 TDD、验证和双轴 review.*代码提交成功后才仅在本地写回/, path);
+    assert.match(clause, /Comments 记录.*`Implementation commit/, path);
+    assert.match(clause, /ticket 不暂存、不提交/, path);
+    assert.match(clause, /核验该实现提交属于当前 `HEAD` ancestry.*解除 `Blocked by`/, path);
+    assert.match(clause, /不能仅凭.*状态解锁/, path);
+    assert.doesNotMatch(content, /与实现一起提交|仅凭状态即可解锁/, path);
+  }
+});
+
+test("legacy resolved tickets require verified implementation commits before migration can unlock work", async () => {
+  for (const path of [".pi/skills/matt-setup/SKILL.md", ".x-matt/agents/issue-tracker.md", "README.md"]) {
+    const content = await readFile(join(ROOT, path), "utf8");
+    const migration = content.split("\n").find((line) => line.startsWith("旧项目迁移时"));
+    assert.ok(migration, `${path}: legacy migration instructions are required`);
+    assert.match(migration, /既有 `resolved`.*Implementation commit/, path);
+    assert.match(migration, /核验真实实现提交.*当前 `HEAD` ancestry.*追加完整 SHA/, path);
+    assert.match(migration, /保留原有完成摘要/, path);
+    assert.match(migration, /仅修改 ticket 状态的提交不算实现证据/, path);
+    assert.match(migration, /无法核验.*parent spec（如有）保持 `spec-ready`.*不得解锁.*不得归档/, path);
+    assert.match(migration, /不伪造完成记录/, path);
+    assert.doesNotMatch(content, /保持 feature 为 active|与实现一起提交|仅凭状态即可解锁/, path);
+  }
+});
+
 test("interactive parent skills preserve HITL and document boundaries", async () => {
   const setup = await readFile(join(ROOT, ".pi", "skills", "matt-setup", "SKILL.md"), "utf8");
   assert.match(setup, /disable-model-invocation:\s*true/);
@@ -451,6 +498,14 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.doesNotMatch(setup, /尚未移植的 wayfinder/);
   assert.match(setup, /setup 所需的 tracker、label、domain 和 Wayfinding 行为契约内置/);
   assert.doesNotMatch(setup, /vendor\/mattpocock-skills/);
+  assert.match(setup, /git rev-parse --git-path info\/exclude/);
+  assert.match(setup, /git rev-parse --show-prefix/);
+  assert.match(setup, /git check-ignore --no-index/);
+  assert.match(setup, /git rm --cached.*保留磁盘文件/);
+  assert.match(setup, /不自动提交迁移/);
+  assert.match(setup, /tracker 与 triage-labels 的 `resolved` 定义必须一致/);
+  const setupVerification = setup.split("## 写入与验证\n")[1];
+  assert.match(setupVerification, /tracker\/triage-labels 的 `resolved` 定义一致性.*Implementation commit.*ancestry/);
 
   const archive = await readFile(join(ROOT, ".pi", "skills", "matt-archive", "SKILL.md"), "utf8");
   assert.match(archive, /disable-model-invocation:\s*true/);
@@ -462,8 +517,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(archive, /跨 feature blocker 时拒绝/);
   assert.match(archive, /Commits landed/);
   assert.match(archive, /Durable knowledge settled/);
-  assert.match(archive, /git diff --check/);
-  assert.match(archive, /chore: 归档 <feature-slug> 规格/);
+  assert.match(archive, /Implementation commit: <完整 commit SHA>/);
+  assert.match(archive, /git merge-base --is-ancestor <SHA> HEAD/);
+  assert.match(archive, /out-of-scope.*明确排除理由/);
+  assert.match(archive, /归档不暂存、不创建提交/);
+  assert.match(archive, /`HEAD`、index 与 Git status 均和初始基线一致/);
+  assert.doesNotMatch(archive, /源目录已被 Git 跟踪|用 Git-aware move|chore: 归档/);
   assert.match(archive, /普通会话必须把 `\.x-matt\/work\/shipped\/` 视为不存在/);
   assert.doesNotMatch(archive, /workflow\.json/);
 
@@ -563,7 +622,14 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /contact_supervisor/);
   assert.match(implement, /domain-modeling/);
   assert.match(implement, /Status: resolved/);
-  assert.match(implement, /同一提交/);
+  assert.match(implement, /提交失败时 ticket 保持未完成/);
+  assert.match(implement, /提交成功.*Status: resolved.*Implementation commit/);
+  assert.match(implement, /代码已提交、tracker 待修复/);
+  assert.match(implement, /禁止暂存 `\.x-matt\/work\/`/);
+  assert.match(implement, /检查完整 staged manifest/);
+  assert.match(implement, /resolved blocker.*Implementation commit.*git merge-base --is-ancestor/);
+  assert.match(implement, /不能用本地残留状态解锁/);
+  assert.doesNotMatch(implement, /同一提交中变为|ticket 文件加入允许提交范围/);
   assert.match(implement, /blocker.*Type: ticket.*Status: resolved/);
   assert.match(implement, /spec-ready.*必须先进入 `matt-to-tickets`/);
   assert.match(implement, /Parent: None.*当前会话单 slice/);

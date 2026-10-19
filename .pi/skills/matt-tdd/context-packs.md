@@ -12,6 +12,7 @@ Ticket:
 - Parent: 路径、type/status、相关条款、核验结果
 - Blockers: 路径、type/status、resolved 核验结果
 - direct-slice 时记录已批准 handoff，不能伪造 ticket
+- Local Markdown 的 spec/ticket 仅本地维护且被 Git 忽略，按精确路径直接读取并计算 hash，不用 git show 或 Git-aware 搜索取代；不加入实现提交
 
 Acceptance matrix:
 - AC -> 公开 seam/interface -> 预期行为 -> 保留测试或省略理由

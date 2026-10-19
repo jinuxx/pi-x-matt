@@ -149,6 +149,56 @@ test("accepts a ready ticket whose blocker ticket is resolved", async () => {
   });
 });
 
+for (const linkedWorktree of [false, true]) {
+  test(`reads ignored tracker files in a nested ${linkedWorktree ? "linked worktree" : "repository"} without staging them`, async () => {
+    await withTempRepo(async (repo) => {
+      const runGit = (cwd, ...args) => {
+        const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+        assert.equal(result.status, 0, `${args.join(" ")}: ${result.stderr}`);
+        return result.stdout.trim();
+      };
+      runGit(repo, "init", "-q");
+      let gitRoot = repo;
+      if (linkedWorktree) {
+        runGit(repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+          "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+          "commit", "--allow-empty", "-qm", "fixture");
+        gitRoot = join(repo, "linked");
+        runGit(repo, "worktree", "add", "--detach", "-q", gitRoot, "HEAD");
+        assert.match(await readFile(join(gitRoot, ".git"), "utf8"), /^gitdir: /);
+      }
+      const project = join(gitRoot, "app");
+      await mkdir(project);
+      const git = (...args) => runGit(project, ...args);
+      const excludePath = resolve(project, git("rev-parse", "--git-path", "info/exclude"));
+      const existing = await readFile(excludePath, "utf8");
+      await writeFile(excludePath, `${existing}\n/${git("rev-parse", "--show-prefix")}.x-matt/work/\n`);
+
+      const blockerPath = ".x-matt/work/example/issues/01-resolved.md";
+      const ticketPath = ".x-matt/work/example/issues/02-ready.md";
+      const blockerContent = "# 01: Resolved\n\nType: ticket\nParent: None\nStatus: resolved\nBlocked by: None\n";
+      await writeFixture(project, blockerPath, blockerContent);
+      await writeFixture(project, ticketPath,
+        `# 02: Ready\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`);
+      await writeFixture(project, "implementation.js", "export const ready = true;\n");
+      await writeFixture(project, ".x-matt/context/CONTEXT.md", "# Shared vocabulary\n");
+
+      git("check-ignore", "--no-index", ticketPath, ".x-matt/work/shipped/example/spec.md");
+      const result = runChecker(project, ticketPath);
+      assert.equal(result.status, 0);
+      assertEnvelope(result, ticketPath, true);
+      assert.equal(result.json.blockers[0].ok, true);
+      git("add", ".");
+      assert.deepEqual(git("diff", "--cached", "--name-only", "--relative").split("\n"), [
+        ".x-matt/context/CONTEXT.md",
+        "implementation.js",
+      ]);
+      assert.equal(git("ls-files", "--", ".x-matt/work/"), "");
+      assert.equal(await readFile(join(project, blockerPath), "utf8"), blockerContent);
+    });
+  });
+}
+
 test("rejects an archived ticket before reading it as an implementation entry", async () => {
   await withTempRepo(async (repo) => {
     const ticketPath = ".x-matt/work/shipped/example/issues/01-archived.md";

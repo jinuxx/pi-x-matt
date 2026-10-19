@@ -770,14 +770,14 @@
     },
     "matt-archive": {
       "name": "matt-archive",
-      "description": "在用户显式指定 Local Markdown feature slug 后，核验完成条件，把 parent spec 标记为 shipped 并以独立提交移入归档目录。",
+      "description": "在用户显式指定 Local Markdown feature slug 后，核验实现提交与完成条件，把 parent spec 标记为 shipped 并仅在本地移入归档目录，不创建 Git 提交。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-archive/SKILL.md",
-      "sourceDigest": "a290f434662873b8d9ddd51ea54858ac57406ed924de9b487f16deca0e5b179d",
+      "sourceDigest": "1c4499a15b47d7b145cb54c99c5e2a4c663df4233e0c6519c6f750efbd84067b",
       "upstreamPath": "docs/engineering/to-spec.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47dbcde3e8ba381dc6650206bf36c64336c91f2d9de86ab1898355155081fe5a"
@@ -1056,7 +1056,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "068d21f2dadadf9550d769ad9239dd94e23b03c0fdfc23ec103fefabe2ae439f",
+      "sourceDigest": "92966a000cb50c8f2f3b70f61b2c59872b38c2c63505c3808c8f29680f98f308",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1371,7 +1371,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-setup/SKILL.md",
-      "sourceDigest": "b18aca3fabdc4d378b68d3445802c46a53929e7e21b9a6522e9ee480660b138b",
+      "sourceDigest": "90ca6e0da59a91e19084ecd31ca8f1355f894867c61f321b4c9d02a52daa5854",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "2bcd89e97777cdb705914424e39c97d5db524c8eb4eafac8120778a07774f0ec"
@@ -1760,7 +1760,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-spec/SKILL.md",
-      "sourceDigest": "869cc94001009a61065ffa38eb1c53825b09cbb064f7da90b34f7c2cc3cfb66c",
+      "sourceDigest": "4f5bf0cc0dbdf87160da91c843aa7b7cccb188ad41aab2e9b40d41ff3d599af1",
       "upstreamPath": "skills/engineering/to-spec/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "43ad9cf318e5e7d3d1fa360253a37021796dc87a0c2e595ad262661a10f85088"
@@ -1774,14 +1774,14 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-to-tickets/SKILL.md",
-      "sourceDigest": "0302f7b3bae77d7a9167bdf0b98247b918992c3783279041a4873ac803e62f56",
+      "sourceDigest": "086eafc21963d8b9879583e065e4af2b1de5d1ea3b4bae6eab3b67bd1e3e6d62",
       "upstreamPath": "skills/engineering/to-tickets/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "5c9fba69845c2519b9b35b9af42ae5142c21f8ca15ac2123dc2722002c8058ae"
     },
     "matt-wayfinder": {
       "name": "matt-wayfinder",
-      "description": "把单个会话容纳不下且路线仍模糊的大型工作，规划为 tracker 上的共享决策地图，并每个会话最多解决一个 frontier ticket，直到可以交给 to-spec。",
+      "description": "把单个会话容纳不下且路线仍模糊的大型工作，规划为 tracker 上的跨会话决策地图，并每个会话最多解决一个 frontier ticket，直到可以交给 to-spec。",
       "scope": "parent",
       "class": "interaction",
       "agent": null,
@@ -1792,7 +1792,7 @@
         "matt-to-spec"
       ],
       "sourcePath": ".pi/skills/matt-wayfinder/SKILL.md",
-      "sourceDigest": "84004e49772e14f215278b48ebff9f3d68098073e024e4d015766c8fb368645d",
+      "sourceDigest": "aa7906fd188f78fd25c7b31ea12766fd8c3bc1635fd2aa08d8ef252cdce7262f",
       "upstreamPath": "skills/engineering/wayfinder/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "fee6e1d0c50f0e736b4ef8a599060c959afae904c9a97d82c97f049fcc3aa0f1"

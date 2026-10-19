@@ -1,6 +1,6 @@
 ---
 name: matt-wayfinder
-description: 把单个会话容纳不下且路线仍模糊的大型工作，规划为 tracker 上的共享决策地图，并每个会话最多解决一个 frontier ticket，直到可以交给 to-spec。
+description: 把单个会话容纳不下且路线仍模糊的大型工作，规划为 tracker 上的跨会话决策地图，并每个会话最多解决一个 frontier ticket，直到可以交给 to-spec。
 disable-model-invocation: true
 metadata:
   pi-scope: parent
@@ -22,6 +22,8 @@ metadata:
 先按根 `AGENTS.md` 指针读取 `.x-matt/agents/issue-tracker.md`、`.x-matt/agents/triage-labels.md` 和 `.x-matt/agents/domain.md`。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。Local Markdown 的任何 map 枚举与 frontier 计算都必须从 active effort 精确路径开始，并默认跳过整个 `.x-matt/work/shipped/`；不得输出其中路径/标题或把归档 spec/ticket/map 当作 map、child、blocker、linked decision 或回退来源。用户点名归档 spec 的同会话授权仍只允许历史只读，不能把它放回 frontier。
 
 所有 tracker 写入使用配置中的真实操作。外部 tracker 的 create/edit/assign/close 属外部写入，执行前必须取得明确授权；Local Markdown 是当前仓库内写入，可在用户明确调用本 skill 后按已确认 draft 执行。写后必须重新读取目标并核验。
+
+Local Markdown 的 map 与 decision tickets 仅本地维护，不被 Git 跟踪、不暂存、不提交，不用 `git add -f`。读写前按 tracker 契约核验 active effort 的本机 exclude 保护与未跟踪状态，失效则停止并提示先修复配置；按精确路径直接读取 ignored map/tickets，不能以 Git-aware 搜索未返回作为缺失证据。`claim`/blocking/跨会话读取语义不变，但这些记录不向其他开发者共享。
 
 ## 共同词汇与不变量
 

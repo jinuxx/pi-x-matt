@@ -23,6 +23,7 @@ metadata:
 4. 不要把 `matt-to-tickets` 当作 triage：它产生的 tickets 已按 `ready-for-agent` 约定准备好，不需要再次 triage；不要关闭或修改 parent spec issue。
 5. Local Markdown 发布前读取非空 `PI_SESSION_ID`，并把 `Source session: pi:<PI_SESSION_ID>` 写入每张新 ticket。缺少 session identity 时停止发布。
 6. Local Markdown parent spec 必须位于 active `.x-matt/work/<feature-slug>/spec.md`，并核对 `Type: spec`、`Status: spec-ready`。默认跳过 `.x-matt/work/shipped/`，不得枚举或把 archived spec 当作 parent/近似回退；即使用户在同一会话点名并授权只读某个 archived spec，它也只能作为历史依据，不能重新拆 tickets、修改状态或创建实现入口。
+7. Local Markdown 的 `.x-matt/work/` 只在本机维护。按 tracker 契约核验本机 exclude 生效且当前 feature 未被 Git 跟踪，未满足则停止并提示先运行 `matt-setup`。直接读取已知 ignored parent/ticket 路径，不依赖 Git-aware 搜索；发布只写本地文件，不暂存、不提交、不用 `git add -f`。
 
 ## 切分原则
 

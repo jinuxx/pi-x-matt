@@ -13,6 +13,8 @@ metadata:
 
 # To Spec
 
+Local Markdown tracker 的 `.x-matt/work/` 仅在本机维护：发布前按 `.x-matt/agents/issue-tracker.md` 核验本机 exclude 生效且当前 feature 未被 Git 跟踪，未满足则停止并提示先运行 `matt-setup`。spec 按精确路径直接读写与核验，不暂存、不提交、不用 `git add -f`；ignored 文件不能因 Git-aware 搜索未返回就判为缺失。
+
 本 skill 只综合当前父会话中已经讨论和确认的内容，不重新 interview，不替用户补做产品或架构决定。是否需要 spec 必须在进入本 skill 前由用户通过 transition handoff 决定；一旦显式调用，本 skill 必须完成 seam 确认与发布 gate，不得因 agent 判断“一个 session 能完成”而静默跳过到 implement。
 
 ## 前置条件

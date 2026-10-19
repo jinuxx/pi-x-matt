@@ -2,6 +2,14 @@
 
 Active issues 与 specs 位于仓库内的 `.x-matt/work/<feature-slug>/`。已归档 feature 只位于唯一子目录 `.x-matt/work/shipped/<feature-slug>/`。当前 tracker 不执行远端 API 或 CLI 操作。
 
+## 本地存储与 Git 边界
+
+`.x-matt/work/` 下的 spec、implementation/decision tickets、map 与归档只在本机维护，不被 Git 跟踪，不暂存、不提交，不用 `git add -f` 绕过。`.x-matt/agents/`、`.x-matt/context/` 和 `.x-matt/adr/` 不在此忽略范围内。
+
+setup 通过 `git rev-parse --git-path info/exclude` 定位本机 exclude 文件（不能假定 `.git` 是目录），保留原内容并按需追加 `/<项目相对 Git root 的前缀>.x-matt/work/`；仓库根项目即 `/.x-matt/work/`。用 `git check-ignore --no-index` 核验路径匹配，并用 `git ls-files` 核验当前 feature 没有被跟踪。已有 tracked 文件必须经用户授权后仅取消索引跟踪、保留磁盘文件；忽略规则不会自动取消跟踪，不重写历史。
+
+发布、实现与归档前都核验本地存储边界；规则未生效或当前 feature 仍被跟踪时停止，先修复配置，不强制暂存。Git-aware 搜索可能跳过 ignored 文件，必须按给定路径直接读取 active spec/ticket/map，不能因 Git diff 或搜索中没有它们就判定缺失。归档默认不可见规则不变。
+
 ## 路径
 
 - Parent spec：`.x-matt/work/<feature-slug>/spec.md`
@@ -50,7 +58,7 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 
 新发布的 spec/ticket 必须从当前 Pi 进程读取非空 `PI_SESSION_ID`，并写为 `Source session: pi:<PI_SESSION_ID>`；不得用模型名、时间戳或工作区路径代替。`Parent` metadata 必须存在且非空。没有 parent spec 的当前会话单 slice 可以写 `None`；否则只接受 ticket 中声明的仓库相对 spec 路径，并逐个读取核对 `Type: spec` 与 `Status: spec-ready`，不得凭编号、标题或 feature 名猜测。`scripts/check-local-ticket.mjs` 只负责 Parent 字段的存在性 preflight，不解析或读取 parent；`implement` 父会话仍必须按本段验证真实 relationship。
 
-`Blocked by` 是当前 tracker 的可核验 blocking relationship。无 blocker 时写 `None`；有 blocker 时只接受逗号分隔的仓库相对 ticket 路径，不接受裸编号、标题或绝对路径。逐个读取引用文件，只有每个 blocker 都是 `Type: ticket` 且 `Status: resolved` 时，当前 ticket 才可开始；路径缺失、状态缺失或其他状态都按未完成处理。
+`Blocked by` 是当前 tracker 的可核验 blocking relationship。无 blocker 时写 `None`；有 blocker 时只接受逗号分隔的仓库相对 ticket 路径，不接受裸编号、标题或绝对路径。逐个读取引用文件，只有每个 blocker 都是 `Type: ticket` 且 `Status: resolved`，Comments 中的完整 `Implementation commit` 存在并通过 `git merge-base --is-ancestor <SHA> HEAD` 核验时，当前 ticket 才可开始；路径、状态、实现 SHA 缺失或提交不在当前 branch 都按未完成处理。本地 tracker 不随 branch 切换而回滚，不能仅凭另一个 branch 上留下的 `resolved` 解锁。checker 的 metadata preflight 不能代替父会话的实现提交核验。
 
 ## 发布与读取
 
@@ -58,8 +66,13 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 - “Publish ticket”：按 blockers-first 创建单个 ticket 文件。
 - “Fetch spec/ticket”：读取用户给出的仓库相对路径；不得凭编号猜测其他 feature。
 - Comments 追加到 `## Comments`，不覆盖原正文。
-- `implement` 完成 TDD、完整验证和双轴 review 后，由父会话把当前 Local Markdown ticket 改为 `Status: resolved`，追加完成说明，并把该 ticket 文件包含在同一个最终提交中。提交失败时撤销本次状态/comment 写入，保持 ticket 未完成。
+- `implement` 完成 TDD、完整验证和双轴 review 后，只提交允许范围内的实现、测试与必要共享文件。提交失败时 ticket 保持未完成；提交成功后，父会话才在本地把 ticket 改为 `Status: resolved`，在 `## Comments` 追加验证/review 摘要与 `Implementation commit: <完整 commit SHA>`，重新读取核验。不得把 ticket 加入提交。若本地写回失败，保留已成功的代码提交并报告“代码已提交、tracker 待修复”，不重复提交、不宣称 ticket 完成。
+- `out-of-scope` ticket 必须在本地 Comments 记录排除理由；它不要求伪造实现提交。完成记录指向真实代码提交，而非 ticket 的 Git 历史。
 - 每次写入后重新读取目标文件，核对 Type、Parent、Status、Source session、Blocked by、Reference Inputs（spec）、正文和验收标准；核验失败时停止后续批量写入。
+
+### 旧项目迁移
+
+旧项目迁移时，既有 `resolved` implementation ticket 若缺少 `Implementation commit`，只能核验真实实现提交与该 ticket 对应且属于当前 `HEAD` ancestry 后，在本地 Comments 追加完整 SHA 与核验依据，保留原有完成摘要；仅修改 ticket 状态的提交不算实现证据，不按状态或时间猜测。无法核验时保留现有状态，parent spec（如有）保持 `spec-ready`，报告待补证；对应 blocker 不得解锁，feature 不得归档。不伪造完成记录，不自动重做实现。
 
 ## Parent spec 归档
 
@@ -68,10 +81,10 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 只有同时满足以下条件，parent spec 才能从 `spec-ready` 改为 `shipped`：
 
 1. 该 feature 的全部 implementation tickets 都是 `resolved` 或 `out-of-scope`，不存在 `ready-for-agent` 或其他状态；每个 Blocked by 都是 `None` 或只引用该 feature 内的真实 ticket，存在跨 feature blocker 时不得归档；
-2. 各 terminal ticket 的完成状态和相关实现提交已落在当前 branch；
+2. 每个 `resolved` ticket 的 Comments 都有可核验的完整 `Implementation commit`，且相关实现提交属于当前 `HEAD` 的 ancestry；每个 `out-of-scope` ticket 有明确排除理由，其说明如引用相关 commit，也必须属于当前 branch。不得从 ticket 的 Git 历史猜测实现提交；
 3. 实现中产生的 canonical term、跨会话事实和 ADR 级决定已写入 `.x-matt/context/CONTEXT.md` 或 `.x-matt/adr/`，或经核验明确没有新增持久知识。
 
-归档从干净工作区开始，把 `.x-matt/work/<feature-slug>/` 整体移动到 `.x-matt/work/shipped/<feature-slug>/`，不重命名文件、不删除 ticket。移动时只允许把 spec 的 `Status: spec-ready` 改为 `Status: shipped`，并改写全部 tickets 的 Parent 路径与内部 Blocked by 路径到 shipped 新位置。处理前后都必须完整读取 spec 与全部 tickets，并按原文只允许上述 metadata 变化的方式核对正文无损坏；移动、状态和路径改写必须独占一个提交，摘要使用 `chore: 归档 <feature-slug> 规格`。
+归档从 Git 工作区干净（不含本地 ignored tracker）的基线开始，用普通文件系统移动把 `.x-matt/work/<feature-slug>/` 整体移动到 `.x-matt/work/shipped/<feature-slug>/`，不用 `git mv`，不重命名文件、不删除 ticket。移动时只允许把 spec 的 `Status: spec-ready` 改为 `Status: shipped`，并改写全部 tickets 的 Parent 路径与内部 Blocked by 路径到 shipped 新位置。处理前后都必须完整读取 spec 与全部 tickets，并按原文只允许上述 metadata 变化的方式核对正文无损坏；失败时恢复原文和路径。归档不暂存、不创建提交，前后 `HEAD`、index 与 Git status 必须不变，目标仍受本地忽略规则保护。
 
 `.x-matt/work/shipped/` 默认对模型不可见：读取 `.x-matt/work/`、枚举 feature、计算 frontier 或寻找 ticket/spec 时必须跳过该子目录，不得输出其中路径或标题，也不得把归档内容作为 `matt-to-tickets`、`matt-implement`、`matt-wayfinder` 或 `matt-code-review` Spec 轴的候选、入口或近似回退来源。用户询问未点名的历史 spec 时，只说明内容已归档并要求用户给出准确标题或路径，不得自行搜索。
 
