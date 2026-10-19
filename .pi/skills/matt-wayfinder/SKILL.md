@@ -19,11 +19,11 @@ metadata:
 
 ## Tracker gate
 
-先按根 `AGENTS.md` 指针读取 `.x-matt/agents/issue-tracker.md`、`.x-matt/agents/triage-labels.md` 和 `.x-matt/agents/domain.md`。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。Local Markdown 的任何 map 枚举与 frontier 计算都必须从 active effort 精确路径开始，并默认跳过整个 `.x-matt/work/shipped/`；不得输出其中路径/标题或把归档 spec/ticket/map 当作 map、child、blocker、linked decision 或回退来源。用户点名归档 spec 的同会话授权仍只允许历史只读，不能把它放回 frontier。
+先应用[业务项目隐私契约](../matt-setup/privacy.md)，按本地 `.pi/APPEND_SYSTEM.md` 入口或准确路径读取 `.x-matt/agents/issue-tracker.md`、`.x-matt/agents/triage-labels.md` 和 `.x-matt/agents/domain.md`，不要求向团队 AGENTS 写入指针。tracker 文档必须明确提供可执行的 **Wayfinding operations**：map、child decision ticket、blocking、frontier、claim、release、resolve、out-of-scope、fog graduation 与结果核验。任一操作缺失、CLI/auth/remote 无法只读核验或 tracker 未配置时停止，并建议运行 `matt-setup`；不得自行猜测 GitHub、GitLab 或 Local Markdown，也不得沿用上游的隐式 local fallback。Local Markdown 的任何 map 枚举与 frontier 计算都必须从 active effort 精确路径开始，并默认跳过整个 `.x-matt/work/shipped/`；不得输出其中路径/标题或把归档 spec/ticket/map 当作 map、child、blocker、linked decision 或回退来源。用户点名归档 spec 的同会话授权仍只允许历史只读，不能把它放回 frontier。
 
 所有 tracker 写入使用配置中的真实操作。外部 tracker 的 create/edit/assign/close 属外部写入，执行前必须取得明确授权；Local Markdown 是当前仓库内写入，可在用户明确调用本 skill 后按已确认 draft 执行。写后必须重新读取目标并核验。
 
-Local Markdown 的 map 与 decision tickets 仅本地维护，不被 Git 跟踪、不暂存、不提交，不用 `git add -f`。读写前按 tracker 契约核验 active effort 的本机 exclude 保护与未跟踪状态，失效则停止并提示先修复配置；按精确路径直接读取 ignored map/tickets，不能以 Git-aware 搜索未返回作为缺失证据。`claim`/blocking/跨会话读取语义不变，但这些记录不向其他开发者共享。
+业务项目整个 `.x-matt/` 与个人 `.pi/` 仅本地维护，不被 Git 跟踪、不暂存、不提交，不用 `git add -f`；源码维护例外按已核验边界处理。读写前按 tracker 契约核验本机 exclude 保护与未跟踪状态，失效则停止并提示先修复配置；按精确路径直接读取 ignored map/tickets，不能以 Git-aware 搜索未返回作为缺失证据。`claim`/blocking/跨会话读取语义不变，但这些记录不向其他开发者共享。
 
 ## 共同词汇与不变量
 
@@ -81,7 +81,7 @@ charting 完成后停止，不进入第一个 HITL ticket。
 5. 按 `Type:` 值选择 resolver：
    - `grilling`：执行 live `matt-grilling` + `matt-domain-modeling`，用户确认答案前不得代答或 resolve；
    - `research`：调用 `matt-research` workflow，只接受结构化来源与 gaps；多个 research 可并行，但分别 claim、核验和记录；
-   - `prototype`：按 `matt-prototype` parent 的 question/workspace/HITL/capture gates 调度唯一 worker；取得本地 prototype branch context pointer 与用户 verdict 后才可形成 Answer，失败时 release；
+   - `prototype`：按 `matt-prototype` parent 的 question/workspace/HITL/capture gates 调度唯一 worker；取得本地 prototype 分支 context pointer（branch、commit SHA、artifact paths）与用户 verdict 后才可形成 Answer，失败时 release；
    - `task`：执行不交付 destination 的最小前置动作；需要用户动作时给精确 checklist，外部写入、购买、生产控制或敏感数据操作仍需明确确认。
 6. 形成 Answer draft，包含决定/事实、理由、被拒绝方案、artifact/source pointers 与剩余未知。HITL ticket 使用 `ask_user_question` 请求用户确认 resolution；AFK ticket 由父会话核验一手证据和未知项。resolver 不可用、用户选择延期、证据无效或本 session 无法完成时，不得遗留自己的 claimed ticket：按 tracker release 协议恢复 open/unclaimed 并核验，然后停止。
 

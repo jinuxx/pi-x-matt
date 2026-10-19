@@ -22,6 +22,7 @@ metadata:
 2. 从 Pack 标记为“必须读取”的源码/测试开始，核对关键 symbol、调用关系和文件 hash，使用 Pack 中的领域词汇。架构全文、全部 ADR、README/AGENTS 全文和模块调用者均为按需材料，不得重新扫描整个 module。默认只读取 manifest 内文件。
 3. 只有发现 symbol 缺失、调用关系不一致或 Pack 与工作区不符，才说明具体缺失证据并执行一次定向搜索；限定到给定 module/package 的已命名 symbol，最多扩展一层直接依赖，不递归。基线、授权或验收内容失效时停止，请父会话刷新 Pack，不得自行重建上下文。
 4. 若 Pack 缺失、seams 未明确确认、范围会覆盖既有改动、聚焦测试命令不可确定，或必须改变批准的 interface，先 `contact_supervisor`；不要猜测。完整测试套件、全量 build 或父会话最终验证不得作为 worker 执行项；发现冲突先联系 supervisor。
+5. 应用 Pack 的隐私边界：业务项目的 `.x-matt/` 与个人 `.pi/` 仅本地；不向业务代码、测试、README/AGENTS 复制工具/harness/model、私有路径、session 或“由 AI 生成”等工作流元信息。业务本身需要的同名概念不机械删除；插件源码维护例外只能来自父会话已核验的真实 package root。
 
 ## Red → Green
 

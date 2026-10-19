@@ -172,7 +172,8 @@ for (const linkedWorktree of [false, true]) {
       const git = (...args) => runGit(project, ...args);
       const excludePath = resolve(project, git("rev-parse", "--git-path", "info/exclude"));
       const existing = await readFile(excludePath, "utf8");
-      await writeFile(excludePath, `${existing}\n/${git("rev-parse", "--show-prefix")}.x-matt/work/\n`);
+      const prefix = git("rev-parse", "--show-prefix");
+      await writeFile(excludePath, `${existing}\n/${prefix}.x-matt/\n/${prefix}.pi/\n`);
 
       const blockerPath = ".x-matt/work/example/issues/01-resolved.md";
       const ticketPath = ".x-matt/work/example/issues/02-ready.md";
@@ -181,7 +182,17 @@ for (const linkedWorktree of [false, true]) {
       await writeFixture(project, ticketPath,
         `# 02: Ready\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`);
       await writeFixture(project, "implementation.js", "export const ready = true;\n");
-      await writeFixture(project, ".x-matt/context/CONTEXT.md", "# Shared vocabulary\n");
+      for (const path of [
+        ".x-matt/agents/issue-tracker.md", ".x-matt/context/CONTEXT.md",
+        ".x-matt/adr/0001-local.md", ".x-matt/research/note.md", ".x-matt/prototypes/example/index.html",
+        ".pi/settings.json", ".pi/APPEND_SYSTEM.md",
+      ]) {
+        await writeFixture(project, path, "Private working material\n");
+      }
+      const sharedInstructions = "# Team instructions\n\nRun project tests before committing.\n";
+      const sharedReadme = "# Business project\n";
+      await writeFixture(project, "AGENTS.md", sharedInstructions);
+      await writeFixture(project, "README.md", sharedReadme);
 
       git("check-ignore", "--no-index", ticketPath, ".x-matt/work/shipped/example/spec.md");
       const result = runChecker(project, ticketPath);
@@ -190,11 +201,14 @@ for (const linkedWorktree of [false, true]) {
       assert.equal(result.json.blockers[0].ok, true);
       git("add", ".");
       assert.deepEqual(git("diff", "--cached", "--name-only", "--relative").split("\n"), [
-        ".x-matt/context/CONTEXT.md",
+        "AGENTS.md",
+        "README.md",
         "implementation.js",
       ]);
-      assert.equal(git("ls-files", "--", ".x-matt/work/"), "");
+      assert.equal(git("ls-files", "--", ".x-matt/", ".pi/"), "");
       assert.equal(await readFile(join(project, blockerPath), "utf8"), blockerContent);
+      assert.equal(await readFile(join(project, "AGENTS.md"), "utf8"), sharedInstructions);
+      assert.equal(await readFile(join(project, "README.md"), "utf8"), sharedReadme);
     });
   });
 }
@@ -521,5 +535,32 @@ test("rejects a .x-matt/work symlink whose real target is outside the repository
     } finally {
       await rm(outsideRepo, { recursive: true, force: true });
     }
+  });
+});
+
+test("sharing one .pi entry needs a finer rule because a whole-directory ignore hides it", async () => {
+  await withTempRepo(async (repo) => {
+    const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    assert.equal(git("init", "-q").status, 0);
+    const excludePath = resolve(repo, git("rev-parse", "--git-path", "info/exclude").stdout.trim());
+    const existing = await readFile(excludePath, "utf8");
+    await writeFixture(repo, ".pi/settings.json", "{}\n");
+    await writeFixture(repo, ".pi/skills/team/SKILL.md", "team skill\n");
+    await writeFixture(repo, ".pi/mcp.json", "{}\n");
+
+    // Default: the whole directory is ignored, including the entry we want to share.
+    await writeFile(excludePath, `${existing}\n/.pi/\n`);
+    assert.equal(git("check-ignore", "-q", ".pi/mcp.json").status, 0);
+    assert.notEqual(git("add", "--dry-run", ".pi/mcp.json").status, 0);
+
+    // Approved sharing replaces the whole-directory rule with finer personal rules.
+    await writeFile(excludePath, `${existing}\n/.pi/settings.json\n/.pi/skills/\n`);
+    assert.equal(git("check-ignore", "-q", ".pi/settings.json").status, 0);
+    assert.equal(git("check-ignore", "-q", ".pi/skills/team/SKILL.md").status, 0);
+    assert.equal(git("check-ignore", "-q", ".pi/mcp.json").status, 1);
+    assert.equal(git("add", "--dry-run", ".pi/mcp.json").status, 0);
+    assert.equal(git("add", ".pi/mcp.json").status, 0);
+    assert.deepEqual(git("ls-files", "--", ".pi/").stdout.trim().split("\n"), [".pi/mcp.json"]);
+    assert.equal(git("ls-files", "--", ".pi/settings.json", ".pi/skills/").stdout.trim(), "");
   });
 });

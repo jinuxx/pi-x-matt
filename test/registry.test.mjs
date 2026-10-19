@@ -726,7 +726,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(prototype, /prototype\/<slug>/);
   assert.match(prototype, /不创建 branch、不 commit、不 stage、不 push/);
   assert.match(prototype, /不 push/);
-  assert.match(prototype, /原 branch 无 prototype 残留/);
+  assert.match(prototype, /prototype commit 只存在于本地 `prototype\/<slug>`/);
   assert.match(prototype, /生产实现.*implement.*tdd.*code-review/);
 
   const tdd = await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "SKILL.md"), "utf8");

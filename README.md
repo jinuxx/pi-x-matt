@@ -174,7 +174,7 @@ npm run pack:check     # 检查 package 文件清单
 /reload
 ```
 
-首次使用发布链前运行 `matt-setup`，由用户确认 tracker、label mapping 和领域文档布局；它只在用户批准 draft 后写入 `.x-matt/` 与可选的项目级 `AGENTS.md` 指针，不会创建远端 issue 或 label。Matt 管理的项目文档统一采用：
+首次使用发布链前运行 `matt-setup`，业务项目使用仅本地 Local Markdown，由用户确认 label mapping、领域布局与隐私迁移 draft；它只写本地 `.x-matt/`、`.pi/APPEND_SYSTEM.md` 入口和 Git exclude，不向团队 AGENTS/README 添加工具说明，不会创建远端 issue 或 label。Matt 管理的项目文档统一采用：
 
 ```text
 .x-matt/
@@ -186,9 +186,13 @@ npm run pack:check     # 检查 package 文件清单
 
 未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，active spec 与 tickets 写入 `.x-matt/work/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`。tracker 只在本机维护，不被 Git 跟踪、不暂存、不提交；完成后由 `matt-implement` 先提交代码，再在本地把 ticket 写为 `resolved`，Comments 记录 `Implementation commit: <完整 commit SHA>` 与验证/review 摘要。提交失败不写完成状态；本地写回失败则报告“代码已提交、tracker 待修复”，不重复提交。全部 tickets 为 `resolved` / `out-of-scope`、Comments 中相关实现提交已在当前 branch、持久知识已沉淀后，用户可在独立步骤显式运行 `matt-archive <feature-slug>`：它把 parent 改为 `shipped`，整体移动到 `.x-matt/work/shipped/<feature-slug>/`，改写 Parent/Blocked by 路径，仅本地归档，不创建提交；`matt-implement` 不得代做归档。
 
-`matt-setup` 将 `.x-matt/work/` 加入本机 Git exclude，不修改团队 `.gitignore`：通过 `git rev-parse --git-path info/exclude` 定位文件，并按项目相对 Git root 的前缀写规则（根项目为 `/.x-matt/work/`，支持 nested project 与 Git worktree）。范围覆盖 spec、implementation/decision tickets、map 与归档，不包括 `.x-matt/agents/`、`.x-matt/context/` 或 `.x-matt/adr/`。发布、实现与归档前须确认 ignore 生效且当前 feature 未被跟踪；禁止 `git add -f`。ignored tracker 必须按给定路径直接读取，不从 Git diff 或 Git-aware 搜索中取证。
+**业务项目排除的是整个 `.x-matt/` 和个人 `.pi/`，不是仅 work/。** 包括 tracker、agent 契约、glossary、ADR、research、原型、settings、Pi package/extension/skill 声明、工具/harness 配置及本地入口；业务自己的 `package.json`、构建配置和锁文件不在其中。`matt-setup` 通过 `git rev-parse --git-path info/exclude` 与 `--show-prefix` 配置本机规则（根项目为 `/.x-matt/`、`/.pi/`），支持 nested project 与 linked worktree，不修改团队 `.gitignore`。规则不匹配或个人资料仍被跟踪时停止；ignored 文件按准确路径读取，不能用 Git-aware 搜索或 diff 缺失推断不存在。
 
-已有项目重新运行 `matt-setup` 更新契约与本机 exclude；已有 tracked tracker 文件需另行授权后仅取消索引跟踪、保留磁盘文件，不重写历史。取消跟踪产生的索引删除需先作为一次迁移提交落地，再继续 implement/archive；此删除记录不删除本机文件。本机 exclude 不随 clone 传播，新 clone 需重新 setup；本地 tracker 的备份与跨机器迁移需自行处理，不依赖 Git。归档的实现追溯依据是本地 Comments 中的 commit SHA，而不是 ticket 的 Git 历史；`out-of-scope` 只需明确排除理由，不伪造实现 commit。本地状态不随 branch 切换回滚，因此 implementation blocker 除 `resolved` 外，还须核验记录的实现 commit 属于当前 `HEAD` ancestry，不能用其他 branch 的完成状态解锁。
+入口使用 Pi 原生 `.pi/APPEND_SYSTEM.md`，保留已有本地内容，不用 AGENTS override 遮蔽团队指令。若新建 project APPEND 会遮蔽全局同名文件，setup 会停止并要求先明确保留/合并方式。提交前检查完整 staged manifest、内容和最终提交信息，不自动附加 AI attribution、工具生成的 co-author、session、私有路径或模型/harness 说明；提交后若 hook 追加归因则停止、不 push，不伪造作者或绕过团队策略。完整规则见[业务项目隐私契约](.pi/skills/matt-setup/privacy.md)。
+
+已有项目重新运行 `matt-setup` 迁移整个个人 AI 资料范围，而不是只迁移 tracker。先展示准确清单：个人 tracked 文件经授权后仅取消索引跟踪、保留磁盘文件；旧 AGENTS/README 的个人入口 block 经批准后移入本地文件，团队原文不动。不能自动取消跟踪团队 `.pi/` 配置，也不重写历史。取消跟踪产生的索引删除需先作为一次迁移提交落地，再继续 implement/archive；此删除记录不删除本机文件。本机 exclude 不随 clone 传播，新 clone/worktree 需重新核验；本地资料需自行备份。实现追溯使用本地 Comments 的真实 commit SHA；blocker 必须核验该实现提交属于当前 `HEAD` ancestry，不能用其他 branch 的完成状态解锁。
+
+**插件源码仓库是例外**：只有目标 cwd 的真实路径等于已加载 package root 时，才保留 `.pi/` 与既有契约的版本控制；不能靠相同目录名或 package name 启用例外。本仓库只排除整个 `.x-matt/`，`.pi/` 作为 package 源码保持跟踪；已 tracked 契约不受忽略影响，新增需要分发的契约文件须显式 `git add -f`。这不意味着业务项目也能提交这些资料。忽略规则不能消除已有 Git 历史，也不能保证手动操作、第三方扩展、hook 或远端服务“绝对无痕”。
 
 旧项目迁移时，既有 `resolved` implementation ticket 若缺少 `Implementation commit`，只能核验真实实现提交与该 ticket 对应且属于当前 `HEAD` ancestry 后，在本地 Comments 追加完整 SHA 与核验依据，保留原有完成摘要；仅修改 ticket 状态的提交不算实现证据，不按状态或时间猜测。无法核验时保留现有状态，parent spec（如有）保持 `spec-ready`，报告待补证；对应 blocker 不得解锁，feature 不得归档。不伪造完成记录，不自动重做实现。
 
@@ -196,9 +200,9 @@ npm run pack:check     # 检查 package 文件清单
 
 需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。shared understanding 确认后必须停止并把控制权交还给用户，由用户显式选择 `/skill:matt-to-spec`、一个 `/skill:matt-implement` 单 slice 或暂停；不得在同一连续流程中直接确认测试 seam 或启动 TDD。greenfield、多业务流程、多个 seam、部署/迁移、跨 session，或依赖用户提供且不能安全压缩的事实、说明、样例与约束的工作默认进入 spec → tickets；这些材料不限于任何项目或技术格式。目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
 
-讨论无法回答一个明确的状态/逻辑或 UI 设计问题时，使用 model-invoked `matt-prototype`。父会话先确认唯一 question 与 logic/UI branch，再由单 worker 构建：logic 是可双击的单文件 HTML；UI 是真实页面上下文中通过 `?variant=` 切换的 3–5 个结构差异方案。用户本人给出 verdict 后，artifact 只提交到本地 `prototype/<slug>` branch，不合并、不 push；原 branch 只接收可核验 context pointer，生产实现仍进入 `matt-to-spec`/`matt-implement`。
+讨论无法回答一个明确的状态/逻辑或 UI 设计问题时，使用 model-invoked `matt-prototype`。父会话先确认唯一 question 与 logic/UI branch，再由单 worker 构建：logic 是可双击的单文件 HTML；UI 是真实页面上下文中通过 `?variant=` 切换的 3–5 个结构差异方案。用户本人给出 verdict 后，artifact 只提交到本机 `prototype/<slug>` 分支，禁止 push、PR、merge 或 rebase 进共享分支；原 branch 只接收可核验 context pointer，生产实现仍进入 `matt-to-spec`/`matt-implement`。
 
-`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得 artifact branch pointer 与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
+`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得本地 prototype 分支 context pointer（不 push）与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
 
 需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次执行带内置双轴复核的 `matt-tdd` 和父会话完整验证，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。当前没有实现批量 ticket 或 push/PR 的自动化。
 

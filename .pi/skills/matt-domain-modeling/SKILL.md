@@ -19,6 +19,7 @@ metadata:
 1. 先检查 `.x-matt/context/CONTEXT-MAP.md`、`.x-matt/context/CONTEXT.md` 和 `.x-matt/adr/`。
 2. 存在 `.x-matt/context/CONTEXT-MAP.md` 时按 map 定位 `.x-matt/context/<context>/CONTEXT.md`；无法判断归属时向用户确认。对应 ADR 位于 `.x-matt/adr/<context>/`。否则使用 `.x-matt/context/CONTEXT.md` 与 `.x-matt/adr/`。
 3. 文件和目录按需创建：首个项目术语确定时才创建对应 `CONTEXT.md`；首个符合条件且经用户同意的决定出现时才创建对应 ADR 目录。不得在 `.x-matt/` 外创建 Matt 管理的领域文档。
+4. 业务项目这些文件均被忽略，必须按准确路径直接 read/ls；新建前核验目录真实内容，不能因 Git-aware find/grep 没有返回就判定不存在。ADR 编号只根据准确目标目录的本地文件递增，避免漏读后覆盖旧记录。
 
 ## 术语纪律
 
@@ -70,4 +71,6 @@ _Avoid_: <不推荐的同义词>
 
 ## 写入边界
 
-父会话是 glossary 与 ADR 的唯一写者。写前读取当前内容，保留用户已有结构和无关改动；事实调查子代理只返回证据，不写共享文档。每次写入后核对 diff，确保 glossary 没有变成 spec，ADR 没有记录临时或显然决定。
+先应用[业务项目隐私契约](../matt-setup/privacy.md)：业务项目整个 `.x-matt/`（包括 glossary、ADR）都仅本地，不被 Git 跟踪；不因它们属于领域知识就复制到团队 README/AGENTS 或随实现提交。若需形成正式业务文档，必须作为用户明确批准的独立交付，去除个人工具元信息，不自动晋升本地工作记录。真实插件源码仓库按已核验的维护例外处理。
+
+父会话是 glossary 与 ADR 的唯一写者。写前读取当前内容，保留用户已有结构和无关改动；事实调查子代理只返回证据，不写领域文档。每次写入后按文件原文核对变更，ignored 文件不能依赖 Git diff；确保 glossary 没有变成 spec，ADR 没有记录临时或显然决定。

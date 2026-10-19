@@ -2,6 +2,8 @@
 
 本仓库使用 single-context 领域文档布局。
 
+本仓库是插件源码维护例外，维护用领域契约可随源码分发。业务项目按 `.pi/skills/matt-setup/privacy.md` 保护整个 `.x-matt/` 与个人 `.pi/`，glossary、ADR 和入口仅在本机维护，不自动复制到团队文档或提交。
+
 ## 探索前读取
 
 按相关性读取：

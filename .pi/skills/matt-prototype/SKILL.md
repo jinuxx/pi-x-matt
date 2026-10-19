@@ -14,6 +14,8 @@ Prototype 是**回答一个设计问题的 throwaway code**。只有问题无法
 
 父会话拥有 question/branch 确认、HITL 评审、verdict 和 branch capture；`matt-prototype` workflow 的唯一 `matt-worker` 只构建批准 artifact，不创建 branch、不 commit、不 stage、不 push。父会话与 worker 不并行写同一工作区，任何时刻只运行一个 prototype worker。
 
+隐私边界：业务项目的原型提交只存在于本机 `prototype/<slug>` 分支，禁止 push、PR、merge 或 rebase 进共享分支；不把 `.x-matt/` 内容、工具名或 harness 说明写进业务文件与提交信息。完整规则见[业务项目隐私契约](../matt-setup/privacy.md)。
+
 ## Question gate
 
 先读取相关代码、项目说明、`.x-matt/context/`、`.x-matt/adr/`、当前 tracker/map ticket 和真实 route/module。把 design question 收敛为一句可由 artifact 回答的话，并判断 branch：

@@ -15,6 +15,8 @@ metadata:
 
 本 skill 是 Local Markdown parent spec 的唯一归档入口。它只能由用户在独立步骤中显式调用，只接受一个准确的 `<feature-slug>`；不得从标题、相似目录、当前 frontier 或最近处理的 ticket 猜测目标。它不进入 `matt-implement`、`matt-tdd` 或任何 workflow lane，不启动 subagent，也不改变 implementation ticket 的 `resolved` 语义。
 
+先应用[业务项目隐私契约](../matt-setup/privacy.md)：业务项目保护整个 `.x-matt/` 与个人 `.pi/`，包括归档、领域知识和入口；源码维护例外只保留必要的发布资源，不取消已有的本地 tracker 边界。
+
 普通会话必须把 `.x-matt/work/shipped/` 视为不存在。只有用户在同一会话明确点名某个归档 spec 的标题或路径时，才可只读对应归档目录；该授权只覆盖被点名对象、只在当前会话有效，不能据此枚举其他归档、重新开启 ticket、改写状态、创建新 ticket、作为 frontier/implementation 入口，或作为 `matt-to-tickets`、`matt-implement`、`matt-wayfinder`、`matt-code-review` Spec 轴的候选或近似回退规格。
 
 ## 输入与初始 gate

@@ -1,5 +1,7 @@
 # Project Agent Instructions
 
+本仓库是 pi-x-matt 插件源码维护例外：发布所需的 `.pi/`、工程说明和维护契约继续被 Git 跟踪。使用本插件的业务项目则按 `.pi/skills/matt-setup/privacy.md` 将整个 `.x-matt/` 与个人 `.pi/` 仅保存在本机，不把源码仓库例外推广到目标项目。
+
 ## Agent skills
 
 ### Issue tracker

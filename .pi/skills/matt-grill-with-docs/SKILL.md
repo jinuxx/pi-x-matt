@@ -40,7 +40,7 @@ metadata:
    - 决定同时通过三项 ADR gate 时，向用户提议；取得同意后立即写入。
 5. 更新会话状态和 decision tree，重复直到 frontier 为空。
 
-每次共享文档写入前说明将修改的术语或决定；写后检查 diff。子代理和 reviewer 不得写 `.x-matt/context/` 或 `.x-matt/adr/`。
+每次领域文档写入前说明将修改的术语或决定；按 domain-modeling 的隐私边界，仅在本地 `.x-matt/` 保留业务项目工作记录，写后按原文核验，不能用 Git diff 代替 ignored 文件证据。子代理和 reviewer 不得写 `.x-matt/context/` 或 `.x-matt/adr/`。
 
 ## Shared-understanding gate
 

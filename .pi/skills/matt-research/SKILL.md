@@ -25,7 +25,7 @@ metadata:
 
 ## 跨会话证据
 
-completion result 默认只属于当前会话，不把普通 output 或临时 artifact 路径当作长期记录。工作需要跨 session 进入 `matt-to-spec` 时，由父会话在结果核验后把 `question`、`summary`、`findings`、`sources` 与 `gaps` 写成带引用的 Markdown research note；只使用用户指定路径或仓库已有 research 文档约定，没有明确目标路径时保持未持久化并说明限制。researcher 仍不得写项目文件。后续会话必须显式提供该 note，不能依赖模型记忆重建研究结论。
+先应用[业务项目隐私契约](../matt-setup/privacy.md)。completion result 默认只属于当前会话，不把普通 output 或临时 artifact 路径当作长期记录。工作需要跨 session 进入 `matt-to-spec` 时，由父会话在结果核验后把 `question`、`summary`、`findings`、`sources` 与 `gaps` 写成带引用的 Markdown research note；业务项目默认仅本地保存到已受保护的 `.x-matt/research/`，不写团队文档或提交工具使用记录。用户指定其他路径时先核验其私有边界，不能把“保存”默认为公开授权；无法确定时保持未持久化并说明限制。真实源码维护例外可使用已批准的仓库文档位置。researcher 仍不得写项目文件。后续会话必须显式提供该 note，不能依赖模型记忆重建研究结论。
 
 ## 边界
 

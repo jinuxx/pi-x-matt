@@ -23,6 +23,7 @@ Acceptance matrix:
 Applicable instructions:
 - AGENTS/README/工程规范中本次适用条款，附路径与章节/行号
 - 必要领域词汇与已决定的架构边界，不内联全部架构和 ADR
+- 隐私边界必须交给 worker 与 reviewer：业务项目整个 .x-matt/、个人 .pi/ 和其他已确认本地资料不进 Git；不在业务文件/提交信息中复制工具/harness/model、session、私有路径或自动 AI 归因。源码维护例外附真实 package root 核验，不只凭名称判断
 
 Fixed point:
 - 实际 HEAD commit，不用会漂移的 HEAD 名称代替

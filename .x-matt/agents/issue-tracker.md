@@ -4,9 +4,11 @@ Active issues 与 specs 位于仓库内的 `.x-matt/work/<feature-slug>/`。已�
 
 ## 本地存储与 Git 边界
 
-`.x-matt/work/` 下的 spec、implementation/decision tickets、map 与归档只在本机维护，不被 Git 跟踪，不暂存、不提交，不用 `git add -f` 绕过。`.x-matt/agents/`、`.x-matt/context/` 和 `.x-matt/adr/` 不在此忽略范围内。
+本文件是插件源码仓库的维护契约，适用 `.pi/skills/matt-setup/privacy.md` 的源码维护例外：本仓库只排除整个 `.x-matt/`，`.pi/` 作为 package 源码保持跟踪。业务项目排除 `.x-matt/` 与 `.pi/` 两个整目录，不得照抄此例外；入口使用本地 `.pi/APPEND_SYSTEM.md`，不写团队 AGENTS/README。
 
-setup 通过 `git rev-parse --git-path info/exclude` 定位本机 exclude 文件（不能假定 `.git` 是目录），保留原内容并按需追加 `/<项目相对 Git root 的前缀>.x-matt/work/`；仓库根项目即 `/.x-matt/work/`。用 `git check-ignore --no-index` 核验路径匹配，并用 `git ls-files` 核验当前 feature 没有被跟踪。已有 tracked 文件必须经用户授权后仅取消索引跟踪、保留磁盘文件；忽略规则不会自动取消跟踪，不重写历史。
+`.x-matt/` 下的个人工作资料只在本机维护，不被 Git 跟踪，不暂存、不提交，不用 `git add -f` 绕过。本仓库仍跟踪的既有契约（如本文件）不受忽略影响；新增需要分发的契约文件要显式 `git add -f` 并核对结果。
+
+setup 通过 `git rev-parse --git-path info/exclude` 定位本机 exclude 文件（不能假定 `.git` 是目录），保留原内容并按需追加整目录规则 `/<项目相对 Git root 的前缀>.x-matt/`；仓库根项目即 `/.x-matt/`。用 `git check-ignore --no-index` 核验路径匹配，并用 `git ls-files` 核验具体工作文件没有被跟踪。已有 tracked 文件必须经用户授权后仅取消索引跟踪、保留磁盘文件；忽略规则不会自动取消跟踪，不重写历史。
 
 发布、实现与归档前都核验本地存储边界；规则未生效或当前 feature 仍被跟踪时停止，先修复配置，不强制暂存。Git-aware 搜索可能跳过 ignored 文件，必须按给定路径直接读取 active spec/ticket/map，不能因 Git diff 或搜索中没有它们就判定缺失。归档默认不可见规则不变。
 
