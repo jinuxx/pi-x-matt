@@ -12,7 +12,7 @@
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@xl0/pi-lovely-codex
 pi install -l npm:pi-subagents@0.79.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.21
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.22
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@xl0/pi-lovely-codex` 为 `matt-worker` 提供 `apply_patch`。
@@ -45,7 +45,7 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.21
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.22
 ```
 
 ## 架构

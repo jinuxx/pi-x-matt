@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.22
+
+- 业务项目默认把整个 `.x-matt/` 与整个 `.pi/` 加入本机 Git exclude（两条整目录规则），不再只保护 `.x-matt/work/`：tracker、agent 契约、glossary、ADR、research、原型、settings、Pi package/extension/skill 声明与本地入口都只在本机保存。业务自己的 `package.json`、构建配置与锁文件明确不在忽略范围。
+- 入口从团队 `AGENTS.md` 改为本地 `.pi/APPEND_SYSTEM.md`；setup 不再向共享 AGENTS/README 写工具说明。若新建 project APPEND 会遮蔽全局同名文件，setup 停止并要求先明确保留/合并方式。
+- 提交链路增加内容级检查：除私有路径外，还检查复制进业务文件的 session ID、harness/model/工具说明、AI attribution 或工具生成的 `Co-authored-by`；提交后核对真实 commit 与 trailer，hook 追加归因时停止、不 push，不伪造作者、不关闭团队 hook。
+- 新增 `matt-setup/privacy.md` 隐私契约并随包分发：作用范围、真实 package root 例外、整目录 exclude 与迁移、本地入口规则、提交检查、模型/第三方/hook 的能力边界；明确不承诺消除历史或“绝对无痕”。
+- `.pi` 共享例外需要改变规则形态（Git 不能在已排除父目录内用 `!` 回包含）并由用户显式批准、记录清单，核验改为双向（个人条目仍忽略且未跟踪；批准条目 `check-ignore` 不匹配且可跟踪）。
+- 源码维护例外只排除整个 `.x-matt/`，`.pi/` 作为 package 源码保持跟踪；新增需分发的契约文件才允许逐路径 `git add -f`，并要求 force-add 集合与完整 staged manifest 收敛。原型回到本机 `prototype/<slug>` 分支，禁止 push/PR/merge/rebase 进共享历史。
+- 新增 `test/privacy-contract.test.mjs` 契约测试与真实 Git 回归（整目录忽略、业务文件仍可暂存、`.pi` 细规则共享）；83/83 测试通过，最终两轮 Standards/Spec 双轴复核均为 `PASS`。
+
 ## 0.2.21
 
 - Local Markdown tracker 统一仅在本机维护：spec、implementation/decision tickets、map 与归档不再被 Git 跟踪或随实现提交。`matt-setup` 配置本机 Git exclude，支持 nested project 与 linked worktree，不修改团队 `.gitignore`；本仓库已有 tracker 仅取消索引跟踪，保留磁盘文件，不重写历史。
