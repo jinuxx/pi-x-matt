@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.21
+
+- Local Markdown tracker 统一仅在本机维护：spec、implementation/decision tickets、map 与归档不再被 Git 跟踪或随实现提交。`matt-setup` 配置本机 Git exclude，支持 nested project 与 linked worktree，不修改团队 `.gitignore`；本仓库已有 tracker 仅取消索引跟踪，保留磁盘文件，不重写历史。
+- `matt-implement` 在代码提交成功后才本地写回 `resolved` 与完整 `Implementation commit`；blocker 解锁必须核验实现提交属于当前 `HEAD` ancestry。本地写回失败保留代码提交并报告待修复，不重复实现或提交。
+- `matt-archive` 保留用户显式触发、资格与内容核验，但只做本地移动和 metadata 改写，不再创建归档提交；失败恢复本地原文与路径。
+- 同步 canonical 状态词表、setup 写后核验与旧项目迁移说明：只允许核验后回填真实实现 SHA，保留原完成摘要；缺证时不解锁、不归档。已有项目需更新插件后重新运行 `matt-setup`，取消跟踪的索引删除需一次迁移提交落地。
+- 增加状态/迁移契约测试与真实 linked-worktree 回归；77/77 测试通过，最终完善增量的 Standards/Spec 双轴复核均为 `PASS`。
+
 ## 0.2.20
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 npm latest `0.79.1`。
