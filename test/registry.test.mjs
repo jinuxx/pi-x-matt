@@ -205,7 +205,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.equal(settings.subagents.agentOverrides, undefined);
   assert.deepEqual(settings.packages, [{
-    source: "npm:pi-subagents@0.79.1",
+    source: "npm:pi-subagents@0.80.0",
     autoload: false,
     extensions: ["+index.js"],
     skills: [],
@@ -234,7 +234,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.22");
+  assert.equal(manifest.version, "0.2.23");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -257,7 +257,8 @@ test("package manifest exposes namespaced resources", async () => {
   ]);
   assert.deepEqual(manifest.pi.subagents.agents, ["./.pi/agents"]);
   assert.equal(manifest.engines.node, ">=22.19.0");
-  assert.equal(manifest.dependencies["pi-subagents"], "0.79.1");
+  assert.equal(manifest.peerDependencies["@earendil-works/pi-coding-agent"], ">=1.2.0");
+  assert.equal(manifest.dependencies["pi-subagents"], "0.80.0");
   assert.deepEqual(manifest.bundledDependencies, ["pi-subagents"]);
   assert.equal(manifest.peerDependencies["pi-subagents"], undefined);
   assert.equal(manifest.repository.url, "git+https://github.com/jinuxx/pi-x-matt.git");
@@ -767,8 +768,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI\/RPC 授权/);
   assert.match(readme, /本 session 以 `\/skill:matt-implement` 启动时直接放行/);
   assert.match(readme, /取消或 print\/JSON mode 没有 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.22/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.22/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.23/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.23/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
   assert.match(readme, /`matt-archive <feature-slug>`/);
   assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);

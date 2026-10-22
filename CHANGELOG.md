@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.23
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.80.0`，Pi host peer 下限同步为 `>=1.2.0`；Node 下限仍为 `22.19.0`。升级 runtime 后必须退出并重新启动 Pi。
+- 已核对新版的 `spawn` RPC、scripted-workflow sandbox 与 `workflow-resources` 公共注册 API，现有 dispatcher 无需改动。内置 `parallel/tasks/chain` 的逐子任务 `cwd/model` 和可选 `enableSlashCommands` 不改变现有项目配置、模型选择与权限边界。
+- completion notice 直接唤醒空闲父会话，不再额外插入唤醒消息；完整结构化结果仍从通知指向的持久化 JSON 读取。0.79.2 起未送达 notice 的重启重放与 child `APPEND_SYSTEM.md` 隔离随新版生效；本项目 child 继续通过 agent prompt、显式 task/skill 与 `inheritProjectContext` 接收指令。
+- 离线契约测试针对已安装 `0.80.0` 运行，83/83 测试、registry、drift 与打包检查通过。升级并重启后的 `0.80.0` + Pi `1.4.0` 真实 Research 单 lane 冒烟通过：workflow `state=complete`、lane `ok=true`、fresh context，已核实 `web_search`/`web_fetch`/`structured_output` 实际调用成功，并从完整 `workflow.value` 读取有效结构化结果。
+
 ## 0.2.22
 
 - 业务项目默认把整个 `.x-matt/` 与整个 `.pi/` 加入本机 Git exclude（两条整目录规则），不再只保护 `.x-matt/work/`：tracker、agent 契约、glossary、ADR、research、原型、settings、Pi package/extension/skill 声明与本地入口都只在本机保存。业务自己的 `package.json`、构建配置与锁文件明确不在忽略范围。

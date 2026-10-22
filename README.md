@@ -6,13 +6,13 @@
 
 ## 安装
 
-要求已安装 Pi、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 npm latest `0.79.1` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.79.1 未声明强制最低 Pi host 版本（`@earendil-works/pi-coding-agent` peer 为 `*`、无 `engines`，仅 `@earendil-works/pi-ai` 要求 `>=0.86.1`），其文档化支持基线与 CI clean-install 覆盖为 Pi `0.86.1`/`1.0.0`/`1.2.0`；Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi 1.2.0 或更高版本、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 `pi-subagents@0.80.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。0.80.0 将 Pi 支持下限提升到 `1.2.0`（`@earendil-works/pi-ai` peer 为 `>=1.2.0`），本 package 的 Pi host peer 同步为 `>=1.2.0`；Pi `0.86.1`/`1.0.0` 不再受支持。Node `22.19.0` 下限来自 bundled `undici@8.10.2` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:@xl0/pi-lovely-codex
-pi install -l npm:pi-subagents@0.79.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.22
+pi install -l npm:pi-subagents@0.80.0
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.23
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@xl0/pi-lovely-codex` 为 `matt-worker` 提供 `apply_patch`。
@@ -27,7 +27,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.22
 
 ```json
 {
-  "source": "npm:pi-subagents@0.79.1",
+  "source": "npm:pi-subagents@0.80.0",
   "autoload": false,
   "extensions": ["+index.js"],
   "skills": [],
@@ -38,14 +38,14 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.22
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.79.1`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。npm 发布包入口是 `index.js`，不是 source checkout 的 `index.ts`；最小加载过滤必须与发布包 manifest 一致。
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.80.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。npm 发布包入口是 `index.js`，不是 source checkout 的 `index.ts`；最小加载过滤必须与发布包 manifest 一致。
 
 本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
 
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.22
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.23
 ```
 
 ## 架构
@@ -80,7 +80,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.22
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.79.1",
+      "source": "npm:pi-subagents@0.80.0",
       "autoload": false,
       "extensions": ["+index.js"],
       "skills": [],
@@ -108,7 +108,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.22
 
 ## 为子代理指定模型
 
-pi-x-matt 不参与选模型：dispatcher 下发的 lane item 只包含 `key/agent/task/context/skill/timeoutMs/turnBudget/outputSchema/output`，没有 `model`。模型完全由 pi-subagents 的解析链决定，配置写在 **pi-subagents 的 settings**，而不是 package 文件里：
+pi-x-matt 不参与选模型：dispatcher 下发的 lane item 只包含 `key/agent/task/context/skill/timeoutMs/outputSchema/output`，没有 `model`。0.80.0 为内置 `parallel/tasks/chain` 新增的逐子任务 `cwd/model` 不改变本 package 的 scripted workflow；所有 child 仍使用目标项目 root，模型仍由 pi-subagents 的解析链决定，配置写在 **pi-subagents 的 settings**，而不是 package 文件里：
 
 ```text
 <项目>/.pi/settings.json      ← 优先
@@ -233,9 +233,9 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 ## 已验证行为
 
-以下冒烟分两类：升级到 0.78.0 并重启 Pi 后实跑的真实子代理冒烟，以及旧版开发阶段的手工运行。仓库内可复现的是 registry、dispatcher、权限与 gate，以及针对已安装 `0.79.1` 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。
+以下冒烟分两类：升级到 0.80.0 并重启 Pi 后实跑的真实子代理冒烟，以及旧版开发阶段的手工运行。仓库内可复现的是 registry、dispatcher、权限与 gate，以及针对已安装 `0.80.0` 的脚本 sandbox、resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。0.80.0 直接由 completion notice 唤醒空闲父会话，不再额外插入唤醒消息；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
 
-- Research 单 lane 异步冒烟（0.78.0 + Pi 1.2.0，重启后实跑；0.79.1 尚未重跑真实冒烟）：workflow `state=complete`、lane `ok=true`，真实 child 加载私有 `research-executor`，调用 `web_search`/`web_fetch` 完成契约核验并生成 artifact。
+- Research 单 lane 异步冒烟（0.80.0 + Pi 1.4.0，重启后实跑）：workflow `state=complete`、research lane `ok=true`、`resolvedContext=fresh`；真实 child 加载私有 `research-executor`，已从 child session 核实 `web_search`、`web_fetch` 与 `structured_output` 均实际调用成功。异步完成通知已返回，父会话从 `status.json` 的完整 `workflow.value` 核验了两项 findings、官方来源与空 gaps。
 - Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化结果，且未修改项目文件。
 - TDD pipeline 真实冒烟：worker 加载 `codebase-design` + `tdd-executor`，取得一轮真实 RED/GREEN；随后两个 fresh reviewer 只读复核。registry、依赖闭包、唯一写者、lane gate、stage 顺序与前序证据传递另有聚焦测试覆盖。
 
