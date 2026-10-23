@@ -10,12 +10,11 @@
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
-pi install -l npm:@xl0/pi-lovely-codex
 pi install -l npm:pi-subagents@0.80.0
 pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.23
 ```
 
-`@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`；`@xl0/pi-lovely-codex` 为 `matt-worker` 提供 `apply_patch`。
+`@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
 
 安装或升级 pi-subagents 后退出并重新启动 Pi；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。未改变 runtime 版本、只修改本 package 的 skills/dispatcher 时，可使用：
 

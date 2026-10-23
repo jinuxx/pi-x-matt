@@ -402,6 +402,7 @@ test("all project agents are leaf-only and use the private skill path", async ()
   assert.match(worker, /tools:.*\bwrite\b/);
   assert.match(worker, /tools:.*\bapply_patch\b/);
   assert.match(worker, /mutationTools:\s*apply_patch/);
+  assert.match(worker, /`apply_patch`；该工具不可用时，改用 `edit` 或 `write`/);
   for (const name of ["matt-reader", "matt-researcher", "matt-reviewer"]) {
     const content = await readFile(join(ROOT, ".pi", "agents", `${name}.md`), "utf8");
     assert.doesNotMatch(content.match(/^tools:.*$/m)?.[0] ?? "", /\b(edit|write|apply_patch)\b/);
