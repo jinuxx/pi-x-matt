@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.24
+
+- `matt-worker` 现在声明写文件优先使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write` 完成同一改动。
+- README 不再指定 `apply_patch` 的提供方，也不再要求安装特定 provider 包；只声明工具用法与回退，目标项目自行提供或允许回退即可。
+
 ## 0.2.23
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.80.0`，Pi host peer 下限同步为 `>=1.2.0`；Node 下限仍为 `22.19.0`。升级 runtime 后必须退出并重新启动 Pi。
