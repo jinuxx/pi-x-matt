@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.25
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.83.1`，最小加载入口改为 `+bundle/index.js`；Pi/Node 下限仍为 `1.2.0`/`22.19.0`，bundled `undici` 升为 `8.12.3`。
+- 兼容测试从新的 public bundle export 定位 package root，再加载发布物中的脚本 sandbox、resource resolver 与 notification formatter；保留公共 bundled API 注册、一次性 TDD resource 与 fail-closed gate 的契约验证。
+- 正常结束却漏交 `structured_output` 由新版 runtime 在原 session/timeout 内补交一次，dispatcher 不再重复恢复；超时且没有结构化结果时仍保留单次 settlement-only resume。增加聚焦回归覆盖重复恢复拒绝与超时恢复。
+- README 说明新版默认自动续跑及其用户级 `autoResume: false` 配置位置，不把全局选项误写入 project settings；package 安装本身不改用户级配置。升级后必须完整重启 Pi。
+- 84/84 测试、registry 与 drift 检查通过；实际 npm tarball 已核验新版 bundle 入口、workflow worker 与许可证齐全，不包含项目缓存或用户级配置。
+- `0.83.1` + Pi `1.4.0` 重启并重新配置模型后的真实 Research 单 lane 冒烟通过：workflow `state=complete`、lane `ok=true`、fresh context；已从 runtime 与 child session 核验实际模型匹配 researcher override，`web_search`/`web_fetch`/`structured_output` 各成功调用一次，完整结构化结果有效且无额外结算恢复。
+
 ## 0.2.24
 
 - `matt-worker` 现在声明写文件优先使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write` 完成同一改动。

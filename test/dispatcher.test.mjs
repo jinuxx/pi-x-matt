@@ -578,14 +578,14 @@ test("dispatcher rejects failed children even when structured output passes the 
   }
 });
 
-test("dispatcher resumes a retained child once for structured-output settlement", async () => {
+test("dispatcher resumes a timed-out retained child once for structured-output settlement", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const execute = new AsyncFunction("runs", plan.rpcParams.script);
   const failures = [
-    { error: "Missing structured_output call; this step has outputSchema and must finish by calling structured_output." },
     { error: "Subagent timed out after 300000ms.", timedOut: true },
+    { error: "deadline reached", terminalOutcome: "timeout" },
   ];
 
   for (const failure of failures) {
@@ -618,6 +618,25 @@ test("dispatcher resumes a retained child once for structured-output settlement"
     assert.equal(results[0].key, "research");
     assert.equal(results[0].structuredOutput.summary, "done");
   }
+});
+
+test("dispatcher does not repeat the runtime's structured-output recovery", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "bounded research", ROOT);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction("runs", plan.rpcParams.script);
+  let calls = 0;
+  await assert.rejects(() => execute({ all: async () => {
+    calls += 1;
+    return [{
+      key: "research",
+      ok: false,
+      runId: "retained-run",
+      resumability: { state: "resumable" },
+      error: "Missing structured_output call; this step has outputSchema and must finish by calling structured_output.",
+    }];
+  } }), /Missing structured_output call/);
+  assert.equal(calls, 1, "the runtime already owns the one-shot missing-output follow-up");
 });
 
 test("dispatcher fails closed on malformed lanes and cross-agent grants", async () => {

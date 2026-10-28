@@ -11,13 +11,13 @@ import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const API_DIR = dirname(require.resolve("pi-subagents/workflow-resources"));
-const PACKAGE_ROOT = resolve(API_DIR, "../..");
+const PACKAGE_ROOT = resolve(dirname(require.resolve("pi-subagents/workflow-resources")), "..");
+const SOURCE_DIR = join(PACKAGE_ROOT, "src");
 // Exercise the pinned runtime's real parser/sandbox and notification formatter,
 // without launching child sessions, running host commands, or calling models.
-const { runWorkflowScript, validateWorkflowScript } = await import(pathToFileURL(join(API_DIR, "../workflows/scripted-workflow.js")));
-const { resolveWorkflowResource } = await import(pathToFileURL(join(API_DIR, "../workflows/workflow-resources.js")));
-const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(API_DIR, "../runs/background/notify.js")));
+const { runWorkflowScript, validateWorkflowScript } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/scripted-workflow.js")));
+const { resolveWorkflowResource } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/workflow-resources.js")));
+const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/notify.js")));
 
 function planFor(registry, name, evidence) {
   const workflow = registry.skills[name];
