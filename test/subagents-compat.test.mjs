@@ -18,6 +18,7 @@ const SOURCE_DIR = join(PACKAGE_ROOT, "src");
 const { runWorkflowScript, validateWorkflowScript } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/scripted-workflow.js")));
 const { resolveWorkflowResource } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/workflow-resources.js")));
 const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/notify.js")));
+const { createCapacityResilientJsonWriter } = await import(pathToFileURL(join(SOURCE_DIR, "shared/capacity-resilient-json.js")));
 
 function planFor(registry, name, evidence) {
   const workflow = registry.skills[name];
@@ -34,6 +35,184 @@ function successfulResult(plan, key) {
 }
 
 const unexpectedStatus = async () => { throw new Error("Unexpected status call"); };
+
+function reviewResult(plan, key, verdict) {
+  return {
+    ...successfulResult(plan, key),
+    structuredOutput: {
+      axis: key, verdict, summary: `${key}: ${verdict}`,
+      findings: verdict === "FAIL" ? [{
+        severity: "P1", title: `${key} finding`, evidence: `${key}: ${"evidence ".repeat(800)}`,
+        locations: [`${key}.mjs:1`], recommendation: `Fix ${key}`,
+      }] : [],
+      notes: verdict === "NO_EVIDENCE" ? ["Required evidence is unavailable"] : [],
+    },
+  };
+}
+
+function implementResult(plan) {
+  return {
+    ...successfulResult(plan, "implement"),
+    structuredOutput: {
+      status: "COMPLETE", summary: "Implemented", residualRisks: [], changedFiles: ["file.mjs"],
+      confirmedSeams: [{ name: "module", interface: "public", behaviors: ["works"] }],
+      cycles: [{ test: "works", redEvidence: "failed first", greenEvidence: "passed next", files: ["file.mjs"] }],
+      commands: [
+        { command: "test red", phase: "RED", exitCode: 1, testCount: 1, outcome: "failed as expected" },
+        { command: "test green", phase: "GREEN", exitCode: 0, testCount: 1, outcome: "passed" },
+      ],
+    },
+  };
+}
+
+// The real sandbox drives onEmit; the adapter uses the pinned async executor's
+// status projection and atomic writer. Never recover from partial.children here:
+// the failure checkpoint must already be on disk when the sandbox rejects.
+async function withPersistedWorkflow(plan, launch, inspect) {
+  const directory = await mkdtemp(join(tmpdir(), "pi-matt-workflow-status-"));
+  const statusPath = join(directory, "status.json");
+  const writer = createCapacityResilientJsonWriter();
+  let status = { runId: "test-workflow", state: "running", workflow: { emits: [] } };
+  const calls = [];
+  let failure;
+  try {
+    writer.write(statusPath, status);
+    try {
+      const result = await runWorkflowScript({
+        script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+        launch: async key => { calls.push(key); return launch(key); },
+        host: async key => {
+          calls.push(key);
+          return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
+            stdout: "", stderr: "", outputPath: "/tmp/mock-host.log", durationMs: 1 };
+        },
+        onEmit: emits => {
+          status.workflow = { ...status.workflow, emits };
+          writer.write(statusPath, status);
+        },
+      });
+      status = { ...status, state: "complete", workflow: { ...status.workflow, value: result.value } };
+    } catch (error) {
+      failure = error;
+      const published = JSON.parse(await readFile(statusPath, "utf8"));
+      assert.deepEqual(published.workflow.emits, error.partial.emits);
+      assert.ok(published.workflow.emits.some(value => value.type === "pi-x-matt.stage-results"),
+        `complete stage results must be persisted before the gate throws: ${error.message}`);
+      status = { ...published, state: "failed", error: error.message };
+    }
+    writer.write(statusPath, status);
+    // Consume only the documented status.json source, not the in-memory emits.
+    const persisted = JSON.parse(await readFile(statusPath, "utf8"));
+    const checkpoint = persisted.workflow.emits.findLast(value => value.type === "pi-x-matt.stage-results");
+    assert.equal(checkpoint.version, 1);
+    assert.equal(checkpoint.workflow, "matt-tdd");
+    const results = persisted.state === "complete" ? persisted.workflow.value : checkpoint.results;
+    await inspect({ persisted, checkpoint, results, calls, failure });
+  } finally {
+    writer.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test("TDD PASS remains readable from persisted workflow.value", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
+  await withPersistedWorkflow(plan,
+    key => key === "implement" ? implementResult(plan) : reviewResult(plan, key, "PASS"),
+    ({ persisted, checkpoint, results, calls, failure }) => {
+      assert.equal(failure, undefined);
+      assert.equal(persisted.state, "complete");
+      assert.equal(checkpoint.stage, 2);
+      assert.deepEqual(results, persisted.workflow.value);
+      assert.deepEqual(results, checkpoint.results);
+      assert.deepEqual(results.map(result => result.key), ["implement", "standards", "spec"]);
+      assert.deepEqual(calls, ["implement", "review-evidence", "standards", "spec"]);
+    });
+});
+
+test("each reviewer FAIL or NO_EVIDENCE fails closed with both full results persisted", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md" };
+  const plan = planFor(registry, "matt-tdd", evidence);
+  for (const axis of ["standards", "spec"]) {
+    for (const verdict of ["FAIL", "NO_EVIDENCE"]) {
+      const expected = plan.lanes.map(({ key }) => key === "implement"
+        ? implementResult(plan) : reviewResult(plan, key, key === axis ? verdict : "PASS"));
+      await withPersistedWorkflow(plan, key => expected.find(result => result.key === key),
+        ({ persisted, checkpoint, results, failure, calls }) => {
+          assert.match(failure.message, new RegExp(`${axis}\\.verdict`));
+          assert.equal(persisted.state, "failed");
+          assert.equal(Object.hasOwn(persisted.workflow, "value"), false);
+          assert.equal(checkpoint.stage, 2);
+          assert.deepEqual(results.map(result => result.structuredOutput), expected.map(result => result.structuredOutput));
+          assert.ok(results.slice(1).every(result => result.artifactPaths.includes(evidence.path)));
+          assert.deepEqual(calls, ["implement", "review-evidence", "standards", "spec"], "no automatic rerun");
+        });
+    }
+  }
+});
+
+test("both failing review axes retain all findings, not just the first gate error", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = planFor(registry, "matt-tdd");
+  await withPersistedWorkflow(plan,
+    key => key === "implement" ? implementResult(plan) : reviewResult(plan, key, "FAIL"),
+    ({ persisted, results, failure }) => {
+      assert.equal(persisted.state, "failed");
+      assert.match(failure.message, /standards\.verdict/);
+      for (const result of results.slice(1)) {
+        assert.deepEqual(result.structuredOutput, reviewResult(plan, result.key, "FAIL").structuredOutput);
+        assert.ok(result.structuredOutput.findings[0].evidence.length > 5000);
+      }
+    });
+});
+
+test("blocked or missing implement results persist but cannot launch evidence or review", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
+  for (const missing of [false, true]) {
+    const implement = implementResult(plan);
+    if (missing) delete implement.structuredOutput;
+    else implement.structuredOutput.status = "BLOCKED";
+    await withPersistedWorkflow(plan, () => implement, ({ persisted, checkpoint, results, failure, calls }) => {
+      assert.equal(persisted.state, "failed");
+      assert.match(failure.message, missing ? /without valid structuredOutput/ : /implement\.status/);
+      assert.equal(checkpoint.stage, 1);
+      assert.deepEqual(results, [implement]);
+      assert.deepEqual(calls, ["implement"]);
+    });
+  }
+});
+
+test("execution and invalid-output failures remain distinct from valid review verdicts on disk", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = planFor(registry, "matt-tdd");
+  const cases = [
+    { ok: false, error: "provider failed after structured_output", structuredOutput: reviewResult(plan, "spec", "FAIL").structuredOutput },
+    { ok: true },
+    { ok: false, error: "Structured output validation failed: invalid verdict" },
+  ];
+  for (const result of cases) {
+    await withPersistedWorkflow(plan,
+      key => key === "implement" ? implementResult(plan)
+        : key === "standards" ? reviewResult(plan, key, "FAIL")
+          : { key, output: "", artifactPaths: [], ...result },
+      ({ persisted, results, calls }) => {
+        assert.equal(persisted.state, "failed");
+        // The first gate error is not an aggregate verdict: inspect every lane.
+        const standards = results.find(result => result.key === "standards");
+        assert.equal(standards.ok, true);
+        assert.equal(standards.structuredOutput.verdict, "FAIL");
+        assert.deepEqual(standards.structuredOutput.findings, reviewResult(plan, "standards", "FAIL").structuredOutput.findings);
+        const spec = results.find(result => result.key === "spec");
+        assert.equal(spec.ok, result.ok);
+        assert.deepEqual(spec.structuredOutput, result.structuredOutput);
+        assert.equal(spec.error, result.error);
+        assert.ok(spec.ok !== true || !spec.structuredOutput, "not a valid review rejection");
+        assert.deepEqual(calls, ["implement", "standards", "spec"]);
+      });
+  }
+});
 
 test("project filter selects the installed npm extension and matches the bundled version", async () => {
   const manifest = JSON.parse(await readFile(join(PACKAGE_ROOT, "package.json"), "utf8"));

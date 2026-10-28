@@ -39,14 +39,14 @@ Dispatcher 只在无法确认用户显式发起实现时才拦截：本 session 
 1. `implement`：唯一 `matt-worker` 加载 `codebase-design` 与 `tdd-executor`，一次只做一个 vertical slice；每轮先取得真实 RED，再写最小实现取得 GREEN。
 2. 只有 `implement.ok === true`、`implement.structuredOutput.status === "COMPLETE"` 且已提供非空 seams、cycles、changed files 与 commands 时，workflow 才通过受信任的 host step 独立采集完整 Git Review Evidence Pack；采集失败或 HEAD/工作区漂移则停止，不启动 reviewer。结构化命令记录附带 phase、exitCode、testCount/outcome，明确是 worker-reported 过程证据，不是独立验证。
 3. `standards` 与 `spec`：两个 fresh-context、只读 reviewer 并行消费同一个 Pack 与各自适用条款，独立判断最终变化，不重新发现上下文。
-4. 两个 reviewer 都必须返回 `PASS`；任一 `FAIL`/`NO_EVIDENCE` 会触发 lane gate，使整个 workflow fail closed。
+4. 每个阶段在校验与 gate 前将全部已结算结果发布到 `status.json → workflow.emits` 的带标识快照。两个 reviewer 都必须返回 `PASS`；任一 `FAIL`/`NO_EVIDENCE` 仍触发 lane gate，使整个 workflow fail closed，快照不改变失败终态。
 
 上游方法把 refactor 放在 review 阶段，而不是 red→green 循环内。不要让 worker 在测试刚变绿后顺手扩大重构范围；需要重构时，根据 review finding 由父会话取得授权后再启动下一次受限实现。
 
 ## 汇总
 
 1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON，再只消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`。
-2. 任一 lane 失败、缺失或 schema 不合法时，整个工作流失败；不得回退到普通 prose。
+2. 区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效；失败 workflow 按契约读取最新阶段快照，不要求异常分支存在 `workflow.value`。检查所有已返回 lane，保留两个轴的完整结果；不得回退到普通 prose。
 3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令。
-4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL` 时，不宣称任务完成；先报告 finding 并等待用户决定是否进入修复循环。
+4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口，并等待用户决定是否进入修复循环，不自动重跑实现。
 5. 即使 reviewer 均通过，也由父会话核对 Review Evidence Pack 与当前 HEAD、status、文件 hash，检查最终 diff，确认没有越过批准 seams、范围或既有改动。Pack 过期不得沿用 PASS。

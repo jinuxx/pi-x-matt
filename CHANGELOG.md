@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.26
+
+- Dispatcher 在每阶段 gate 校验前通过 runtime `emit(...)` 发布完整累积结果到 `status.json → workflow.emits`；两个 reviewer 同时不通过时仍保留两轴全部 findings，workflow 继续 fail closed。
+- 同步父流程读取契约：成功仍读取 `workflow.value`，失败读取最后一个带版本与 workflow 标识的阶段快照；区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效，不从预览、prose、receipt 或旧 transcript 拼装结果，不新增实现重跑。
+- 增加真实 sandbox 与原子落盘读取回归，覆盖全 PASS、任一 reviewer `FAIL`/`NO_EVIDENCE`、双轴同时失败和 implement 早停；package filter 测试不再禁止合法的本地 `agentOverrides` 配置。
+- `0.83.1` + Pi `1.4.0` 重启后的真实双 reviewer 负例冒烟通过：workflow 保持失败且无 `workflow.value`，实际阶段快照完整保留 Standards 1 项、Spec 2 项 findings，schema 均有效，无自动重跑或仓库改动。
+- 89/89 测试、registry、drift 与发布包检查通过；个人 settings 与模型覆盖配置不纳入提交或安装包。
+
 ## 0.2.25
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.83.1`，最小加载入口改为 `+bundle/index.js`；Pi/Node 下限仍为 `1.2.0`/`22.19.0`，bundled `undici` 升为 `8.12.3`。

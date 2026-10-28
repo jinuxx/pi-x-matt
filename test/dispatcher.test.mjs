@@ -304,7 +304,7 @@ test("dispatcher builds two independent guarded review lanes", async () => {
   assert.match(plan.rpcParams.script, /spec\.verdict/);
 
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.script);
+  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
   await assert.rejects(
     () => execute({ all: async (lanes) => lanes.map((lane) => ({
       key: lane.key,
@@ -344,7 +344,7 @@ test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   assert.match(plan.rpcParams.script, /前序阶段结构化结果/);
 
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.script);
+  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
   let calls = 0;
   await assert.rejects(
     () => execute({ all: async () => {
@@ -459,7 +459,10 @@ test("TDD host evidence is captured once after implement and before both reviewe
   const results = await execute(runs, value => emitted.push(value));
   assert.ok(results.slice(1).every(result => result.artifactPaths.includes(evidence.path)));
   assert.deepEqual(order, ["implement", "review-evidence", "standards,spec"]);
-  assert.deepEqual(emitted, [{ reviewEvidencePath: evidence.path }]);
+  assert.deepEqual(emitted.filter(value => value.type !== "pi-x-matt.stage-results"), [{ reviewEvidencePath: evidence.path }]);
+  const snapshots = emitted.filter(value => value.type === "pi-x-matt.stage-results");
+  assert.deepEqual(snapshots.map(value => value.stage), [1, 2]);
+  assert.deepEqual(snapshots.at(-1).results, results);
   order.length = 0;
   await assert.rejects(() => execute({ ...runs, host: async () => { throw new Error("capture failed"); } }, () => {}), /capture failed/);
   assert.deepEqual(order, ["implement"], "no reviewer can launch without current Git evidence");
@@ -505,7 +508,7 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.script);
+  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
 
   await assert.rejects(
     () => execute({ all: async () => [] }),
@@ -559,7 +562,7 @@ test("dispatcher rejects failed children even when structured output passes the 
     const workflow = registry.skills[name];
     const laneTasks = Object.fromEntries(workflow.workflow.lanes.map((lane) => [lane.key, "Bounded task"]));
     const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks);
-    const execute = new AsyncFunction("runs", plan.rpcParams.script);
+    const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
     for (const ok of [false, undefined]) {
       let calls = 0;
       await assert.rejects(() => execute({ all: async (items) => {
@@ -582,7 +585,7 @@ test("dispatcher resumes a timed-out retained child once for structured-output s
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.script);
+  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
   const failures = [
     { error: "Subagent timed out after 300000ms.", timedOut: true },
     { error: "deadline reached", terminalOutcome: "timeout" },
@@ -624,7 +627,7 @@ test("dispatcher does not repeat the runtime's structured-output recovery", asyn
   const registry = await loadCurrentRegistry(ROOT);
   const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "bounded research", ROOT);
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", plan.rpcParams.script);
+  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
   let calls = 0;
   await assert.rejects(() => execute({ all: async () => {
     calls += 1;
