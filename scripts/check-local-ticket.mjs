@@ -27,6 +27,10 @@ function metadata(content, field) {
   return undefined;
 }
 
+function isOutsideWork(pathFromRoot) {
+  return !pathFromRoot.startsWith(`.x-matt/work${sep}`);
+}
+
 function isShippedPath(pathFromRoot) {
   return (
     pathFromRoot === ".x-matt/work/shipped" ||
@@ -41,10 +45,7 @@ try {
     const root = process.cwd();
     const target = resolve(root, ticket);
     const pathFromRoot = relative(root, target);
-    const outsideRoot = pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`);
-    const outsideWork = !pathFromRoot.startsWith(`.x-matt/work${sep}`);
-
-    if (outsideRoot || outsideWork) {
+    if (isOutsideWork(pathFromRoot)) {
       result.errors.push("Ticket path must be under .x-matt/work");
     } else if (isShippedPath(pathFromRoot)) {
       result.errors.push(
@@ -54,11 +55,7 @@ try {
       const realRoot = await realpath(root);
       const realTarget = await realpath(target);
       const realPathFromRoot = relative(realRoot, realTarget);
-      const outsideRealRoot =
-        realPathFromRoot === ".." || realPathFromRoot.startsWith(`..${sep}`);
-      const outsideRealWork = !realPathFromRoot.startsWith(`.x-matt/work${sep}`);
-
-      if (outsideRealRoot || outsideRealWork) {
+      if (isOutsideWork(realPathFromRoot)) {
         result.errors.push("Ticket path must be under .x-matt/work");
       } else {
         const content = await readFile(realTarget, "utf8");
@@ -101,15 +98,10 @@ try {
 
             const blockerTarget = resolve(root, blockerReference);
             const blockerPathFromRoot = relative(root, blockerTarget);
-            const outsideBlockerRoot =
-              blockerPathFromRoot === ".." || blockerPathFromRoot.startsWith(`..${sep}`);
-            const outsideBlockerWork = !blockerPathFromRoot.startsWith(`.x-matt/work${sep}`);
-
             if (
               blockerReference === "" ||
               isAbsolute(blockerReference) ||
-              outsideBlockerRoot ||
-              outsideBlockerWork
+              isOutsideWork(blockerPathFromRoot)
             ) {
               result.errors.push(
                 `Blocker ${JSON.stringify(blockerReference)} must be a repository-relative path under .x-matt/work`,
@@ -126,14 +118,7 @@ try {
             try {
               const realBlockerTarget = await realpath(blockerTarget);
               const realBlockerPathFromRoot = relative(realRoot, realBlockerTarget);
-              const outsideRealBlockerRoot =
-                realBlockerPathFromRoot === ".." ||
-                realBlockerPathFromRoot.startsWith(`..${sep}`);
-              const outsideRealBlockerWork = !realBlockerPathFromRoot.startsWith(
-                `.x-matt/work${sep}`,
-              );
-
-              if (outsideRealBlockerRoot || outsideRealBlockerWork) {
+              if (isOutsideWork(realBlockerPathFromRoot)) {
                 result.errors.push(
                   `Blocker ${JSON.stringify(blockerReference)} must be a repository-relative path under .x-matt/work`,
                 );

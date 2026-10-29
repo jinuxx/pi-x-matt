@@ -6,7 +6,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { registerWorkflowResource } from "pi-subagents/workflow-resources";
-import { buildDispatchRequest, loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
+import { loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
+import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");

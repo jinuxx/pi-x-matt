@@ -237,7 +237,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.26");
+  assert.equal(manifest.version, "0.2.27");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -270,43 +270,15 @@ test("package manifest exposes namespaced resources", async () => {
   assert.ok(manifest.files.includes("child-tools"));
 });
 
-test("dispatcher keeps the package root in the extension", async () => {
+test("dispatcher extension binds the package root and session lifecycle to the runtime", async () => {
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
-  const runtime = await readFile(join(ROOT, "lib", "implementation-runtime.mjs"), "utf8");
   assert.match(extension, /const PACKAGE_ROOT = resolve\(dirname\(fileURLToPath\(import\.meta\.url\)\), "\.\.\/\.\.\/\.\."\)/);
   assert.match(extension, /createImplementationRuntime\(pi, PACKAGE_ROOT\)/);
-  assert.match(runtime, /loadCurrentRegistry\(packageRoot\)/);
   assert.match(extension, /registerWorkflowResource/);
-  assert.match(runtime, /const \{ script: _script, \.\.\.options \} = plan\.rpcParams/);
-  assert.match(runtime, /workflow: "pi-x-matt\.tdd"/);
-});
-
-test("project dispatcher defers pi-subagents RPC until turn_end", async () => {
-  const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
-  const runtime = await readFile(join(ROOT, "lib", "implementation-runtime.mjs"), "utf8");
-  assert.match(runtime, /const pending = \[\]/);
   assert.match(extension, /pi\.on\("turn_end", \(\) => runtime\.flush\(\)\)/);
-  assert.match(runtime, /pending\.push/);
-  assert.match(extension, /const PACKAGE_ROOT = resolve\(dirname\(fileURLToPath\(import\.meta\.url\)\), "\.\.\/\.\.\/\.\."\)/);
-  assert.match(runtime, /loadCurrentRegistry\(packageRoot\)/);
-  assert.match(runtime, /rpc\("spawn", dispatch\.rpcParams/);
-});
-
-test("project dispatcher requires runtime user authorization before queuing matt-tdd", async () => {
-  const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
-  const runtime = await readFile(join(ROOT, "lib", "implementation-runtime.mjs"), "utf8");
-  assert.match(runtime, /createDispatchAuthorization/);
-  assert.match(extension, /pi\.on\("input"/);
-  assert.match(runtime, /authorization\.observeInput\(event\.text, event\.source\)/);
-  assert.match(extension, /pi\.on\("session_start"/);
-  assert.match(runtime, /authorization\.start\(sessionId, entries/);
-  assert.match(runtime, /authorizeWorkflowDispatch\(workflow\.name, signal, ctx, authorization, scope, identity/);
-  assert.match(runtime, /authorization: authorizationReason/);
-  const authorizationIndex = runtime.indexOf("authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization");
-  const queueIndex = runtime.indexOf("pending.push");
-  assert.notEqual(authorizationIndex, -1);
-  assert.notEqual(queueIndex, -1);
-  assert.ok(authorizationIndex < queueIndex, "matt-tdd authorization must happen before the dispatch is queued");
+  assert.match(extension, /pi\.on\("input", event => runtime\.input\(event\)\)/);
+  assert.match(extension, /runtime\.start\(ctx, event\.reason\)/);
+  assert.match(extension, /runtime\.shutdown\(\)/);
 });
 
 test("repository tracker setup is executable and discoverable by Pi", async () => {
@@ -774,19 +746,11 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
   assert.match(readme, /同范围连续修复不重复入口确认/);
   assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.26/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.26/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.27/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.27/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
   assert.match(readme, /`matt-archive <feature-slug>`/);
   assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);
-});
-
-test("parent workflows require structured completion results", async () => {
-  for (const name of ["matt-research", "matt-prototype", "architecture-scan", "architecture-design", "matt-code-review", "matt-tdd"]) {
-    const content = await readFile(join(ROOT, ".pi", "skills", name, "SKILL.md"), "utf8");
-    assert.match(content, /structuredOutput/);
-    assert.match(content, /fail|失败/);
-  }
 });
 
 test("reviewers stay inside a bounded evidence envelope", async () => {

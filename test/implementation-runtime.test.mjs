@@ -44,7 +44,12 @@ async function fixture(run) {
     runtime = createImplementationRuntime(pi, ROOT, {
       rpc: async (method, params) => {
         assert.equal(method, "spawn");
-        const plan = runtime.resolve(params.args);
+        if (params.workflow) {
+          assert.equal(params.workflow, "pi-x-matt.tdd");
+          assert.equal("script" in params, false);
+          assert.deepEqual(Object.keys(params.args), ["dispatchId"]);
+        }
+        const plan = params.workflow ? runtime.resolve(params.args) : { script: params.script };
         assert.ok(plan.script, plan.error);
         const runId = `run-${launches.length}`, asyncDir = join(artifacts, runId);
         await mkdir(asyncDir);
@@ -113,9 +118,57 @@ async function fixture(run) {
   }
 }
 
+test("invalid dispatch input fails before authorization, evidence preparation or queueing", async () => {
+  await fixture(async f => {
+    await assert.rejects(() => f.runtime.dispatch(f.params, undefined,
+      { ...f.ctx, isProjectTrusted: () => false }), /untrusted project/);
+    const invalid = [
+      [{ ...f.params, task: " " }, /task must not be empty/],
+      [{ ...f.params, laneTasks: { implement: "implementation only" } }, /requires complete laneTasks/],
+      [{ ...f.params, laneTasks: { ...f.params.laneTasks, spec: " " } }, /spec must be a non-empty string/],
+      [{ ...f.params, laneTasks: { ...f.params.laneTasks, unknown: "task" } }, /unknown lane/],
+      [{ ...f.params, workflow: "matt-grilling" }, /not a parent orchestration workflow/],
+    ];
+    for (const [params, error] of invalid) {
+      await assert.rejects(() => f.runtime.dispatch(params, undefined, f.ctx), error);
+    }
+    assert.equal(f.prompts, 0);
+    assert.equal(f.runtime.plans.size, 0);
+    assert.equal(f.entries.length, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 0);
+  });
+});
+
+test("TDD cannot queue or launch without user authorization", async () => {
+  await fixture(async f => {
+    await assert.rejects(() => f.runtime.dispatch(f.params, undefined,
+      { ...f.ctx, hasUI: false }), /requires explicit user authorization/);
+    await assert.rejects(() => f.runtime.dispatch(f.params, undefined,
+      { ...f.ctx, ui: { confirm: async () => false } }), /not authorized by the user/);
+    assert.equal(f.runtime.plans.size, 0);
+    assert.equal(f.entries.some(entry => entry.customType === IMPLEMENTATION_ENTRY), false);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 0);
+  });
+});
+
+test("ordinary dispatch queues a script without authorization and launches only on flush", async () => {
+  await fixture(async f => {
+    const queued = await f.runtime.dispatch({ workflow: "matt-research", task: "research only" }, undefined, f.ctx);
+    assert.equal(queued.details.authorization, "not-required");
+    assert.equal(f.prompts, 0);
+    assert.equal(f.launches.length, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    assert.match(f.launches[0].script, /matt-researcher/);
+  });
+});
+
 test("host reload restores the exact grant and repair lineage without repeating authorization", async () => {
   await fixture(async f => {
     const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    assert.equal(f.launches.length, 0);
     await assert.rejects(() => f.runtime.dispatch(f.params, undefined, f.ctx), /still active/);
     await f.runtime.flush();
     const first = await f.settle({ fail: true });
@@ -128,6 +181,12 @@ test("host reload restores the exact grant and repair lineage without repeating 
         callPath: ["public -> parser"], examples: ["null rejects"] }],
     } }, undefined, f.ctx);
     assert.equal(repair.details.authorization, "reused-implement-grant");
+    assert.match(repair.details.lanes.find(lane => lane.key === "implement").task, /Root-cause repair contract/);
+    const standardsTask = repair.details.lanes.find(lane => lane.key === "standards").task;
+    const specTask = repair.details.lanes.find(lane => lane.key === "spec").task;
+    assert.match(specTask, /"reference":"AC1"/);
+    assert.doesNotMatch(standardsTask, /"reference":"AC1"/);
+    assert.doesNotMatch(standardsTask + specTask, /Root-cause repair contract/);
     assert.equal(f.prompts, 1);
     await f.runtime.flush();
     const second = await f.settle({ value: "fixed\n" });

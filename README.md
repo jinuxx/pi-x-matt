@@ -11,7 +11,7 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.83.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.26
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.27
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -44,7 +44,7 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.26
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.27
 ```
 
 ## 架构
@@ -171,7 +171,11 @@ npm run pack:check     # 检查 package 文件清单
 
 生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema` 与正数 `timeoutMs`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口，宿主生命周期逻辑位于 `lib/implementation-runtime.mjs`。每次 dispatch 重新验证 registry 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`matt-tdd` 强制提供 implement/standards/spec 三项完整 `laneTasks`，`matt-code-review` 强制提供 standards/spec 两项，避免角色或轴专属证据泄漏。已验证 plan 在 `turn_end` 经进程内 RPC 异步启动；TDD 使用 session-scoped trusted resource，只授予包内 collector 固定命令，其他 workflow 仍使用无 host 权限脚本。普通 prose output 被禁用；结果数量、lane key、`ok === true`、结构化 schema 与双轴 `PASS` gate 不变，任何不满足均 fail closed。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口，宿主生命周期逻辑位于 `lib/implementation-runtime.mjs`。每次 dispatch 由 `buildRegistry` 校验 package 源文件、路径、digest 和路由，并将生成结果与磁盘 registry 逐字比较；只使用重新生成的对象，不按缓存中的路径读取文件。缓存被篡改或过期时拒绝调度，提示运行 `npm run registry`。
+
+输入校验与脚本生成分两步：授权前校验任务、计算 leaf 闭包并验证 agent 绑定；TDD 的授权、证据与修复信息齐备后才生成一次脚本。`matt-tdd` 强制提供 implement/standards/spec 三项完整 `laneTasks`，`matt-code-review` 强制提供 standards/spec 两项，避免角色或轴专属证据泄漏。
+
+已验证 plan 在 `turn_end` 经进程内 RPC 异步启动；TDD 使用 session-scoped trusted resource，只授予包内 collector 固定命令，其他 workflow 仍使用无 host 权限脚本。普通 prose output 被禁用；结果数量、lane key、`ok === true`、结构化 schema 与双轴 `PASS` gate 不变，任何不满足均 fail closed。
 
 TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时确认绑定到 ticket/hash、项目/branch/HEAD 和精确范围，由宿主 custom entry 保存并在 reload 时恢复。同范围连续修复不重复入口确认；新 ticket、实质范围/架构变化和破坏性决定仍需确认。授权最多 24 小时，对话等待最多 5 分钟；取消、过期或无可信来源且无 UI 时 fail closed。完整输入、修复、诊断、增量 review 与局部恢复见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
 
