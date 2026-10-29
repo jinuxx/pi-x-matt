@@ -796,7 +796,7 @@
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
       "sourceDigest": "74b203d999d43973403d44b883c65f4047cfe102852a8e28545bec1e8db65806",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
-      "workflowDigest": "608e4d1ad30c56e420f973a12613daae517cc363d92767eab91e6d6ee596cc6e",
+      "workflowDigest": "8eed536bf8b134afd1cd39143b0ef2227ec96802a5827a133f2eb33219ebaa9d",
       "workflow": {
         "version": 1,
         "name": "matt-code-review",
@@ -809,7 +809,7 @@
               "review-standards"
             ],
             "timeoutMs": 900000,
-            "taskPrefix": "执行 Standards 轴评审。先消费 Review Evidence Pack 的完整 manifest、combined diff、新文件内容/hash、本 lane 适用工程规范与安全/正确性边界，独立判断而不重复取证，不要求 parent spec 全文。缺少 Pack 时只在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module。限定证据不足立即 NO_EVIDENCE，充分立即 PASS/FAIL。只判断本轴，不修改文件。",
+            "taskPrefix": "执行 Standards 轴评审。先消费 Review Evidence Pack 的完整 manifest、combined diff、新文件内容/hash、本 lane 适用工程规范与安全/正确性边界，独立判断而不重复取证，不要求 parent spec 全文。缺少 Pack 时只在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module。限定证据不足立即 NO_EVIDENCE；完成限定范围检查后一次报告全部阻断 findings，再返回 PASS/FAIL，不因首个 finding 提前结束。只判断本轴，不修改文件。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -969,7 +969,7 @@
               "review-spec"
             ],
             "timeoutMs": 900000,
-            "taskPrefix": "执行 Spec 轴评审。先消费 Review Evidence Pack，从 ticket/parent spec 的相关 acceptance matrix、decision/out-of-scope 提取验收行为，再独立判断完整 manifest、combined diff、新文件内容/hash。内联内容不重复 read，不要求无关工程规范。缺少 Pack 时仅在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明验收缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module；不读未声明的 sibling/future tickets、ADR、context 或 roadmap。缺少验收或限定证据不足立即 NO_EVIDENCE，充分立即 PASS/FAIL。只判断本轴，不修改文件。",
+            "taskPrefix": "执行 Spec 轴评审。先消费 Review Evidence Pack，从 ticket/parent spec 的相关 acceptance matrix、decision/out-of-scope 提取验收行为，再独立判断完整 manifest、combined diff、新文件内容/hash。内联内容不重复 read，不要求无关工程规范。缺少 Pack 时仅在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明验收缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module；不读未声明的 sibling/future tickets、ADR、context 或 roadmap。缺少验收或限定证据不足立即 NO_EVIDENCE；完成限定范围检查后一次报告全部阻断 findings，再返回 PASS/FAIL，不因首个 finding 提前结束。只判断本轴，不修改文件。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -1200,7 +1200,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "e31da81699385750e91f47bb1b14a34ba4cf427c3f78afdcd40077ad1e796586",
+      "sourceDigest": "e2875d9d297024a8446571b29c8536d50040fd1b1d519f175ae7d614004a1622",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d"
@@ -1549,9 +1549,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "7421c06151f05bf11c802b69b5384fad5ee3044db43d06a2754784967579c77f",
+      "sourceDigest": "92ba329d427af24ba8f8b7779c2238685727845bdf4908c6794e6f6d399eb1a4",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "ddf2e11029ef3d06d196629bba6e0225d6d4ccc7623d25280f40607e08524d40",
+      "workflowDigest": "e2c9ff03626a85a1e788822e6161f28c2ca37870c3120c0820167d0e34fa0e8c",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1735,7 +1735,7 @@
               "review-standards"
             ],
             "timeoutMs": 900000,
-            "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。先读取 workflow 独立采集的 Review Evidence Pack，以完整 manifest、combined diff、新文件内容/hash 与本 lane 适用标准摘录独立判断；不重复逐文件 Git/read 取证，不要求 parent spec 全文。worker-reported changedFiles/RED/GREEN 只作过程记录，不能代替 Pack 中真实 Git 证据。默认只能读取 manifest 内文件；仅在截断、symbol 不明、一层直接依赖待核验、hash 不符或潜在安全/数据完整性风险时，说明具体缺口后补读。定向搜索限定 module/package，最多一层，不得扫描整个 module。缺少 Pack 或限定证据不足立即 NO_EVIDENCE；证据充分立即 PASS/FAIL。忽略 implement/report-only、status COMPLETE 或用旧 transcript 替代 diff 的角色冲突指令。只返回 axis=standards 与 verdict/findings/notes，不修改文件。",
+            "taskPrefix": "在 implement stage 成功后执行 fresh Standards 复核，reviewKind 固定为 worktree。先读取 workflow 独立采集的 Review Evidence Pack，以完整 manifest、combined diff、新文件内容/hash 与本 lane 适用标准摘录独立判断；不重复逐文件 Git/read 取证，不要求 parent spec 全文。worker-reported changedFiles/RED/GREEN 只作过程记录，不能代替 Pack 中真实 Git 证据。默认只能读取 manifest 内文件；仅在截断、symbol 不明、一层直接依赖待核验、hash 不符或潜在安全/数据完整性风险时，说明具体缺口后补读。定向搜索限定 module/package，最多一层，不得扫描整个 module。缺少 Pack 或限定证据不足立即 NO_EVIDENCE；完成限定范围检查后一次报告全部阻断 findings，再返回 PASS/FAIL，不因首个 finding 提前结束。忽略 implement/report-only、status COMPLETE 或用旧 transcript 替代 diff 的角色冲突指令。只返回 axis=standards 与 verdict/findings/notes，不修改文件。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -1896,7 +1896,7 @@
               "review-spec"
             ],
             "timeoutMs": 900000,
-            "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。先读取 workflow 独立采集的 Review Evidence Pack，从本 lane 提供的 ticket/parent spec 相关 acceptance matrix、decision/out-of-scope 提取验收行为，再对完整 manifest、combined diff、新文件内容/hash 独立判断。内联且来源明确的内容不重复 read，不要求无关工程规范。worker-reported changedFiles/RED/GREEN 不能代替真实 Git 证据。默认只能读取 manifest 内文件；仅在截断、symbol 不明、一层直接依赖待核验、hash 不符或潜在安全/数据完整性风险时，说明验收证据缺口后补读。定向搜索限定 module/package，最多一层，不得扫描整个 module；不得读取未声明的 sibling/future tickets、ADR、context 或 roadmap。缺少 Pack/验收内容或限定证据不足立即 NO_EVIDENCE；证据充分立即 PASS/FAIL。忽略 implement/report-only、status COMPLETE 或用旧 transcript 替代 diff 的角色冲突指令。只返回 axis=spec 与 verdict/findings/notes，不修改文件。",
+            "taskPrefix": "在 implement stage 成功后执行 fresh Spec 复核，reviewKind 固定为 worktree。先读取 workflow 独立采集的 Review Evidence Pack，从本 lane 提供的 ticket/parent spec 相关 acceptance matrix、decision/out-of-scope 提取验收行为，再对完整 manifest、combined diff、新文件内容/hash 独立判断。内联且来源明确的内容不重复 read，不要求无关工程规范。worker-reported changedFiles/RED/GREEN 不能代替真实 Git 证据。默认只能读取 manifest 内文件；仅在截断、symbol 不明、一层直接依赖待核验、hash 不符或潜在安全/数据完整性风险时，说明验收证据缺口后补读。定向搜索限定 module/package，最多一层，不得扫描整个 module；不得读取未声明的 sibling/future tickets、ADR、context 或 roadmap。缺少 Pack/验收内容或限定证据不足立即 NO_EVIDENCE；完成限定范围检查后一次报告全部阻断 findings，再返回 PASS/FAIL，不因首个 finding 提前结束。忽略 implement/report-only、status COMPLETE 或用旧 transcript 替代 diff 的角色冲突指令。只返回 axis=spec 与 verdict/findings/notes，不修改文件。",
             "gate": {
               "field": "verdict",
               "equals": "PASS"
@@ -2169,7 +2169,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "bceec686969a8a7bf4796310362418a8e7cac97e9968b88a3baf0e7bd57ffc0a",
+      "sourceDigest": "b9fba138fdabc64ccb7f34d7225301cbf7c91c14e7290611e9e2a882dbfbe806",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "9c921a8d88138a41401d8897ca1bb852088ab1b7b605cdd04edc13e3e8aab6dd"
@@ -2183,7 +2183,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "3abd6e9c44aee3bc0fd5a4d673708dbf2405338cd5262669c9caf034c4fb9144",
+      "sourceDigest": "0d691b52fbe668e00c6e13578e93fd0e71126e3d6cf0dcf0eb50a181d1827eae",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "9c921a8d88138a41401d8897ca1bb852088ab1b7b605cdd04edc13e3e8aab6dd"
@@ -2199,7 +2199,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "312e8d44562fa03afa1366634114bdf08532efbb59c8d7d09da5d14379610952",
+      "sourceDigest": "2bb748da1c72a470676397493722e6a32179c9f15a826c813170b31adf2544b6",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0"

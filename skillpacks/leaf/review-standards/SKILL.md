@@ -32,7 +32,7 @@ metadata:
 
 只报告由以下至少一种证据支撑的问题：明确规则冲突、真实代码路径、可复现失败、测试缺口导致的可达回归，或具体 diff hunk。每项给出 P0/P1/P2、位置、证据和最小修复。
 
-限定证据集足以证明问题时立即返回 `FAIL`；完成限定检查且没有 finding 时返回 `PASS`；限定证据不足时立即返回 `NO_EVIDENCE`。`NO_EVIDENCE` 是诚实的停止结果，不得为了制造 `PASS` 扩大文件范围、扫描目录或追踪更多调用层级。
+完成限定范围内的检查后，一次报告全部有证据的阻断 findings 并返回 `FAIL`；不要发现第一项问题就提前结束，也不要把已可确认的问题留到下一轮。没有 finding 时返回 `PASS`；限定证据不足时返回 `NO_EVIDENCE`，在 notes 说明未完成检查与证据缺口。`NO_EVIDENCE` 是诚实的停止结果，不得为了制造 `PASS` 扩大文件范围、扫描目录或追踪更多调用层级。
 
 修复复核以 Pack 的上次已审 snapshotId、本次 snapshotId、获批 finding IDs 与宿主增量为边界。未变化且无依赖影响的内容不重新裁决；原问题未解决、修复回归及新证实的安全/完整性问题仍可阻断。每项必须提供 `id`、稳定 `rootCauseId`、`basis.kind=standard|safety|integrity` 与精确 `reference`、`expected`、`actual`、代码路径/复现 evidence；`classification=original|regression|independent`，前两者用 `relatedFindingIds` 引用获批的 `standards:<id>`，无引用时不得声称原问题或回归。`affectedBy` 列出造成一层依赖影响的本轮变化路径，且在 evidence 解释影响链，否则为空。非阻断建议只进 notes，不以 severity 代替证据。
 

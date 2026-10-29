@@ -54,12 +54,12 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "pi_matt_dispatch",
     label: "Pi Matt Dispatch",
-    description: "Validate and asynchronously dispatch registered least-privilege workflows. matt-tdd requires a bounded implementation envelope; repeated repairs/recovery reference host-owned dispatch IDs.",
+    description: "Validate and asynchronously dispatch registered least-privilege workflows. matt-tdd repair resumes only the writer; review separately dispatches both reviewers. Follow-ups reference host-owned dispatch IDs.",
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
       "matt-tdd and matt-code-review require complete laneTasks; never cross writer/reviewer or Standards/Spec instructions.",
-      "For matt-tdd provide implementation. Reuse its exact approved scope for continuous repairs; use repair/recovery, never redispatch initial implementation. DIAGNOSIS_REQUIRED stops patch dispatch.",
+      "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. Pending review is not delivery approval. Use recovery only for failed reviewers. DIAGNOSIS_REQUIRED stops patch dispatch.",
     ],
     parameters: Type.Object({
       workflow: text(),
@@ -88,6 +88,9 @@ export default function (pi: ExtensionAPI) {
             content: Type.String({ minLength: 1, description: "Inline reproduction test/fixture content; never a trusted path, cwd or snapshot claim." }),
           }), { minItems: 1, description: "Host writes these only to implementation.diagnosticFiles inside the reviewed-state isolation." })),
         })),
+      })),
+      review: Type.Optional(Type.Object({
+        dispatchId: Type.String({ minLength: 1, description: "Latest completed repair dispatch. Review its pinned cumulative increment with both axes, without running the writer." }),
       })),
       recovery: Type.Optional(Type.Object({
         dispatchId: text(),

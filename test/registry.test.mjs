@@ -282,7 +282,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.27");
+  assert.equal(manifest.version, "0.2.28");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -792,8 +792,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
   assert.match(readme, /同范围连续修复不重复入口确认/);
   assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.27/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.27/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.28/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.28/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
   assert.match(readme, /`matt-archive <feature-slug>`/);
   assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);
@@ -851,6 +851,11 @@ test("reviewers stay inside a bounded evidence envelope", async () => {
   assert.ok(tddReviewers.every((lane) => /旧 transcript 替代 diff/.test(lane.taskPrefix)));
   assert.ok(tddReviewers.every((lane) => /Review Evidence Pack/.test(lane.taskPrefix)));
   assert.match(tddReviewers.find((lane) => lane.key === "spec").taskPrefix, /来源明确的内容不重复 read/);
+  for (const text of [standardsSkill, specSkill,
+    ...tddReviewers.map(lane => lane.taskPrefix), ...reviewWorkflow.lanes.map(lane => lane.taskPrefix)]) {
+    assert.match(text, /一次报告全部/);
+    assert.doesNotMatch(text, /证明问题时立即返回|充分立即 PASS\/FAIL/);
+  }
   for (const text of [standardsSkill, specSkill, ...tddReviewers.map(lane => lane.taskPrefix)]) {
     assert.doesNotMatch(text, /首个工具步骤必须 read 当前 ticket|tracked.*逐文件使用|不要使用无 `path`/);
     assert.match(text, /截断/);

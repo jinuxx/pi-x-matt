@@ -11,7 +11,7 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.83.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.27
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.28
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -44,7 +44,7 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.27
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.28
 ```
 
 ## 架构
@@ -64,7 +64,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.27
   → 父会话读取 .pi/skills/<workflow>/SKILL.md
   → pi_matt_dispatch 校验 registry 与 workflow digest
   → 计算每个 lane 的 leaf 闭包
-  → 通过 pi-subagents RPC 异步启动一个或多个 fresh worker/reviewer/researcher
+  → 通过 pi-subagents RPC 异步启动 fresh worker/reviewer/researcher；同票修复 resume 原 writer
   → 子代理读取私有 leaf skill 并按结构化 schema 返回结果
   → 父会话核验并综合结果
 ```
@@ -175,7 +175,7 @@ npm run pack:check     # 检查 package 文件清单
 
 输入校验与脚本生成分两步：授权前校验任务、计算 leaf 闭包并验证 agent 绑定；TDD 的授权、证据与修复信息齐备后才生成一次脚本。`matt-tdd` 强制提供 implement/standards/spec 三项完整 `laneTasks`，`matt-code-review` 强制提供 standards/spec 两项，避免角色或轴专属证据泄漏。
 
-已验证 plan 在 `turn_end` 经进程内 RPC 异步启动；TDD 使用 session-scoped trusted resource，只授予包内 collector 固定命令，其他 workflow 仍使用无 host 权限脚本。普通 prose output 被禁用；结果数量、lane key、`ok === true`、结构化 schema 与双轴 `PASS` gate 不变，任何不满足均 fail closed。
+已验证 plan 在 `turn_end` 经进程内 RPC 异步启动；TDD 使用 session-scoped trusted resource，只授予包内 collector 固定命令，其他 workflow 仍使用无 host 权限脚本。普通 prose output 被禁用；结果数量、lane key、`ok === true`、结构化 schema 与最终双轴 `PASS` gate 不变，任何不满足均 fail closed。repair-only 成功只是待审候选，不是交付通过。
 
 TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时确认绑定到 ticket/hash、项目/branch/HEAD 和精确范围，由宿主 custom entry 保存并在 reload 时恢复。同范围连续修复不重复入口确认；新 ticket、实质范围/架构变化和破坏性决定仍需确认。授权最多 24 小时，对话等待最多 5 分钟；取消、过期或无可信来源且无 UI 时 fail closed。完整输入、修复、诊断、增量 review 与局部恢复见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
 
@@ -250,7 +250,9 @@ TDD 调度前，父会话按 [Context Pack 契约](.pi/skills/matt-tdd/context-p
 
 TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。显式 invocation 或运行时确认只授予一个限定范围；同范围修复和 reload 复用可信授权，无法核验时仍要求确认，取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
 
-`matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。review findings 按同一轮合并根因但保留两轴结论；已有连续修复授权覆盖时不重复询问，新增范围/决定才确认。聚焦修复使用结构化 `repair` 和宿主增量快照；同根因两次未解或相关回归先受限诊断，不机械开启第三轮补丁。仅执行失败的 reviewer 可有界 `recovery`，不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
+`matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。reviewer 完成限定范围检查后一次报告全部阻断 findings，不因首个问题提前返回。findings 按同一轮合并根因但保留两轴结论；已有连续修复授权覆盖时不重复询问，新增范围/决定才确认。
+
+修复与送审分开：结构化 `repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选证据，不自动启动双轴；不可恢复则停止，不暗中换 fresh writer。父会话核对实际改动、逐项 findings 与验证结果后，可继续同范围 repair，或显式 `review: {dispatchId: "<最新 repair>"}`。review 只启动 fresh 双轴，复用最新 implement 与 Evidence Pack，覆盖最近正式评审以来的**累计修复增量**，不重跑 writer、不重复取证。`reviewPending=true` 或 repair 的 `state=complete` 不表示双轴通过，不得提交或沿用旧 PASS。同根因两次修复后仍需继续或相关回归先受限诊断，不因推迟送审而重置计数。仅执行失败的 reviewer 可有界 `recovery`，不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
 
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。RPC 使用 inline `script`，TDD 使用 named `workflow`，两者不能同时发送。每条 lane 必须 `ok === true`，失败后保留的结构化结果不能通过 gate 或启动后续 stage。
 

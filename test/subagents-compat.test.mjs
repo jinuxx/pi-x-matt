@@ -182,6 +182,51 @@ test("each reviewer FAIL or NO_EVIDENCE fails closed with both full results pers
   }
 });
 
+test("writer-only repair and deferred review validate and execute in the native sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills["matt-tdd"];
+  const tasks = { implement: "Repair all approved findings", standards: "Standards only", spec: "Spec only" };
+  const evidence = { command: "trusted-collector", path: "/tmp/repair.md", controlled: true, claimCommand: "trusted-claim" };
+  const boundary = { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: ["spec:F1"] };
+  const repair = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
+    { repairOnly: true, resume: "retained-writer" });
+  assert.equal(validateWorkflowScript(repair.rpcParams.script).ok, true);
+  const calls = [];
+  const repaired = await runWorkflowScript({
+    script: repair.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key, params) => {
+      calls.push(key);
+      assert.equal(params.resume, "retained-writer");
+      for (const field of ["agent", "context", "skill", "outputSchema", "gate"]) assert.equal(field in params, false);
+      return implementResult(repair);
+    },
+    host: async key => {
+      calls.push(key);
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
+        stdout: JSON.stringify({ boundary }), stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 };
+    },
+  });
+  assert.deepEqual(calls, ["implement-claim", "implement", "review-evidence"]);
+  assert.deepEqual(repaired.value.map(row => row.key), ["implement"]);
+  assert.ok(repaired.emits.some(row => row.type === "pi-x-matt.review-pending"));
+  const review = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
+    { implementResult: repaired.value[0], boundary });
+  assert.deepEqual(review.hostCommands, []);
+  assert.equal(validateWorkflowScript(review.rpcParams.script).ok, true);
+  calls.length = 0;
+  const reviewed = await runWorkflowScript({
+    script: review.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key, params) => {
+      calls.push(key);
+      assert.equal(params.context, "fresh");
+      return reviewResult(review, key, "PASS");
+    },
+    host: async () => { throw new Error("Deferred review must not rerun writer or collector"); },
+  });
+  assert.deepEqual(calls, ["standards", "spec"]);
+  assert.deepEqual(reviewed.value.map(row => row.key), ["implement", "standards", "spec"]);
+});
+
 test("both failing review axes retain all findings, not just the first gate error", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = planFor(registry, "matt-tdd");

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.28
+
+- `matt-tdd` 解耦修复与正式送审：`repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选快照，父会话核对证据后选择继续修复或显式 `review`；后者只运行 fresh Standards/Spec，不重跑 writer 或重复取证。多次修复累计到最近正式评审基线，保留授权、精确范围、原 findings、根因计数与诊断门禁；待审成功不授权提交，不可恢复时停止而非暗中换 fresh writer。
+- Standards/Spec 完成限定范围检查后一次报告全部有证据的阻断项，移除发现首个问题即提前 FAIL 的指令；同步 parent/leaf、流程契约、registry 与针对连续修复、独立送审、候选漂移及原生 sandbox 的回归测试。
 - 新增手动 `matt-implement-spec` interaction parent：仅对已有 Local Markdown spec/tickets 在当前分支按依赖 frontier 串行应用 `matt-implement`，每票独立 TDD、授权、完整验证、双轴复核、提交与本地状态写回；失败暂停，不创建 worktree、不扩展 dispatcher 的单写者约束。
 - 全部 tickets 达到核验终态后，从原始 fixed point 到 HEAD 做一次整份 spec committed 双轴评审；续跑复核原始基线与实现提交 ancestry，不重复已完成票。最终 review 失败不自动开修复票或循环重评，不 push/PR，不改 parent spec 或自动归档。package manifest、registry、README 与授权/注册回归同步。
 - 上游快照从 `mattpocock/skills` `3cca18b`（v1.2.3）同步到 `a496f55`（v1.3.2），`vendor/UPSTREAM_SHA`、全部 `pi-upstream-sha` 与生成 registry 一并更新；30 个已移植来源的 drift 检查通过。
@@ -18,7 +22,7 @@
 - 诊断证据绑定原 dispatchId、已审 snapshotId/范围 hash、根因 IDs、命令、退出码、输出 hash 与测试 path/内容 hash；成功、失败与取消都清理宿主临时区，不联网安装依赖、不复制个人 ignored 资料，也不把该本机故障隔离称为安全 sandbox。无 `testFiles` 时保留原项目根诊断路径；30 秒、授权、repair lineage、唯一 writer 与 gate 不变。
 - 内联诊断正文只在宿主 owned 临时区用于取得 RED；`repair.diagnosis.isolation` 与 implement lane handoff 仅保存准确 path 与内容 sha256，不再复制原文。父流程必须在提交 `testFiles` 前脱敏并只用合成/已脱敏 fixture；凭据只经环境变量，不写入测试/fixture/输出。不新增自动 DLP/redactor，也不承诺识别任意 secret/PII 或从会话记录抹去已提交的工具输入。
 - 隔离诊断失败时不向持久化 trace 复制子进程输出，保留退出状态与输出摘要；非诊断文件的权限变化也被拒绝。准备失败与清理失败同时保留因果；不增加“原测试必须先 GREEN”门禁，原已失败的复现仍可使用。
-- README、Dispatch Lifecycle、diagnosing-bugs skill 与生成 registry 同步更新；131/131 测试、registry、upstream drift 与打包检查通过。
+- README、Dispatch Lifecycle、diagnosing-bugs skill 与生成 registry 同步更新；138/138 测试、registry、upstream drift 与打包检查通过。新增修复/送审流程已通过原生 sandbox 契约验证，尚未做真实模型返工链路实跑。
 
 ## 0.2.27
 

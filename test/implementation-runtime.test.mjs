@@ -67,16 +67,19 @@ async function fixture(run) {
     laneTasks: { implement: "implement parser", standards: "standards only", spec: "AC1 only" },
     implementation: { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] },
   };
-  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", findingOverride } = {}) => {
-    const launch = launches.at(-1), calls = [], emits = [];
+  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", findingOverride, workerOverride } = {}) => {
+    const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
     const runs = {
       all: async items => {
         calls.push(...items.map(item => item.key));
+        itemsSeen.push(...items);
         const results = [];
         for (const item of items) {
           if (item.key === "implement") {
             await writeFile(join(cwd, "parser.mjs"), value);
-            results.push({ key: "implement", ok: true, structuredOutput: worker });
+            results.push({ key: "implement", ok: true, agent: "matt-worker",
+              runId: `${launch.runId}-writer`, resumability: { state: "resumable" }, structuredOutput: worker,
+              ...workerOverride });
           } else if (item.key === "spec" && executionFailure) {
             results.push({ key: "spec", ok: false, error: "fetch failed" });
           } else results.push(review(item.key, item.key === "spec" && fail, findingOverride));
@@ -99,7 +102,7 @@ async function fixture(run) {
     }
     await writeFile(join(launch.asyncDir, "status.json"), JSON.stringify(status));
     await runtime.completion({ runId: launch.runId });
-    return { calls, status };
+    return { calls, status, itemsSeen };
   };
   try {
     await mkdir(join(cwd, ".pi"));
@@ -183,18 +186,164 @@ test("host reload restores the exact grant and repair lineage without repeating 
     } }, undefined, f.ctx);
     assert.equal(repair.details.authorization, "reused-implement-grant");
     assert.match(repair.details.lanes.find(lane => lane.key === "implement").task, /Root-cause repair contract/);
-    const standardsTask = repair.details.lanes.find(lane => lane.key === "standards").task;
-    const specTask = repair.details.lanes.find(lane => lane.key === "spec").task;
-    assert.match(specTask, /"reference":"AC1"/);
-    assert.doesNotMatch(standardsTask, /"reference":"AC1"/);
-    assert.doesNotMatch(standardsTask + specTask, /Root-cause repair contract/);
+    assert.equal(repair.details.reviewPending, true);
+    assert.deepEqual(repair.details.lanes.map(lane => lane.key), ["implement"]);
     assert.equal(f.prompts, 1);
     await f.runtime.flush();
     const second = await f.settle({ value: "fixed\n" });
     assert.equal(second.status.state, "complete");
+    assert.deepEqual(second.calls, ["claim", "implement", "evidence"]);
+    assert.equal(second.itemsSeen[0].resume, "run-0-writer");
+    for (const key of ["agent", "context", "skill", "outputSchema"]) assert.equal(key in second.itemsSeen[0], false);
+    assert.deepEqual(second.status.workflow.value.map(row => row.key), ["implement"]);
     const pack = JSON.parse(await readFile(f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data.evidence.snapshotPath, "utf8"));
     assert.deepEqual(pack.incremental.approvedFindingIds, ["spec:parse"]);
     assert.deepEqual(pack.incremental.changes.map(change => change.path), ["parser.mjs"]);
+    f.reload();
+    const reviewDispatch = await f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    assert.equal(reviewDispatch.details.reviewPending, false);
+    const standardsTask = reviewDispatch.details.lanes.find(lane => lane.key === "standards").task;
+    const specTask = reviewDispatch.details.lanes.find(lane => lane.key === "spec").task;
+    assert.match(specTask, /"reference":"AC1"/);
+    assert.doesNotMatch(standardsTask, /"reference":"AC1"/);
+    assert.doesNotMatch(standardsTask + specTask, /Root-cause repair contract/);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "complete");
+    assert.deepEqual(reviewed.status.workflow.value.map(row => row.key), ["implement", "standards", "spec"]);
+    assert.equal(f.prompts, 1);
+  });
+});
+
+const repairGroups = [{ id: "parser", findingIds: ["spec:parse"], contract: "validate first",
+  preserve: ["valid text"], validationOrder: "validate -> normalize -> parse",
+  callPath: ["public -> parser"], examples: ["null rejects"] }];
+
+test("several repairs precede one review, preserving cumulative evidence, latest writer and diagnosis counts", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    let previousId = initial.details.dispatchId;
+    for (const value of ["repair one\n", "repair two\n"]) {
+      const dispatch = await f.runtime.dispatch({ ...f.params, repair: {
+        previousDispatchId: previousId, groups: repairGroups,
+      } }, undefined, f.ctx);
+      await f.runtime.flush();
+      const run = await f.settle({ value });
+      assert.equal(run.status.state, "complete");
+      assert.deepEqual(run.calls, ["claim", "implement", "evidence"]);
+      assert.equal(run.itemsSeen[0].resume, `run-${f.launches.length - 2}-writer`);
+      assert.ok(run.status.workflow.emits.some(row => row.type === "pi-x-matt.review-pending"));
+      previousId = dispatch.details.dispatchId;
+      f.reload();
+    }
+    const latest = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const pack = JSON.parse(await readFile(latest.evidence.snapshotPath, "utf8"));
+    assert.equal(pack.incremental.changes[0].before.content, "patched\n");
+    assert.equal(pack.incremental.changes[0].after.content, "repair two\n");
+    assert.equal(latest.repair.counts.parser, 2);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: previousId, groups: repairGroups,
+    } }, undefined, f.ctx), /DIAGNOSIS_REQUIRED/);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: previousId, lanes: ["spec"] } }, undefined, f.ctx), /pending.*review/i);
+    await f.runtime.dispatch({ ...f.params, review: { dispatchId: previousId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle({ executionFailure: true });
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "failed");
+    const reviewId = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data.id;
+    await f.runtime.dispatch({ ...f.params, recovery: { dispatchId: reviewId, lanes: ["spec"] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.deepEqual((await f.settle()).calls, ["spec"]);
+  });
+});
+
+test("deferred review rejects missing preparation, stale references and drift instead of rerunning a writer", async () => {
+  await fixture(async f => {
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, review: { dispatchId: "invented" } },
+      undefined, f.ctx), /latest host dispatch/);
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: initial.details.dispatchId } }, undefined, f.ctx), /pending repair/i);
+    const repaired = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "fixed\n" });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: initial.details.dispatchId } }, undefined, f.ctx), /latest host dispatch/);
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "external change\n");
+    for (const control of [
+      { review: { dispatchId: repaired.details.dispatchId } },
+      { repair: { previousDispatchId: repaired.details.dispatchId, groups: repairGroups } },
+    ]) await assert.rejects(() => f.runtime.dispatch({ ...f.params, ...control }, undefined, f.ctx), /snapshot.*stale|snapshot.*match/i);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+  });
+});
+
+test("a rejected formal re-review repairs its latest candidate, not the original writer or old increment", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "first repair\n" });
+    const reviewDispatch = await f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true, findingOverride: { ...finding, relatedFindingIds: ["spec:parse"] } });
+    const next = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: reviewDispatch.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: "second repair\n" });
+    assert.equal(repaired.itemsSeen[0].resume, "run-1-writer");
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+    assert.equal(pack.incremental.changes[0].before.content, "first repair\n");
+    assert.equal(pack.incremental.changes[0].after.content, "second repair\n");
+    assert.equal(record.repair.counts.parser, 2);
+    assert.equal(record.reviewSourceId, reviewDispatch.details.dispatchId);
+    assert.equal(next.details.reviewPending, true);
+  });
+});
+
+test("missing retained writer fails closed; blocked repairs cannot become formal review", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true, workerOverride: { resumability: { state: "not-resumable" } } });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx), /Retained writer is unavailable/);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const blocked = await f.settle({ workerOverride: {
+      structuredOutput: { ...worker, status: "BLOCKED" },
+    } });
+    assert.equal(blocked.status.state, "failed");
+    assert.deepEqual(blocked.calls, ["claim", "implement"]);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /pending repair|implementation/i);
   });
 });
 

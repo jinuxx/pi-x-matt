@@ -26,4 +26,6 @@
 5. 不得从 `output`、`outputReference`、`outputArtifactPath`、文件扩展名、自然语言或 workflow receipt 重建结构化结果，也不从 `workflow-children.jsonl`、旧 transcript 或通知拼装结果。上述 `status.json` 字段是本项目所有 dispatcher workflow 的完整结果来源。
 6. 来源缺失、不可读或 JSON 无效，失败快照缺失/标识不符，或阶段结果不完整时 fail closed，报告准确的 workflow run ID、lane key 与路径；不得自动重派发、改变执行模式或回退到预览。已有的阶段结果可作诊断，但不授权继续执行或提交。
 
+`matt-tdd` 的 **repair-only** 是明确的阶段边界：工具 receipt 的 `reviewPending=true`，成功结果只含 implement，且 emits 含 `pi-x-matt.review-pending`。这是“修复完成、尚未评审”，不是完整 TDD 成功，也不是 reviewer 丢失；禁止提交或复用修复前 PASS。核对本次 writer 证据与实际改动后，父会话选择继续同范围 repair 或显式 `review`。review 结果复用最近 implement，并包含本次 fresh Standards/Spec；只有当前候选的两轴 PASS 才能进入最终验证。缺少 pending 标记或预期结果时仍 fail closed，不凭单 lane `COMPLETE` 猜测模式。
+
 超时 settlement 前后均保留 gate 前快照。恢复后的 lane 使用 `recoveryHistory` 保留原始失败；settlement 再失败时同时报告原 timeout 与恢复错误，不只报告最后的 fetch failed。`pi-x-matt.recovery` emit 记录恢复边界，不是成功结果来源。只有授权/快照仍有效且符合 [局部恢复契约](dispatch-contract.md) 时，显式恢复失败 reviewer；不重新启动 implement，也不以有效 FAIL 为执行故障重跑。

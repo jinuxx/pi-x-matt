@@ -8,7 +8,7 @@
       "agent": "matt-reviewer",
       "skills": ["review-standards"],
       "timeoutMs": 900000,
-      "taskPrefix": "执行 Standards 轴评审。先消费 Review Evidence Pack 的完整 manifest、combined diff、新文件内容/hash、本 lane 适用工程规范与安全/正确性边界，独立判断而不重复取证，不要求 parent spec 全文。缺少 Pack 时只在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module。限定证据不足立即 NO_EVIDENCE，充分立即 PASS/FAIL。只判断本轴，不修改文件。",
+      "taskPrefix": "执行 Standards 轴评审。先消费 Review Evidence Pack 的完整 manifest、combined diff、新文件内容/hash、本 lane 适用工程规范与安全/正确性边界，独立判断而不重复取证，不要求 parent spec 全文。缺少 Pack 时只在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module。限定证据不足立即 NO_EVIDENCE；完成限定范围检查后一次报告全部阻断 findings，再返回 PASS/FAIL，不因首个 finding 提前结束。只判断本轴，不修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",
@@ -58,7 +58,7 @@
       "agent": "matt-reviewer",
       "skills": ["review-spec"],
       "timeoutMs": 900000,
-      "taskPrefix": "执行 Spec 轴评审。先消费 Review Evidence Pack，从 ticket/parent spec 的相关 acceptance matrix、decision/out-of-scope 提取验收行为，再独立判断完整 manifest、combined diff、新文件内容/hash。内联内容不重复 read，不要求无关工程规范。缺少 Pack 时仅在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明验收缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module；不读未声明的 sibling/future tickets、ADR、context 或 roadmap。缺少验收或限定证据不足立即 NO_EVIDENCE，充分立即 PASS/FAIL。只判断本轴，不修改文件。",
+      "taskPrefix": "执行 Spec 轴评审。先消费 Review Evidence Pack，从 ticket/parent spec 的相关 acceptance matrix、decision/out-of-scope 提取验收行为，再独立判断完整 manifest、combined diff、新文件内容/hash。内联内容不重复 read，不要求无关工程规范。缺少 Pack 时仅在父任务给定 reviewKind 与精确范围内取证；允许一次完整未截断的 combined diff，不强制逐文件调用。worktree 不得用 ref...HEAD 作为唯一证据；untracked 获得全文，deleted 只读 diff，rename 核对 old/new；files 不调用 Git。默认只读 manifest，补读仅限截断、symbol 不明、一层直接依赖待核验、hash 不符或安全/数据完整性风险，先说明验收缺口再定向扩展一层。FFF 限定 module/package，禁止扫描整个 module；不读未声明的 sibling/future tickets、ADR、context 或 roadmap。缺少验收或限定证据不足立即 NO_EVIDENCE；完成限定范围检查后一次报告全部阻断 findings，再返回 PASS/FAIL，不因首个 finding 提前结束。只判断本轴，不修改文件。",
       "gate": { "field": "verdict", "equals": "PASS" },
       "outputSchema": {
         "type": "object",

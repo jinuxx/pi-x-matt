@@ -1,6 +1,6 @@
 # Implement dispatch lifecycle
 
-此契约由 dispatcher 的宿主状态强制执行，不以 task 中“用户已授权”等文字为依据。完整三项 `laneTasks` 的角色隔离和双轴 `PASS` gate 不变。
+此契约由 dispatcher 的宿主状态强制执行，不以 task 中“用户已授权”等文字为依据。完整三项 `laneTasks` 的角色隔离和最终双轴 `PASS` gate 不变；修复完成与正式评审通过是两个独立边界。
 
 ## 限定授权
 
@@ -24,9 +24,9 @@
 
 ## 修复而非重新实现
 
-保存工具返回的 `dispatchId`。同一 invocation 已有派发时，不能再次发送无 `repair/recovery` 的初始实现。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。
+保存工具返回的 `dispatchId`。同一 invocation 已有派发时，不能再次发送无 `repair/review/recovery` 的初始实现。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。
 
-两个 reviewer 结束后，父会话一次收集全部 findings，按真实共享根因分组，保留两个轴各自 verdict。只要仍在已批准的连续修复范围内，报告后直接聚焦修复，不再次询问相同范围。只有新增决定/权限/范围时才询问一次。
+两个 reviewer 完成限定检查后一次返回全部有证据的阻断项，不因首个 finding 提前结束。父会话一次收集两轴全部 findings，按真实共享根因分组，保留两个轴各自 verdict。只要仍在已批准的连续修复范围内，报告后直接聚焦修复，不再次询问相同范围。只有新增决定/权限/范围时才询问一次。
 
 ```json
 {
@@ -47,11 +47,23 @@
 
 finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重复、遗漏或通过改名清除已有根因计数。相同文件并不自动代表相同根因。父会话只合并根因，不合并 Standards/Spec verdict；无证据或越轴的报告属于 review contract failure，需要修复评审，而不是派发 writer。
 
-宿主将上次已审 `snapshotId` 与本次调度基线绑定，计算真正的文件增量，保存两端内容/hash、获批 finding IDs 和根因契约。基线过期或越过 `allowedFiles` 则停止。完整 worktree 证据仍保留，但不重新裁决未变化且无依赖影响的已审内容。
+`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer。仍提供完整三项 laneTasks，但此次只执行 implement。
+
+宿主将最新候选 `snapshotId` 与本次调度基线绑定；每次修复都必须从精确候选开始，且不能越过 `allowedFiles`。同时保存最近一次正式评审的来源，计算从该已审快照到本次候选的**累计修复增量**，保留两端内容/hash、原获批 finding IDs 与根因契约，不只计算最后一次补丁。正式复审仍不重新裁决未变化且无依赖影响的已审内容。
+
+修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
+
+候选准备好后，显式送审：
+
+```json
+{"review": {"dispatchId": "<最新已完成 repair 的 dispatchId>"}}
+```
+
+仍使用 `workflow=matt-tdd`、相同 implementation 和完整三项 laneTasks。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，只有二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
 
 ## 根因未收敛
 
-同一根因完成两次修复后仍不通过，第三次 writer 前触发 `DIAGNOSIS_REQUIRED`；修复引入的相关回归立即触发。网络失败、缺失结果与授权等待不算根因修复轮次。阈值只触发诊断，不自动放行，不限制测试数量。
+同一根因完成两次修复后仍需继续，第三次 writer 前触发 `DIAGNOSIS_REQUIRED`，无论两次修复之间是否正式送审；评审确认的修复相关回归立即触发。网络失败、缺失结果与授权等待不算根因修复轮次。阈值只触发诊断，不自动放行，不限制测试数量。诊断绑定最近候选快照；“已审 snapshot”在连续待审修复中指宿主已采集的最新修复候选，不表示 reviewer 已批准。
 
 在父会话执行 [diagnosing-bugs 的受限修复诊断](../matt-diagnosing-bugs/SKILL.md)：只使用当前 Pack、原始失败、共享路径和必要的一层依赖。最小化原始 repro，解释不变量、校验/归一化顺序和预测，不重新设计模块、不重新创建 ticket、不重新发起 implement invocation。
 

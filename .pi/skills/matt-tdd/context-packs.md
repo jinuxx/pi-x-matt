@@ -1,6 +1,6 @@
 # Implementation Context Pack / Review Evidence Pack
 
-“必须获得内容”不等于“必须由每条 lane 自己调用 read”。父会话负责预检与语义筛选，workflow 负责实现后的 Git 原始证据；worker 不编写供 reviewer 信任的 diff 摘要。fresh context 保留，默认不 fork 整段父会话。
+“必须获得内容”不等于“必须由每条 lane 自己调用 read”。父会话负责预检与语义筛选，workflow 负责实现后的 Git 原始证据；worker 不编写供 reviewer 信任的 diff 摘要。初次 writer 与 reviewer 使用 fresh context，同票修复 resume 最近 writer，默认不 fork 整段父会话。
 
 ## Implementation Context Pack（父会话在调度前提供）
 
@@ -51,15 +51,15 @@ Commands:
 
 worker 默认只读 manifest。只有 symbol 缺失、调用关系不一致、Pack 与工作区不符时，才说明具体缺口，执行一次路径限定的定向搜索，最多扩展一层直接依赖；仍不足则联系父会话，不重建整个 module 的上下文。授权或基线已失效时立即停止，不以定向搜索自行修复授权。
 
-修复 Pack 还必须包含 [Dispatch Lifecycle](dispatch-contract.md) 的结构化根因分组：获批 finding IDs、稳定根因 ID、不变量、输入校验/归一化顺序、共享调用路径及必要正反例/回归。同根因两轮未解或修复回归先诊断，不新增任意测试数量上限。
+修复 Pack 还必须包含 [Dispatch Lifecycle](dispatch-contract.md) 的结构化根因分组：获批 finding IDs、稳定根因 ID、不变量、输入校验/归一化顺序、共享调用路径及必要正反例/回归。继续修复时附最近候选基线、已完成修复与仍待验证项；不要让 retained writer 仅凭旧上下文猜测本轮任务。同根因两轮未解或修复回归先诊断，不新增任意测试数量上限。
 
 ## Review Evidence Pack（实现结束后、review 开始前）
 
-TDD dispatcher 在入队前保存真实 HEAD 与工作区快照；implement 通过 gate 后，受信任的 named workflow host step 调用包内 collector，在 OS temp 写只读 `review.md`，然后才并行启动两个 reviewer。采集失败、HEAD 漂移或采集中工作区变化会阻止 review。不得由 worker 提供或覆盖该证据文件。
+TDD dispatcher 在入队前保存真实 HEAD 与工作区快照；implement 通过 gate 后，受信任的 named workflow host step 调用包内 collector，在 OS temp 写只读 `review.md`。初次实现随后并行启动两个 reviewer；repair 只保留证据，父会话显式 review 时核对快照后复用，不重复采集。采集失败、HEAD 漂移或采集中工作区变化会阻止 review。不得由 worker 提供或覆盖该证据文件。
 
 Pack 由三部分组成：
 
-1. **运行时 Git 原始证据**：fixed point/current HEAD、git status、完整 manifest、完整 combined worktree diff、变化文件全文/hash、deleted 与 renamed old/new、调度前工作区快照。修复时附上次已审 snapshotId、本次 snapshotId、获批 finding IDs 和宿主计算的本轮增量（前后内容/hash），不把整个 HEAD diff 误当本轮新变化。文件内容和 diff 按真实行写入，过大时允许按 offset 补读，不静默截断。二进制或不可采集文件标记 `complete=false`，reviewer 必须补证或 `NO_EVIDENCE`。symlink 只记录 link 本身，不复制目标。
+1. **运行时 Git 原始证据**：fixed point/current HEAD、git status、完整 manifest、完整 combined worktree diff、变化文件全文/hash、deleted 与 renamed old/new、调度前工作区快照。修复时附最近正式已审 snapshotId、本次候选 snapshotId、获批 finding IDs 和宿主计算的累计修复增量（前后内容/hash），不把整个 HEAD diff 或仅最后一次补丁误当本次复审范围。文件内容和 diff 按真实行写入，过大时允许按 offset 补读，不静默截断。二进制或不可采集文件标记 `complete=false`，reviewer 必须补证或 `NO_EVIDENCE`。symlink 只记录 link 本身，不复制目标。
 2. **测试过程记录**：workflow 附加 `implement.structuredOutput` 中每轮 RED/GREEN/related-regression 命令、exitCode、testCount、outcome。这些明确标为 **worker-reported**，不是独立测试验证；数量不可得时为 null。父会话最终验证仍由父会话实际执行。若测试证据矛盾或不足，返回缺口，不能靠 writer 的 COMPLETE 宣称验证通过。
 3. **父会话的 lane-specific 条款**：`standards` 只接收适用工程规范、安全/正确性边界；`spec` 接收 ticket acceptance matrix 与 parent spec 相关条款。均附来源/hash，不要求把不相关文档全文复制给另一轴。
 

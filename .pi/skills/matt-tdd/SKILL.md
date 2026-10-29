@@ -29,24 +29,28 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `implementation`、连续修复的 `repair` 或失败 reviewer 的 `recovery`：完整遵循 [Dispatch Lifecycle](dispatch-contract.md)。保存宿主 dispatchId；不得以重复初始实现代替修复/恢复。
+- `implementation`、连续修复的 `repair`、独立送审的 `review` 或失败 reviewer 的 `recovery`：完整遵循 [Dispatch Lifecycle](dispatch-contract.md)。保存宿主 dispatchId；不得以重复初始实现代替修复/送审/恢复。
 - `task`: 只放三条 lane 都可安全读取的共享事实：需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、module/package 搜索边界和停止条件。不得把仅适用于 implement 的 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等指令放入共享 task。
 - `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换，不自动继承 `task`。`implement` 包含 Implementation Context Pack、RED/GREEN 与相关回归命令，明确完整测试套件/全量 build/最终验证由父会话执行、worker 不得运行。`standards` 只需共同证据边界、适用工程规范与安全/正确性边界；`spec` 只需共同边界、ticket acceptance matrix 与 parent spec 相关条款。两者先消费 workflow 生成的 Review Evidence Pack，额外读取仅限已说明的缺口、一层直接依赖；不得要求 `status COMPLETE` 或用旧 transcript 代替 diff。report-only、resume 或失败恢复也必须提供三项，不退回共享 task。
 
 Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。相同范围的连续修复复用授权，不重复询问入口或已经批准的 seams/范围；新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消、未响应或过期时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
 
-工作流按代码强制的阶段执行：
+初次实现按代码强制的阶段执行：
 
 1. `implement`：唯一 `matt-worker` 加载 `codebase-design` 与 `tdd-executor`，一次只做一个 vertical slice；每轮先取得真实 RED，再写最小实现取得 GREEN。
 2. 只有 `implement.ok === true`、`implement.structuredOutput.status === "COMPLETE"` 且已提供非空 seams、cycles、changed files 与 commands 时，workflow 才通过受信任的 host step 独立采集完整 Git Review Evidence Pack；采集失败或 HEAD/工作区漂移则停止，不启动 reviewer。结构化命令记录附带 phase、exitCode、testCount/outcome，明确是 worker-reported 过程证据，不是独立验证。
 3. `standards` 与 `spec`：两个 fresh-context、只读 reviewer 并行消费同一个 Pack 与各自适用条款，独立判断最终变化，不重新发现上下文。
 4. 每个阶段在校验与 gate 前将全部已结算结果发布到 `status.json → workflow.emits` 的带标识快照。两个 reviewer 都必须返回 `PASS`；任一 `FAIL`/`NO_EVIDENCE` 仍触发 lane gate，使整个 workflow fail closed，快照不改变失败终态。
 
+修复与正式评审分开调度：`repair` resume 最近的 writer，完成后只采集累计修复证据并返回 implement lane 与 `pi-x-matt.review-pending` 标记，不运行 stage 2。父会话先逐项核对 findings、真实 diff 与聚焦验证；需要继续同范围修复时再次 `repair`，准备好后才用 `review: {dispatchId: "<最新 repair>"}`。送审复用该 implement 结果与候选快照，仅运行 fresh 双轴，范围是最近正式评审以来的全部修复而非最后一轮补丁。三项 laneTasks、授权、快照/范围、根因诊断与最终双轴 PASS gate 不变；writer 不可恢复或候选过期时停止，不自动重新实现。
+
+reviewer 完成限定范围检查后一次报告全部有证据的阻断项，不在发现首个 finding 时提前返回 FAIL。保持证据边界；缺证据仍返回 NO_EVIDENCE，不能靠扩大扫描来追求穷尽。
+
 上游方法把 refactor 放在 review 阶段，而不是 red→green 循环内。不要让 worker 在测试刚变绿后顺手扩大重构范围；需要重构时，根据 review finding 由父会话取得授权后再启动下一次受限实现。
 
 ## 汇总
 
-1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON，再只消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`。
+1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON。初次实现/正式送审消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`；repair 只返回 implement，成功仍是待审候选，不能宣称 TDD 全流程完成或提交。
 2. 区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效；失败 workflow 按契约读取最新阶段快照，不要求异常分支存在 `workflow.value`。检查所有已返回 lane，保留两个轴的完整结果；不得回退到普通 prose。
 3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令；若 RED 靠临时改代码或 fixture 强制得到，要求提供对 pristine 副本的 `diff` 证明 mutation 确实落地，不采信未证明的 red。
 4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口。已有连续修复授权覆盖的真实 findings 按结构化根因契约聚焦修复，不再重复询问；新增决定/范围才询问。`NO_EVIDENCE`、执行失败或无效报告先有界恢复 reviewer，不重复 writer。同根因两轮未解或相关回归触发受限诊断，不机械开启下一轮补丁。
