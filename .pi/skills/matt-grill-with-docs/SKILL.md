@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: matt-grilling, matt-domain-modeling
   pi-upstream-path: skills/engineering/grill-with-docs/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Grill With Docs
@@ -35,7 +35,7 @@ metadata:
 2. 按 `matt-grilling` 协议一次询问当前 frontier 的 1–4 个决定，并为每项给出有依据的推荐答案。
 3. 用户回答后，明确区分新事实和用户决定。不要把 agent 推荐、现有代码或默认实践改写为用户决定。
 4. 按 `matt-domain-modeling` 规则检查每个答案：
-   - 新的 canonical term 一旦确定，立即更新 `.x-matt/context/` 下对应的 `CONTEXT.md`。
+   - 新的 canonical term 一旦确定，立即更新 `.x-matt/context/` 下对应的 `GLOSSARY.md`。
    - 与 glossary 或代码冲突时，先暴露冲突并留在 frontier。
    - 决定同时通过三项 ADR gate 时，向用户提议；取得同意后立即写入。
 5. 更新会话状态和 decision tree，重复直到 frontier 为空。

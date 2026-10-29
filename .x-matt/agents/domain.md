@@ -8,11 +8,13 @@
 
 按相关性读取：
 
-- `.x-matt/context/CONTEXT.md`
-- `.x-matt/context/CONTEXT-MAP.md`（若未来存在，则按 map 读取 `.x-matt/context/<context>/CONTEXT.md`）
+- `.x-matt/context/GLOSSARY.md`
+- `.x-matt/context/GLOSSARY-MAP.md`（若未来存在，则按 map 读取 `.x-matt/context/<context>/GLOSSARY.md`）
 - `.x-matt/adr/` 中与目标区域相关的 ADR；multi-context 时读取 `.x-matt/adr/<context>/`
 
 文件不存在时静默继续；不要为满足布局而创建空文件。`domain-modeling` 会在术语确定或决定通过 ADR gate 时按需创建。
+
+如果只存在 legacy `CONTEXT.md` / `CONTEXT-MAP.md`，可按旧名读取本轮所需内容，但必须提示用户运行 `matt-setup` 迁移到 `GLOSSARY` 名称；不要同时维护两套名称，也不要把旧名当作新建文件的默认路径。
 
 ## Single-context 布局
 
@@ -20,12 +22,12 @@
 .x-matt/
 ├── agents/
 ├── context/
-│   └── CONTEXT.md
+│   └── GLOSSARY.md
 ├── adr/
 └── work/
 ```
 
-`.x-matt/context/CONTEXT.md` 保存 canonical domain terms，不保存 spec、计划、测试或实现流水账。`.x-matt/adr/` 只保存难逆转、令人意外且存在真实备选方案的决定。若项目以后采用 multi-context，则增加 `.x-matt/context/CONTEXT-MAP.md`，各 context 分别使用 `.x-matt/context/<context>/CONTEXT.md` 和 `.x-matt/adr/<context>/`。
+`.x-matt/context/GLOSSARY.md` 保存 canonical domain terms，不保存 spec、计划、测试或实现流水账。`.x-matt/adr/` 只保存难逆转、令人意外且存在真实备选方案的决定。若项目以后采用 multi-context，则增加 `.x-matt/context/GLOSSARY-MAP.md`，各 context 分别使用 `.x-matt/context/<context>/GLOSSARY.md` 和 `.x-matt/adr/<context>/`。
 
 ## 使用规则
 

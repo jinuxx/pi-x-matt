@@ -9,7 +9,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: architecture-vocabulary-reader, architecture-deepening-reader
   pi-upstream-path: skills/engineering/codebase-design/DESIGN-IT-TWICE.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Architecture Interface Design
@@ -22,6 +22,6 @@ metadata:
 - `flexible`：支持已确认的多种 use cases 与 extension，但不加入假想需求。
 - `common-caller`：让最常见 caller 的默认路径最简单，并明确较少见路径的成本。
 
-返回：interface 名称；entries（name、params/inputs、result、invariants、ordering、errors）；一个 caller usage example；implementation 隐藏内容；dependency strategy 与真实 adapters；depth/locality 评估；trade-offs。使用 CONTEXT 领域词汇和共享 architecture 词汇。
+返回：interface 名称；entries（name、params/inputs、result、invariants、ordering、errors）；一个 caller usage example；implementation 隐藏内容；dependency strategy 与真实 adapters；depth/locality 评估；trade-offs。使用 GLOSSARY 领域词汇和共享 architecture 词汇。
 
 方案必须结构上不同于其他策略，不只是改名。一个 adapter 时不造 port；测试面必须是 interface，不暴露 private methods。证据不足时返回 `BLOCKED`，不要猜测。只通过运行时结构化输出回答。

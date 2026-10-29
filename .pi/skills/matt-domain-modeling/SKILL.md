@@ -7,7 +7,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/domain-modeling/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Domain Modeling
@@ -16,9 +16,9 @@ metadata:
 
 ## 定位上下文
 
-1. 先检查 `.x-matt/context/CONTEXT-MAP.md`、`.x-matt/context/CONTEXT.md` 和 `.x-matt/adr/`。
-2. 存在 `.x-matt/context/CONTEXT-MAP.md` 时按 map 定位 `.x-matt/context/<context>/CONTEXT.md`；无法判断归属时向用户确认。对应 ADR 位于 `.x-matt/adr/<context>/`。否则使用 `.x-matt/context/CONTEXT.md` 与 `.x-matt/adr/`。
-3. 文件和目录按需创建：首个项目术语确定时才创建对应 `CONTEXT.md`；首个符合条件且经用户同意的决定出现时才创建对应 ADR 目录。不得在 `.x-matt/` 外创建 Matt 管理的领域文档。
+1. 先检查 `.x-matt/context/GLOSSARY-MAP.md`、`.x-matt/context/GLOSSARY.md` 和 `.x-matt/adr/`。
+2. 存在 `.x-matt/context/GLOSSARY-MAP.md` 时按 map 定位 `.x-matt/context/<context>/GLOSSARY.md`；无法判断归属时向用户确认。对应 ADR 位于 `.x-matt/adr/<context>/`。否则使用 `.x-matt/context/GLOSSARY.md` 与 `.x-matt/adr/`。
+3. 文件和目录按需创建：首个项目术语确定时才创建对应 `GLOSSARY.md`；首个符合条件且经用户同意的决定出现时才创建对应 ADR 目录。不得在 `.x-matt/` 外创建 Matt 管理的领域文档。
 4. 业务项目这些文件均被忽略，必须按准确路径直接 read/ls；新建前核验目录真实内容，不能因 Git-aware find/grep 没有返回就判定不存在。ADR 编号只根据准确目标目录的本地文件递增，避免漏读后覆盖旧记录。
 
 ## 术语纪律
@@ -26,8 +26,8 @@ metadata:
 - 用户使用的词与现有 glossary 冲突时立即指出，并要求在两个含义间明确选择。
 - 对含糊或过载词提出一个精确 canonical term，并用具体边界场景验证它。
 - 用户描述的领域关系必须和相关代码交叉核验；矛盾属于待决问题，不能把代码或用户陈述静默当成真相。
-- 术语一旦解决，立即对 `.x-matt/context/` 下的目标 `CONTEXT.md` 做小范围编辑，不在会话结束时批量补写。
-- `.x-matt/context/` 下的 `CONTEXT.md` 只保存项目领域词汇，不保存实现细节、需求、计划、测试、决定流水账或通用编程概念。
+- 术语一旦解决，立即对 `.x-matt/context/` 下的目标 `GLOSSARY.md` 做小范围编辑，不在会话结束时批量补写。
+- `.x-matt/context/` 下的 `GLOSSARY.md` 只保存项目领域词汇，不保存实现细节、需求、计划、测试、决定流水账或通用编程概念。
 
 格式：
 

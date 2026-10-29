@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: docs/engineering/to-spec.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Archive
@@ -35,7 +35,7 @@ metadata:
 1. **Spec lifecycle**：spec 是 `Type: spec` 且 `Status: spec-ready`。parent spec 只允许 `spec-ready → shipped`，不存在其他合法状态转换。
 2. **Ticket terminal state**：每个 issue 都是 `Type: ticket`，`Parent` 精确等于当前 `.x-matt/work/<feature-slug>/spec.md`，`Status` 只能是 `resolved` 或 `out-of-scope`。存在 `ready-for-agent`、缺失状态或其他状态时拒绝。每个 `Blocked by` 必须是 `None`，或逗号分隔且全部位于当前 `.x-matt/work/<feature-slug>/issues/` 的仓库相对 ticket 路径；每个引用都必须真实存在。存在跨 feature blocker 时拒绝，因为归档后所有 Parent 与 Blocked by 都必须解析到本 feature 的 shipped 目录。
 3. **Commits landed**：对每个 `resolved` ticket，直接读取本地 `## Comments` 中的 `Implementation commit: <完整 commit SHA>`，核验 commit 存在且 `git merge-base --is-ancestor <SHA> HEAD` 成功，并检查该提交与 ticket 实现相符。`out-of-scope` 必须有明确排除理由，不要求不存在的实现提交；其说明如显式引用相关 commit，也须属于当前 `HEAD`。缺少记录、SHA 无效或提交不在当前 branch 时拒绝，不从 ticket 的 Git 历史推断，不补造完成记录。
-4. **Durable knowledge settled**：读取 `.x-matt/context/CONTEXT.md`（若存在）和 `.x-matt/adr/` 下相关记录，并对照 spec、ticket 完成说明与相关提交。实现中形成的新 canonical term、跨会话事实或通过 ADR gate 的难逆转决定必须已经写入这些持久文档；明确没有新增持久知识是合法结果。若证据显示仍有待沉淀知识，或无法判断一个明显的长期决定是否应落盘，列为缺失项并拒绝归档，不在本 skill 中顺手补写领域文档。
+4. **Durable knowledge settled**：读取 `.x-matt/context/GLOSSARY.md`（若存在）和 `.x-matt/adr/` 下相关记录，并对照 spec、ticket 完成说明与相关提交。实现中形成的新 canonical term、跨会话事实或通过 ADR gate 的难逆转决定必须已经写入这些持久文档；明确没有新增持久知识是合法结果。若证据显示仍有待沉淀知识，或无法判断一个明显的长期决定是否应落盘，列为缺失项并拒绝归档，不在本 skill 中顺手补写领域文档。
 
 拒绝结果按以上四类列出准确文件与缺失事实，不把“大体完成”解释为 shipped。
 

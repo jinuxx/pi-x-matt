@@ -9,7 +9,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: architecture-vocabulary-reader
   pi-upstream-path: skills/engineering/codebase-design/DEEPENING.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Architecture Deepening Reader

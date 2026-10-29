@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/to-tickets/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # To Tickets
@@ -46,7 +46,7 @@ metadata:
 
 ## Blocking edges
 
-为每张 ticket 列出真正阻止它开始的 tickets，不要把“相关”或“可能更方便”当成 blocker。无 blocker 的 ticket 可以立即开始；发布顺序按 blockers-first，保证依赖已有 tracker identifier 后再建立 native blocking links。tracker 不支持 native edges 时，在 ticket body 的 `Blocked by` 中保留引用。
+为每张 ticket 列出真正阻止它开始的 tickets，不要把“相关”或“可能更方便”当成 blocker。无 blocker 的 ticket 可以立即开始；发布顺序按 blockers-first，保证依赖已有 tracker identifier 后再建立 native blocking links。tracker 支持 native edges 时只用 native edges 表达 blocking，正文不写 `## Blocked by`，避免两处记录漂移；tracker 不支持时才在 ticket body 的 `Blocked by` 中保留引用。
 
 ## User quiz
 
@@ -63,7 +63,7 @@ metadata:
 
 1. 用户批准 breakdown 后，先发布无 blocker 的 tickets，再按依赖顺序发布后续 tickets。
 2. local-markdown tracker：按 blockers-first 写入 `.x-matt/work/<feature-slug>/issues/<NN>-<slug>.md`，每张 ticket 一个文件，`NN` 从 `01` 开始；每个文件使用 `Type: ticket`、`Status: ready-for-agent`、`Source session: pi:<PI_SESSION_ID>`、Parent、Blocked by、What to build、Acceptance criteria 和空的 `## Comments` 锚点。
-3. real tracker：按配置执行 issue 创建，使用 `ready-for-agent` label；优先使用 tracker 原生 blocking/sub-issue relationship，不可用时将 blocking references 写入 body。父 spec 只作为 parent reference，不关闭、不修改。Local Markdown parent 同样保持 `spec-ready`；归档只能由用户之后单独运行 `matt-archive`。
+3. real tracker：按配置执行 issue 创建，使用 `ready-for-agent` label；优先使用 tracker 原生 blocking/sub-issue relationship，不可用时将 blocking references 写入 body。源是既有 parent spec issue 时，按 tracker doc 的操作把每张 ticket 建成它的 sub-issue；sub-issue 不可用时在 ticket body 顶部写 `Part of #<parent>`。父 spec 只作为 parent reference，不关闭、不修改。Local Markdown parent 同样保持 `spec-ready`；归档只能由用户之后单独运行 `matt-archive`。
 4. 每次创建后读取或查询结果。Local Markdown 核对标题、Type、Parent、Status、Source session、Blocked by、正文、验收标准和 Comments 锚点；real tracker 核对标题、正文、label、identifier 和 blocking edge。任何发布结果无法核验时停止并报告，不继续批量创建。
 5. 发布完成后报告 ticket 数量、frontier、blocking graph 和下一步 `matt-implement`；`matt-implement` 已移植，每次只处理一个 ticket，并在 TDD、完整验证和双轴 code-review 通过后提交当前 branch。不要在 `matt-to-tickets` 中自行实施或批量处理 tickets。
 
@@ -108,7 +108,7 @@ Blocked by: <Local Markdown 使用仓库相对 ticket 路径，或 None (can sta
 
 ## Blocked by
 
-- <每个 blocking ticket 的 tracker reference，或 None (can start immediately)>
+- <仅在 tracker 不支持 native edges 时保留本段：每个 blocking ticket 的 tracker reference，或 None (can start immediately)>
 ```
 
-real tracker ticket 应使用 `ready-for-agent` label，并优先通过 tracker 原生 relationship 写入 parent/sub-issue 和 blocking edges；正文中的 Parent 与 Blocked by 是可核验的备用记录。
+real tracker ticket 应使用 `ready-for-agent` label，并优先通过 tracker 原生 relationship 写入 parent/sub-issue 和 blocking edges；blocker 已用 native edges 表达时省略整个 `## Blocked by` 段，正文中的 Parent 与 Blocked by 只在 tracker 缺少对应原生关系时作为可核验的备用记录。

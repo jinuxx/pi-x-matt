@@ -56,6 +56,7 @@ test("registry captures parent workflows and their private leaves", async () => 
     "matt-grill-with-docs",
     "matt-grilling",
     "matt-implement",
+    "matt-implement-spec",
     "matt-improve-codebase-architecture",
     "matt-prototype",
     "matt-research",
@@ -182,6 +183,14 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.equal(registry.skills["matt-implement"].dispatch, "none");
   assert.equal(registry.skills["matt-implement"].agent, null);
   assert.deepEqual(registry.skills["matt-implement"].dependsOn, ["matt-domain-modeling"]);
+  const implementSpec = registry.skills["matt-implement-spec"];
+  assert.equal(implementSpec.scope, "parent");
+  assert.equal(implementSpec.class, "interaction");
+  assert.equal(implementSpec.dispatch, "none");
+  assert.equal(implementSpec.agent, null);
+  assert.equal(implementSpec.workflow, undefined);
+  assert.deepEqual(implementSpec.dependsOn, ["matt-implement"]);
+  assert.equal(implementSpec.upstreamPath, "skills/engineering/implement-spec/SKILL.md");
   assert.equal(registry.skills["matt-diagnosing-bugs"].scope, "parent");
   assert.equal(registry.skills["matt-diagnosing-bugs"].class, "interaction");
   assert.equal(registry.skills["matt-diagnosing-bugs"].dispatch, "none");
@@ -197,6 +206,42 @@ test("registry captures parent workflows and their private leaves", async () => 
   assert.equal(registry.skills["matt-improve-codebase-architecture"].dispatch, "none");
   assert.equal(registry.skills["matt-improve-codebase-architecture"].agent, null);
   assert.deepEqual(registry.skills["matt-improve-codebase-architecture"].dependsOn, ["matt-grilling", "matt-domain-modeling"]);
+});
+
+test("implement-spec keeps serial ticket gates and a distinct whole-spec review", async () => {
+  const skill = await readFile(join(ROOT, ".pi/skills/matt-implement-spec/SKILL.md"), "utf8");
+  assert.match(skill, /disable-model-invocation: true/);
+  assert.match(skill, /Local Markdown/);
+  assert.match(skill, /当前分支/);
+  assert.match(skill, /不创建 worktree/);
+  assert.match(skill, /最多一个.*matt-worker/);
+  assert.match(skill, /Type: spec.*Status: spec-ready/);
+  assert.match(skill, /Type: ticket.*Parent/);
+  assert.match(skill, /默认跳过.*\.x-matt\/work\/shipped\//);
+  assert.match(skill, /直接读取.*ignored/);
+  assert.match(skill, /循环依赖|环/);
+  assert.match(skill, /Implementation commit.*git merge-base --is-ancestor/);
+  assert.match(skill, /frontier.*编号.*路径/);
+  assert.match(skill, /没有 frontier.*仍有未完成.*停止/);
+  assert.match(skill, /每张 ticket.*重新.*scope.*allowedFiles/);
+  assert.match(skill, /不授予.*整份 spec.*授权/);
+  assert.match(skill, /无 UI.*停止/);
+  assert.match(skill, /不跨 ticket 复用.*dispatchId/);
+  assert.match(skill, /提交成功.*tracker.*核验.*下一张/);
+  assert.match(skill, /续跑.*fixed point.*缺失.*停止/);
+  assert.match(skill, /全部 tickets.*终态.*才.*整份 spec/s);
+  assert.match(skill, /reviewKind=committed/);
+  assert.match(skill, /完整 parent spec.*acceptance matrix/);
+  assert.match(skill, /FAIL.*NO_EVIDENCE.*停止/);
+  assert.match(skill, /不自动.*shipped.*matt-archive/);
+
+  const implement = await readFile(join(ROOT, ".pi/skills/matt-implement/SKILL.md"), "utf8");
+  assert.match(implement, /matt-implement-spec.*同一父会话.*下一张/);
+  const review = await readFile(join(ROOT, ".pi/skills/matt-code-review/SKILL.md"), "utf8");
+  assert.match(review, /matt-implement-spec.*整份 spec.*active parent spec/);
+  const specReviewer = await readFile(join(ROOT, "skillpacks/leaf/review-spec/SKILL.md"), "utf8");
+  assert.match(specReviewer, /matt-implement-spec.*完整 active parent spec.*聚合 acceptance matrix/);
+  assert.match(specReviewer, /不要求虚构.*当前单 ticket/);
 });
 
 test("project package filter keeps only the pi-subagents extension", async () => {
@@ -249,6 +294,7 @@ test("package manifest exposes namespaced resources", async () => {
     "./.pi/skills/matt-grill-with-docs",
     "./.pi/skills/matt-grilling",
     "./.pi/skills/matt-implement",
+    "./.pi/skills/matt-implement-spec",
     "./.pi/skills/matt-improve-codebase-architecture",
     "./.pi/skills/matt-prototype",
     "./.pi/skills/matt-research",
@@ -338,8 +384,8 @@ test("repository tracker setup is executable and discoverable by Pi", async () =
   assert.match(labels, /`open` \/ `claimed` \/ `resolved` \/ `out-of-scope`/);
   const domain = await readFile(join(ROOT, ".x-matt", "agents", "domain.md"), "utf8");
   assert.match(domain, /single-context/);
-  assert.match(domain, /\.x-matt\/context\/CONTEXT\.md/);
-  assert.match(domain, /\.x-matt\/context\/<context>\/CONTEXT\.md/);
+  assert.match(domain, /\.x-matt\/context\/GLOSSARY\.md/);
+  assert.match(domain, /\.x-matt\/context\/<context>\/GLOSSARY\.md/);
   assert.match(domain, /\.x-matt\/adr\/<context>\//);
   assert.match(tracker, /\.x-matt\/work\//);
   assert.match(agents, /\.x-matt\/agents\//);
@@ -443,7 +489,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(setup, /\.x-matt\/agents\/issue-tracker\.md/);
   assert.match(setup, /\.x-matt\/agents\/triage-labels\.md/);
   assert.match(setup, /\.x-matt\/agents\/domain\.md/);
-  assert.match(setup, /\.x-matt\/context\/<context>\/CONTEXT\.md/);
+  assert.match(setup, /\.x-matt\/context\/<context>\/GLOSSARY\.md/);
   assert.match(setup, /\.x-matt\/adr\/<context>\//);
   assert.match(setup, /\.x-matt\/work\/<feature-slug>\//);
   assert.match(setup, /不创建远端 issue、label/);
@@ -516,7 +562,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(grilling, /不得代替用户执行命令/);
 
   const domain = await readFile(join(ROOT, ".pi", "skills", "matt-domain-modeling", "SKILL.md"), "utf8");
-  assert.match(domain, /CONTEXT\.md/);
+  assert.match(domain, /GLOSSARY\.md/);
   assert.match(domain, /ADR gate/);
   assert.match(domain, /架构形状/);
   assert.match(domain, /唯一写者/);
@@ -723,10 +769,10 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(research, /research note/);
 
   const readme = await readFile(join(ROOT, "README.md"), "utf8");
-  assert.match(readme, /11 个交互式 parent/);
+  assert.match(readme, /12 个交互式 parent/);
   assert.match(readme, /6 个执行型 parent.*`architecture-scan`.*`architecture-design`/);
-  assert.match(readme, /交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）/);
-  assert.match(readme, /`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none`/);
+  assert.match(readme, /交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）/);
+  assert.match(readme, /`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none`/);
   assert.match(readme, /首次使用发布链前运行 `matt-setup`/);
   assert.match(readme, /spec-ready.*ready-for-agent.*resolved/);
   assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);

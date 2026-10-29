@@ -6,7 +6,7 @@ metadata:
   pi-scope: parent
   pi-class: orchestration
   pi-upstream-path: skills/engineering/improve-codebase-architecture/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Architecture Scan

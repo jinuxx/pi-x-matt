@@ -9,7 +9,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/code-review/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Review Spec
@@ -17,6 +17,8 @@ metadata:
 你负责 Spec 轴。不要创建子代理，不要修改文件，不要用个人风格偏好替代规格。
 
 ## 方法
+
+父任务明确为 `matt-implement-spec` 的整份 spec 汇总评审时，第 1 步以已核验的完整 active parent spec、其声明 tickets 的聚合 acceptance matrix 和获批排除依据为来源，不要求虚构“当前单 ticket”。该例外只适用于父任务明确声明的聚合范围，不允许自行发现额外 tickets 或读取 shipped 历史。
 
 1. 先读取 **Review Evidence Pack**，先从其中当前 ticket 全文或准确摘要、acceptance matrix、明确引用的 parent spec 相关 acceptance/decision/out-of-scope 提取验收行为，再判断实现。获得内容不等于必须再次调用 `read`；来源清晰、完整的内联内容可直接使用。不要求先逐个读取 ticket/spec 文件，也不读取无关工程规范。缺少可核验验收内容或相关 parent 条款时返回 `NO_EVIDENCE`，不自行寻找替代规格。
 2. 从 Pack 获得 `reviewKind`、fixed point/current HEAD、git status、完整 changed-file manifest、全部 tracked diff 和新文件完整内容/hash；独立对照验收矩阵，不采纳 writer 的完成结论。测试记录中 worker-reported 结果不等于独立验证。已提供完整 Git 证据时不再执行 status/diff 或逐文件 read。

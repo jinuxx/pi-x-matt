@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: matt-grilling, matt-domain-modeling
   pi-upstream-path: skills/engineering/improve-codebase-architecture/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Improve Codebase Architecture
@@ -68,7 +68,7 @@ metadata:
 - 哪些旧 shallow tests 在新 interface tests 覆盖后可删除；
 - migration boundary、明确 out of scope 与风险。
 
-不要在用户确认前设计最终 interface。每轮只问当前 frontier 的 1–4 个问题。术语形成时按 `matt-domain-modeling` 即时更新 `.x-matt/context/` 下对应的 `CONTEXT.md`；candidate 若与 ADR 冲突，明确引用。用户以长期、load-bearing 原因拒绝 candidate 时，按三项 ADR gate 询问是否记录，以免未来 scan 重复建议；“现在不值得”一类临时原因不写 ADR。
+不要在用户确认前设计最终 interface。每轮只问当前 frontier 的 1–4 个问题。术语形成时按 `matt-domain-modeling` 即时更新 `.x-matt/context/` 下对应的 `GLOSSARY.md`；candidate 若与 ADR 冲突，明确引用。用户以长期、load-bearing 原因拒绝 candidate 时，按三项 ADR gate 询问是否记录，以免未来 scan 重复建议；“现在不值得”一类临时原因不写 ADR。
 
 ## Design it twice
 

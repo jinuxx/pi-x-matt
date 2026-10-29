@@ -183,7 +183,7 @@ for (const linkedWorktree of [false, true]) {
         `# 02: Ready\n\nType: ticket\nParent: None\nStatus: ready-for-agent\nBlocked by: ${blockerPath}\n`);
       await writeFixture(project, "implementation.js", "export const ready = true;\n");
       for (const path of [
-        ".x-matt/agents/issue-tracker.md", ".x-matt/context/CONTEXT.md",
+        ".x-matt/agents/issue-tracker.md", ".x-matt/context/GLOSSARY.md",
         ".x-matt/adr/0001-local.md", ".x-matt/research/note.md", ".x-matt/prototypes/example/index.html",
         ".pi/settings.json", ".pi/APPEND_SYSTEM.md",
       ]) {

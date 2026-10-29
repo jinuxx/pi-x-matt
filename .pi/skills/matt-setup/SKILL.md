@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/setup-matt-pocock-skills/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Setup Matt Pocock Skills
@@ -42,11 +42,11 @@ metadata:
 - 无可识别 remote：推荐 Local Markdown，写入 `.x-matt/work/<feature-slug>/`。
 - Other：要求用户提供一段可执行说明，至少包含 create、read、label/status、blocking relationship 和结果核验方式。
 
-选择 GitHub/GitLab 时先只读核验 CLI、认证和 remote 解析；失败时保持未配置，不写一个看似可用的契约。不得以 setup 名义创建远端 issue、label、project 或 repository。
+选择 GitHub/GitLab 时先只读核验 CLI、认证和 remote 解析。remote 必须可达：在仓库内运行 `gh repo view` / `glab repo view` 能打印该项目才算通过；没有指向该 host 的 remote 时向用户索取仓库 URL，并说明需要 `git remote add origin <url>`，配好并复验前不得继续。核验失败时保持未配置，不写一个看似可用的契约。不得以 setup 名义创建远端 issue、label、project 或 repository。
 
 ### B. Label vocabulary
 
-询问是否保留 canonical labels，推荐是：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。用户拒绝时收集现有 tracker 中的实际映射。该文件只定义语义映射，不创建远端 labels；GitHub/GitLab 缺少 `ready-for-agent` 时必须报告下游发布仍会 fail closed。
+询问是否保留 canonical labels，推荐是：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。用户拒绝时收集现有 tracker 中的实际映射。该文件只定义语义映射，不创建远端 labels。GitHub/GitLab 缺少 canonical label 时，列出用户需要执行的精确命令（`gh label create <name>` / `glab label create <name>`），说明在 `matt-to-spec`、`matt-to-tickets` 首次发布前必须创建；setup 不代用户执行远端写操作，未创建时配置保持未完成并报告下游发布仍会 fail closed。
 
 即使 `triage` 尚未登记，也要写 `.x-matt/agents/triage-labels.md`，因为 `matt-to-spec`、`matt-to-tickets` 和 Local Markdown lifecycle 需要区分 `spec-ready`、`shipped`、`ready-for-agent`、`resolved` 与 `out-of-scope`。`spec-ready` / `shipped` 是 parent spec lifecycle，`resolved` / `out-of-scope` 是 ticket terminal 状态；`ready-for-agent` 是 canonical triage role，也是可实现 ticket 的入口状态。
 
@@ -54,7 +54,9 @@ Local Markdown 的 tracker 与 triage-labels 的 `resolved` 定义必须一致�
 
 ### C. Domain docs
 
-没有真实 monorepo signals 时直接采用 single-context：glossary 按需创建在 `.x-matt/context/CONTEXT.md`，ADR 位于 `.x-matt/adr/`；setup 本身不创建空 glossary 或 ADR。只有发现真实多 context 时才询问是否采用 `.x-matt/context/CONTEXT-MAP.md`，并把各 context 的 glossary 放在 `.x-matt/context/<context>/CONTEXT.md`、ADR 放在 `.x-matt/adr/<context>/`。所有 Matt 管理的领域文档必须留在 `.x-matt/` 内。
+没有真实 monorepo signals 时直接采用 single-context：glossary 按需创建在 `.x-matt/context/GLOSSARY.md`，ADR 位于 `.x-matt/adr/`；setup 本身不创建空 glossary 或 ADR。只有发现真实多 context 时才询问是否采用 `.x-matt/context/GLOSSARY-MAP.md`，并把各 context 的 glossary 放在 `.x-matt/context/<context>/GLOSSARY.md`、ADR 放在 `.x-matt/adr/<context>/`。所有 Matt 管理的领域文档必须留在 `.x-matt/` 内。
+
+发现 legacy `.x-matt/context/CONTEXT.md` 或 `CONTEXT-MAP.md` 时，列出精确路径并取得一次迁移批准，然后用普通 `mv` 改成 `GLOSSARY.md` / `GLOSSARY-MAP.md`（这些文件不被 Git 跟踪，不使用 `git mv`），并同步改写各自引用；未迁移时报告配置未完成，不写入指向新名称的契约，也不静默同时读取两套名称。
 
 ### D. 本地 Pi 入口
 
@@ -163,7 +165,7 @@ GitHub/GitLab 至少定义：CLI、repo 解析、create/read、label、native bl
 ## 写入与验证
 
 1. 先验证 exclude 保护，再对批准的本地文件做小范围写入；`.pi/APPEND_SYSTEM.md` 的入口 block 已存在时原位更新，不追加重复 section，不向团队文档写入工具元信息。
-2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用。Local Markdown 还必须逐项核对 spec/ticket 的 `Source session` 与 `Reference Inputs` 契约、tracker/triage-labels 的 `resolved` 定义一致性（代码提交成功后仅本地写回、Comments 记录完整 `Implementation commit`、blocker 的 `HEAD` ancestry gate）、`spec-ready → shipped` 归档规则、`.x-matt/work/shipped/<feature-slug>/` 唯一路径、默认不可见/点名只读规则、map 路径、decision ticket 路径、完整 metadata 模板与 `Claimed by: None`；发现 metadata 行 `Claim:`、decision ticket 位于 `issues/` 或其他非 canonical 路径时核验失败并停止。
+2. 重新读取全部目标文件，核对 tracker 类型、路径/remote、label mapping、domain layout 和互相引用；legacy `CONTEXT.md` / `CONTEXT-MAP.md` 必须已迁移或明确报告未迁移。Local Markdown 还必须逐项核对 spec/ticket 的 `Source session` 与 `Reference Inputs` 契约、tracker/triage-labels 的 `resolved` 定义一致性（代码提交成功后仅本地写回、Comments 记录完整 `Implementation commit`、blocker 的 `HEAD` ancestry gate）、`spec-ready → shipped` 归档规则、`.x-matt/work/shipped/<feature-slug>/` 唯一路径、默认不可见/点名只读规则、map 路径、decision ticket 路径、完整 metadata 模板与 `Claimed by: None`；发现 metadata 行 `Claim:`、decision ticket 位于 `issues/` 或其他非 canonical 路径时核验失败并停止。
 3. 核验业务项目整个 `.x-matt/` 与个人 `.pi/`（含入口）未被跟踪且未暂存，保护规则确实生效；默认没有共享条目；若用户批准了某项共享 `.pi` 条目，才额外验证该条目 `git check-ignore` 不匹配且可按其状态被跟踪（新条目用 `git add --dry-run`，已跟踪条目用 `git ls-files --error-unmatch`），否则报告未配置完成。不预先创建 `.x-matt/work/<feature-slug>/`。源码维护例外按源码规则核验，不取消跟踪发布资源。需要迁移的个人资料未获批准或未处理完时报告未配置完成，不隐瞒；源码维护选择 GitHub/GitLab 时只执行只读 CLI/auth/repo/label 核验。
 4. Local Markdown 缺少 PI_SESSION_ID、本机 exclude、入口或任一目标文件核验失败时，明确列为未完成；仅源码维护例外选择 GitHub/GitLab/Other 时才要求 CLI、认证、remote、必要 label 或可执行 workflow。任何未完成状态都不得告诉下游 tracker 已配置。
 5. 成功时报告本地文件和仍存在的历史/第三方限制，提示 `/reload` 后核验本地入口已加载，再说明 `matt-to-spec` 与 `matt-to-tickets` 会读取这些契约。日后切换布局时重新运行本 skill；普通文字调整可直接编辑本地 `.x-matt/agents/*.md`。

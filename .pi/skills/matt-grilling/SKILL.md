@@ -7,7 +7,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/productivity/grilling/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Grilling
@@ -23,7 +23,7 @@ metadata:
 
 ## 每轮协议
 
-- 每轮使用一次 `ask_user_question`，包含 1–4 个互不依赖的 frontier 问题。存在推荐答案时，将推荐选项放在第一项并标记 `(Recommended)`。
+- 每轮使用一次 `ask_user_question`，包含 1–4 个互不依赖的 frontier 问题。存在推荐答案时，将推荐选项放在第一项并标记 `(Recommended)`，并把问题与选项措辞成“确认推荐项 = 回答是”，不要让肯定语气对应否定答案。
 - 问题必须说明正在决定什么以及主要权衡；不要把背景说明、实现教程或多个依赖问题塞进一个问题。
 - 用户可一次回答整轮。收到答案前不要进入下一轮，也不要开始实施。
 - 自定义答案不够明确时，只追问影响行为、持久数据、成本、架构或范围的歧义。

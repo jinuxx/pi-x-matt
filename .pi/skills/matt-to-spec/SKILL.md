@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/to-spec/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # To Spec
@@ -42,7 +42,7 @@ metadata:
 
 1. 从当前会话提取已确认的目标、用户故事、实现决定、测试决定、非目标和进一步注意事项。
 2. 区分来源：用户决定、Wayfinder resolved ticket、代码库事实、ADR 约束、研究证据和 agent 建议。前五类中只有已确认且可追溯的内容可以进入 spec；未被确认的建议放入待决事项并停止，不把它伪装成决定。
-3. 不把 glossary 变成 spec：`.x-matt/context/` 下对应的 `CONTEXT.md` 提供术语，spec 保存本次工作的行为和决定。
+3. 不把 glossary 变成 spec：`.x-matt/context/` 下对应的 `GLOSSARY.md` 提供术语，spec 保存本次工作的行为和决定。
 4. 对已确认范围内的用户可观察行为，尽可能穷举为 numbered user stories；不要为了“完整”发明用户未确认的需求。架构或重构工作可以减少 user stories，但必须把重点和理由放入 implementation/testing decisions。
 5. 规格应覆盖已确认的公开行为和拒绝的范围；不要加入当前讨论没有依据的兼容性、性能、错误处理或未来扩展承诺。
 6. 用户提供且后续实现、验证或运维需要依赖的事实、说明性内容、样例和约束，如果压缩改写会损失语义或可追溯性，必须在 `Reference Inputs` 中忠实落盘并标注来源为用户输入；这可以包括业务规则、现状说明、操作步骤、边界解释、样例数据/交互，以及查询、API、schema、配置等技术材料，不以特定项目或材料类型为限。先移除密码、token、cookie、真实私钥及其他 secrets；被脱敏的字段使用明确占位符，不能静默省略整段输入，也不能只改写成 agent 的行为摘要。

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- 新增手动 `matt-implement-spec` interaction parent：仅对已有 Local Markdown spec/tickets 在当前分支按依赖 frontier 串行应用 `matt-implement`，每票独立 TDD、授权、完整验证、双轴复核、提交与本地状态写回；失败暂停，不创建 worktree、不扩展 dispatcher 的单写者约束。
+- 全部 tickets 达到核验终态后，从原始 fixed point 到 HEAD 做一次整份 spec committed 双轴评审；续跑复核原始基线与实现提交 ancestry，不重复已完成票。最终 review 失败不自动开修复票或循环重评，不 push/PR，不改 parent spec 或自动归档。package manifest、registry、README 与授权/注册回归同步。
+- 上游快照从 `mattpocock/skills` `3cca18b`（v1.2.3）同步到 `a496f55`（v1.3.2），`vendor/UPSTREAM_SHA`、全部 `pi-upstream-sha` 与生成 registry 一并更新；30 个已移植来源的 drift 检查通过。
+- 跟随上游 v1.3.0 的领域文档重命名：`.x-matt/context/` 下的 `CONTEXT.md` 改为 `GLOSSARY.md`、`CONTEXT-MAP.md` 改为 `GLOSSARY-MAP.md`；domain-modeling、grill-with-docs、improve-codebase-architecture、to-spec、archive、setup、tdd、diagnosing-bugs、architecture 设计 lane、`.x-matt/agents/domain.md` 与 `issue-tracker.md`、README 与测试断言同步。
+- `matt-setup` 检测 legacy `CONTEXT.md` / `CONTEXT-MAP.md`：列出精确路径、取得批准后用普通 `mv` 迁移（这些文件不被 Git 跟踪），未迁移则报告未配置；`.x-matt/agents/domain.md` 允许只读旧名但必须提示迁移，不并行维护两套名称。
+- `matt-code-review`：改为强制搜索仓库标准文件（存在 `CODING_STANDARDS.md` / `CONTRIBUTING.md` 时必须在列），issue 引用经 `.x-matt/agents/issue-tracker.md` 取回而非猜测 CLI，两轴在一次 dispatch 中一起发出并前台聚合报告。
+- `matt-tdd` 与 `tdd-executor`：每个候选 seam 附一行“抓到什么/漏掉什么”；forced RED 必须对 pristine 副本 `diff` 证明 mutation 真正落地，否则不算 RED。
+- `matt-wayfinder`：real tracker 的 map/child 只带 `wayfinder:*` label、不打 triage label；第一遍创建取得真实 identifier，第二遍才写 blocking edges 与交叉引用，禁止占位符。
+- `matt-to-tickets`：源是既有 parent spec issue 时把 ticket 建成它的 sub-issue；blocker 已用 native edges 表达时正文省略 `## Blocked by`，仅在 tracker 缺少原生关系时保留备用记录。
+- `matt-grilling` 的问题措辞让“确认推荐项”等于回答“是”；`matt-implement` 收到 ticket reference 时先取回并陈述标题，有歧义先询问。
+- `matt-setup`：GitHub/GitLab remote 必须以 `gh repo view` / `glab repo view` 可打印项目为完成定义；缺少 canonical label 时只给出用户需执行的创建命令，不代执行远端写操作，未创建保持未配置。
 - TDD 新增可选 `implementation.diagnosticFiles`（`allowedFiles` 的精确子集）与 `repair.diagnosis.testFiles`；缺省时保持 v0.2.27 的范围对象形状，既有 grant/reload/repair 不受影响，授权确认会展示隔离诊断文件权限。
 - 需要内联复现测试时，宿主先严格确认原工作区等于最近已审 `snapshotId`，再在自己的 OS temp 区从 HEAD 与已审未提交变更（含删除/重命名）重建项目，只写入获批诊断文件并执行原批准命令；退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未变，才继续同一个 repair。GREEN、其他症状、超时、取消、快照漂移与越权改动均 fail closed。
 - 诊断证据绑定原 dispatchId、已审 snapshotId/范围 hash、根因 IDs、命令、退出码、输出 hash 与测试 path/内容 hash；成功、失败与取消都清理宿主临时区，不联网安装依赖、不复制个人 ignored 资料，也不把该本机故障隔离称为安全 sandbox。无 `testFiles` 时保留原项目根诊断路径；30 秒、授权、repair lineage、唯一 writer 与 gate 不变。

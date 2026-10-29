@@ -6,7 +6,7 @@ metadata:
   pi-scope: parent
   pi-class: orchestration
   pi-upstream-path: skills/engineering/tdd/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Test-Driven Development
@@ -18,7 +18,7 @@ metadata:
 ## 调度前
 
 1. 复用 `matt-implement` 已核验的上下文，按 [Context Pack 契约](context-packs.md) 生成 Implementation Context Pack。必须获得 ticket、相关 spec 验收/decision/out-of-scope 与适用项目说明；已取得内容不重复读取。ticket、parent、blocker 或 manifest 规格来源只要位于 `.x-matt/work/shipped/` 就立即 fail closed，不读取、不调度任何 lane；归档内容即使被用户点名也只能作为历史依据，不能进入 TDD。相关源码、词汇与测试按精确 manifest 分级；架构全文、全部 ADR 和整个模块调用者仅按需读取。
-2. 写出建议测试的公开 **seam**、每个 seam 的 **interface** 与待验证行为。测试只能穿过公开 interface，不测试实现细节。
+2. 写出建议测试的公开 **seam**、每个 seam 的 **interface** 与待验证行为，并给每个候选 seam 附一行说明它能抓到什么、漏掉什么，供用户取舍。测试只能穿过公开 interface，不测试实现细节。
 3. 对每个候选测试执行测试价值 gate：显式验收行为、缺陷回归、业务规则、分支/状态转换、权限/数据完整性或公开 contract 必须保留；仅重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、验证框架本身、不可达或规格明确排除的假设性边缘情况可以省略独立测试。代码行数少本身不是省略理由；多个紧密相关的简单断言可以合并进一个行为级测试。参数化案例按独立行为、字段映射和共享校验等价类选取：同一等价类保留一个代表输入，不默认生成字段×状态×错误值的全排列；只有该组合产生不同的可观察行为、状态转换或安全/数据完整性风险时才拆成独立案例。不设任意案例数上限，也不为降低统计数合并独立行为。记录保留项的代表输入、预计展开次数、昂贵准备成本以及省略项和理由，避免 worker 机械地为每个字段或边缘情况创建测试方法。
 4. 若用户尚未明确批准这些 seams 与测试价值判断，使用 `ask_user_question` 请求一次聚焦确认。确认前不得调用 TDD workflow。
 5. 记录固定基线（优先当前 `HEAD`）和调度前工作区状态，避免把既有改动错误归因给 worker。
@@ -48,6 +48,6 @@ Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 has
 
 1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON，再只消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`。
 2. 区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效；失败 workflow 按契约读取最新阶段快照，不要求异常分支存在 `workflow.value`。检查所有已返回 lane，保留两个轴的完整结果；不得回退到普通 prose。
-3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令。
+3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令；若 RED 靠临时改代码或 fixture 强制得到，要求提供对 pristine 副本的 `diff` 证明 mutation 确实落地，不采信未证明的 red。
 4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口。已有连续修复授权覆盖的真实 findings 按结构化根因契约聚焦修复，不再重复询问；新增决定/范围才询问。`NO_EVIDENCE`、执行失败或无效报告先有界恢复 reviewer，不重复 writer。同根因两轮未解或相关回归触发受限诊断，不机械开启下一轮补丁。
 5. 即使 reviewer 均通过，也由父会话核对 Review Evidence Pack 与当前 HEAD、status、文件 hash，检查最终 diff，确认没有越过批准 seams、范围或既有改动。Pack 过期不得沿用 PASS。

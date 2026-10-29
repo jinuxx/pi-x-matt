@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: matt-grilling, matt-domain-modeling, matt-to-spec
   pi-upstream-path: skills/engineering/wayfinder/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Wayfinder
@@ -34,6 +34,8 @@ metadata:
 - **Out of scope**：明确位于 destination 之外，不会从 fog 毕业。
 
 人类可见叙述和 map 的 `Decisions so far` 始终使用 ticket **标题链接**，不得用裸编号、slug 或路径代替名称。完整答案只存在一个 ticket 中；map 仅保存一行 gist 和链接，不复制详情。open tickets 由 frontier query 得到，不列进 map body。
+
+real tracker 的 map 只带 `wayfinder:map`，child ticket 只带 `wayfinder:<type>`。这些是决定，不是实现工作：不得给 map 或 child 附加 `ready-for-agent` 等 triage label。
 
 每个 decision ticket 的 metadata `Type:` 只能是 `research`、`prototype`、`grilling`、`task`。`matt-research`、`matt-prototype` 与 `matt-grilling` 是 resolver skill/workflow 名，不是 `Type:` 值：
 
@@ -63,8 +65,8 @@ metadata:
 批准后按 tracker 契约：
 
 1. 创建 map，`Decisions so far` 初始为空；
-2. 第一遍创建所有当前可精确表述的 child tickets，取得真实 identity；
-3. 第二遍写 blocking edges；
+2. 第一遍创建所有当前可精确表述的 child tickets，取得真实 identity，不写 `#<n>`、`<NN>` 一类占位 identifier；
+3. 第二遍写 blocking edges 与交叉引用，只用第一步取得的真实 identity：tracker 会把占位符自动链接到无关对象；
 4. 重新读取 map、tickets、parent/child、types、statuses 和 edges，计算并展示 frontier；
 5. 对每个初始 `Type: research` ticket，先按 tracker claim 协议读取非空 `PI_SESSION_ID`、写入 `pi:<PI_SESSION_ID>` 并核验，再分别调用 `pi_matt_dispatch` 的 `matt-research` workflow。缺失 identity 时不得 claim；lane 缺失、失败或无效 `structuredOutput` 时按 tracker release 协议恢复 open/unclaimed；有效结果由父会话按 resolve 协议写入。普通 prose output 不能作为答案。
 

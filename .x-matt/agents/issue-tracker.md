@@ -36,6 +36,8 @@ parent spec 的 `Status` 只有 `spec-ready` 与 `shipped`。`spec-ready` 只表
 
 ## Ticket 格式
 
+用户显式调用 `matt-implement-spec` 时，可以用 active spec 作为整批图的入口，但必须已有下述格式的 tickets。编排仅在当前分支串行应用单票 `matt-implement`，不能把 parent spec 直接传为 TDD 的 `implementation.ticket`；逐票授权、提交与本地 `resolved`/实现 SHA 核验不变。parent spec 不在该流程中改变或归档。
+
 每个 ticket 至少包含：
 
 ```markdown
@@ -84,7 +86,7 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 
 1. 该 feature 的全部 implementation tickets 都是 `resolved` 或 `out-of-scope`，不存在 `ready-for-agent` 或其他状态；每个 Blocked by 都是 `None` 或只引用该 feature 内的真实 ticket，存在跨 feature blocker 时不得归档；
 2. 每个 `resolved` ticket 的 Comments 都有可核验的完整 `Implementation commit`，且相关实现提交属于当前 `HEAD` 的 ancestry；每个 `out-of-scope` ticket 有明确排除理由，其说明如引用相关 commit，也必须属于当前 branch。不得从 ticket 的 Git 历史猜测实现提交；
-3. 实现中产生的 canonical term、跨会话事实和 ADR 级决定已写入 `.x-matt/context/CONTEXT.md` 或 `.x-matt/adr/`，或经核验明确没有新增持久知识。
+3. 实现中产生的 canonical term、跨会话事实和 ADR 级决定已写入 `.x-matt/context/GLOSSARY.md` 或 `.x-matt/adr/`，或经核验明确没有新增持久知识。
 
 归档从 Git 工作区干净（不含本地 ignored tracker）的基线开始，用普通文件系统移动把 `.x-matt/work/<feature-slug>/` 整体移动到 `.x-matt/work/shipped/<feature-slug>/`，不用 `git mv`，不重命名文件、不删除 ticket。移动时只允许把 spec 的 `Status: spec-ready` 改为 `Status: shipped`，并改写全部 tickets 的 Parent 路径与内部 Blocked by 路径到 shipped 新位置。处理前后都必须完整读取 spec 与全部 tickets，并按原文只允许上述 metadata 变化的方式核对正文无损坏；失败时恢复原文和路径。归档不暂存、不创建提交，前后 `HEAD`、index 与 Git status 必须不变，目标仍受本地忽略规则保护。
 
@@ -154,4 +156,4 @@ Wayfinder decision tickets 不是 implementation tickets，不能进入 `impleme
 
 ## 当前能力边界
 
-`to-spec`、`to-tickets` 与 `wayfinder` 已支持本契约。`triage` 尚未移植；本文件不代表 triage 当前可调用，也不应触发相应自动化。
+`to-spec`、`to-tickets`、`wayfinder` 与串行轻量版 `matt-implement-spec` 已支持本契约。`triage` 尚未移植；本文件不代表 triage 当前可调用，也不应触发相应自动化。

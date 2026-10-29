@@ -161,6 +161,36 @@ test("dispatcher authorization records an explicit matt-tdd confirmation", async
   assert.equal(reason, "user-confirmed");
 });
 
+test("implement-spec cannot turn one ticket approval into a batch grant", async () => {
+  const authorization = createDispatchAuthorization();
+  authorization.observeInput("/skill:matt-implement", "interactive");
+  authorization.observeInput("/skill:matt-implement-spec .x-matt/work/demo/spec.md", "interactive");
+  assert.equal(authorization.userInvokedImplement(), false);
+  const prompts = [];
+  const ctx = {
+    hasUI: true,
+    ui: { confirm: async (_title, message) => { prompts.push(message); return true; } },
+  };
+  assert.equal(await authorizeDispatch("matt-tdd", undefined, ctx, authorization, AUTH_SCOPE, AUTH_IDENTITY),
+    "user-confirmed");
+  assert.equal(await authorizeDispatch("matt-tdd", undefined, { hasUI: false }, authorization, AUTH_SCOPE, AUTH_IDENTITY),
+    "reused-implement-grant");
+  assert.equal(prompts.length, 1, "continuous repairs keep the current ticket grant");
+
+  const nextScope = { ...AUTH_SCOPE, ticket: ".x-matt/work/demo/issues/02-next.md", ticketDigest: "next-digest" };
+  const nextIdentity = { ...AUTH_IDENTITY, head: "first-ticket-committed" };
+  await assert.rejects(() => authorizeDispatch("matt-tdd", undefined, { hasUI: false },
+    authorization, nextScope, nextIdentity), /requires explicit user authorization/);
+  await assert.rejects(() => authorizeDispatch("matt-tdd", undefined, {
+    hasUI: true,
+    ui: { confirm: async (_title, message) => { prompts.push(message); return false; } },
+  }, authorization, nextScope, nextIdentity), /was not authorized/);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /02-next\.md/);
+  assert.equal(authorization.matches(nextIdentity, nextScope), false);
+  assert.equal(authorization.current().kind, "revoked");
+});
+
 test("dispatcher uses the inline script RPC contract for every workflow mode", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const modes = new Set();
@@ -681,11 +711,13 @@ test("dispatcher fails closed on malformed lanes and cross-agent grants", async 
 
 test("dispatcher rejects interaction parents", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const interaction = registry.skills["matt-grill-with-docs"];
-  assert.throws(
-    () => buildDispatchRequest(registry, interaction, "不要委派 HITL 访谈", ROOT),
-    /not a parent orchestration workflow/,
-  );
+  for (const name of ["matt-grill-with-docs", "matt-implement-spec"]) {
+    assert.ok(registry.skills[name], `${name} is registered`);
+    assert.throws(
+      () => buildDispatchRequest(registry, registry.skills[name], "不要委派 interaction parent", ROOT),
+      /not a parent orchestration workflow/,
+    );
+  }
 });
 
 test("dispatcher validates runtime gate shape for every workflow mode", async () => {

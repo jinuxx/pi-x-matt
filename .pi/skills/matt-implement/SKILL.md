@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: matt-domain-modeling
   pi-upstream-path: skills/engineering/implement/SKILL.md
-  pi-upstream-sha: 3cca18b368ae95cdbdebbff572ccafa662551015
+  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
 # Implement
@@ -20,7 +20,7 @@ metadata:
 ## 开始前
 
 1. 确认当前 branch 是用户希望写入的 branch；读取 `git status`、`git log` 和当前 fixed point。不要改写或归因用户既有工作区改动。
-2. 必须获得完整 ticket/当前已确认计划和 parent spec 中相关 acceptance、decision、out-of-scope；内容已在会话中且来源/基线可核验时不重复读取。提取本次适用的 AGENTS/README 条款与领域词汇；相关源码、测试和一层直接调用者列入精确 manifest。架构全文、全部 ADR 和整个模块调用者仅按需读取，不把所有材料全文下发。
+2. 用户以编号、URL 或路径传入 ticket reference 时，先按 `.x-matt/agents/issue-tracker.md` 的 tracker 契约取回并陈述其标题；同一 reference 对应多个候选、无匹配或与用户描述不符时，用 `ask_user_question` 澄清后再继续。必须获得完整 ticket/当前已确认计划和 parent spec 中相关 acceptance、decision、out-of-scope；内容已在会话中且来源/基线可核验时不重复读取。提取本次适用的 AGENTS/README 条款与领域词汇；相关源码、测试和一层直接调用者列入精确 manifest。架构全文、全部 ADR 和整个模块调用者仅按需读取，不把所有材料全文下发。
 3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；ticket 路径、Parent 或任何待读取 blocker 一旦位于 `.x-matt/work/shipped/`，立即 fail closed，提示该 ticket 已随 spec 归档，不能实现、重新开启或借 archived blocker 解锁 active ticket。默认不得枚举 shipped 内容；用户同一会话点名授权也仅允许历史只读，不构成实现授权。`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 active `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性与 shipped 非入口 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。没有 ticket 时，必须在当前会话中找到 grilling/diagnosis 等上游流程留下的明确 direct-slice handoff 和用户授权；greenfield、多业务流程、多个独立 seam、部署或迁移工作，以及依赖用户提供且不能安全压缩的事实、说明、样例或约束的工作，不得作为无 ticket 单 slice 开始。材料类型不限于技术 contract。
    Local Markdown tracker 只在本机维护：按 `.x-matt/agents/issue-tracker.md` 核验当前 feature 受本地 Git exclude 保护且未被跟踪，否则停止并提示先修复配置。按精确路径直接读取 ignored ticket/parent/blocker，不依赖 Git-aware 搜索或 `git show`；在 Context Pack 中提供内容与 hash，不能因它们不在 Git diff 中就判为缺失。对每个 resolved blocker 还须读取 Comments 的完整 `Implementation commit`，核验 commit 存在且 `git merge-base --is-ancestor <SHA> HEAD` 成功；记录缺失或仅在其他 branch 上存在时停止，不能用本地残留状态解锁。metadata checker 不能替代此核验。
 4. 从 ticket 或当前会话单 slice 计划中提取候选 seams，并先做测试价值判断。显式 acceptance criterion、缺陷回归、业务规则、分支/状态转换、权限/数据完整性和公开 contract 必须有测试；不要仅因代码行数少而跳过。纯机械且已被现有行为测试覆盖的映射、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格明确排除的假设性边缘情况，不必新增独立测试方法；多个紧密相关的简单字段优先由一个行为级测试覆盖，而不是一字段一测试。参数化案例按独立行为、字段映射和共享校验等价类选取：同一等价类保留一个代表输入即可，不默认生成字段×状态×错误值的全排列；只有当某个组合本身产生不同的可观察行为、状态转换或安全/数据完整性风险时才单独保留。不为压缩数量而合并独立行为，也不规定测试案例数上限。把保留的测试行为、代表输入、预计展开次数和省略项的理由都写入 TDD task。若没有可执行的公开 seam、行为或聚焦测试命令，停止并报告缺口；不要在 implement 中重新设计。
@@ -90,4 +90,6 @@ TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成�
 - Local Markdown ticket 在代码提交成功后仅于本地变为 `resolved`，完成说明记录可核验的 `Implementation commit`；tracker 未被暂存或提交，remote tracker 未关闭或修改；
 - 未推送远端，除非任务明确要求。
 
-完成后报告 commit、实现行为、TDD 证据摘要、review verdict、验证命令和 residual risks。下一个 ticket 必须在新的 implement session 中处理；不要在当前会话继续批量实现。
+完成后报告 commit、实现行为、TDD 证据摘要、review verdict、验证命令和 residual risks。独立调用时，下一个 ticket 必须在新的 implement session 中处理；不要在当前会话继续批量实现。
+
+唯一批量编排例外：用户显式调用 [matt-implement-spec](../matt-implement-spec/SKILL.md) 时，本 skill 每次仍只执行一个 ticket；完成后交回该 parent，由 `matt-implement-spec` 在同一父会话串行选择下一张。每票重新核验 handoff、seams、范围与宿主授权，单写者、逐票完整验证、双轴 PASS 和提交/本地状态写回条件不变；这不授予独立 implement 自动扩张到下一票的能力。

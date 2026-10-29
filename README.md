@@ -2,7 +2,7 @@
 
 `pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
 
-当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、完成规格归档、throwaway prototype、hard-bug 诊断与 architecture deepening survey，以及 11 个交互式 parent：`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`；另有 6 个执行型 parent：`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、双轴 `matt-code-review` 与分阶段 `matt-tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `matt-prototype` 与 architecture workflows 的用户选择仍留在父会话。
+当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、完成规格归档、throwaway prototype、hard-bug 诊断、architecture deepening survey 与串行整份 spec 实现，以及 12 个交互式 parent：`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`；另有 6 个执行型 parent：`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、双轴 `matt-code-review` 与分阶段 `matt-tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `matt-prototype` 与 architecture workflows 的用户选择仍留在父会话。
 
 ## 安装
 
@@ -51,7 +51,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.27
 
 系统分为三个边界：
 
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、`matt-code-review`、`matt-tdd`）通过 registry workflow 调度子代理。
+1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、`matt-code-review`、`matt-tdd`）通过 registry workflow 调度子代理。
 2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
 3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
 
@@ -69,7 +69,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.27
   → 父会话核验并综合结果
 ```
 
-`matt-research`、`matt-prototype` 与 `architecture-scan` 使用单 lane；`architecture-design` 使用 minimal/flexible/common-caller 三个 fresh 只读 lane；`matt-prototype` 只把 artifact 构建交给唯一 `matt-worker`，`architecture-scan` 的 worker 只写 OS temp report；`matt-code-review` 使用相互独立的 `standards` 与 `spec` reviewer lanes；`matt-tdd` 先由唯一 `matt-worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，可以在父会话中调用执行型 workflow。`matt-archive` 不调用 workflow，只在用户给出准确 feature slug 后执行本地归档 gate 与文件移动，不创建提交。`matt-improve-codebase-architecture` 先调用 `architecture-scan` 生成 temp report，用户选择 candidate 并 grilling 后，只有明确需要 alternative interfaces 才调用 `architecture-design`；它不修改生产代码。`matt-implement` 仍在父会话中调用 `matt-tdd` 和 `matt-code-review`，负责单 ticket 的实现、验证、review 与代码提交。
+`matt-research`、`matt-prototype` 与 `architecture-scan` 使用单 lane；`architecture-design` 使用 minimal/flexible/common-caller 三个 fresh 只读 lane；`matt-prototype` 只把 artifact 构建交给唯一 `matt-worker`，`architecture-scan` 的 worker 只写 OS temp report；`matt-code-review` 使用相互独立的 `standards` 与 `spec` reviewer lanes；`matt-tdd` 先由唯一 `matt-worker` 执行 red→green，再由两个 fresh reviewer 并行复核。`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，可以在父会话中调用执行型 workflow。`matt-archive` 不调用 workflow，只在用户给出准确 feature slug 后执行本地归档 gate 与文件移动，不创建提交。`matt-improve-codebase-architecture` 先调用 `architecture-scan` 生成 temp report，用户选择 candidate 并 grilling 后，只有明确需要 alternative interfaces 才调用 `architecture-design`；它不修改生产代码。`matt-implement` 仍在父会话中调用 `matt-tdd` 和 `matt-code-review`，负责单 ticket 的实现、验证、review 与代码提交；`matt-implement-spec` 只串行编排该单票流程，不增加 writer lane 或 worktree。
 
 ## pi-subagents 最小加载
 
@@ -191,12 +191,12 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 /reload
 ```
 
-首次使用发布链前运行 `matt-setup`，业务项目使用仅本地 Local Markdown，由用户确认 label mapping、领域布局与隐私迁移 draft；它只写本地 `.x-matt/`、`.pi/APPEND_SYSTEM.md` 入口和 Git exclude，不向团队 AGENTS/README 添加工具说明，不会创建远端 issue 或 label。Matt 管理的项目文档统一采用：
+首次使用发布链前运行 `matt-setup`，业务项目使用仅本地 Local Markdown，由用户确认 label mapping、领域布局与隐私迁移 draft；它只写本地 `.x-matt/`、`.pi/APPEND_SYSTEM.md` 入口和 Git exclude，不向团队 AGENTS/README 添加工具说明，不会创建远端 issue 或 label。源码维护例外选择 GitHub/GitLab 时，`gh repo view` / `glab repo view` 必须能从仓库内打印项目；缺少的 canonical label 只给出用户需执行的 `gh label create` / `glab label create` 命令，未创建即保持未配置。已有 legacy `.x-matt/context/CONTEXT.md` / `CONTEXT-MAP.md` 时，setup 会先列出精确路径、取得批准后用普通 `mv` 迁移到 `GLOSSARY` 名称；未迁移则报告未配置，不写入指向新名称的契约。Matt 管理的项目文档统一采用：
 
 ```text
 .x-matt/
 ├── agents/   # tracker、label 和 domain 契约
-├── context/  # CONTEXT.md、CONTEXT-MAP.md 与多 context glossary
+├── context/  # GLOSSARY.md、GLOSSARY-MAP.md 与多 context glossary
 ├── adr/      # single-context ADR；多 context 时按子目录分组
 └── work/     # active Local Markdown spec/tickets/map/decisions；shipped/ 是唯一归档子目录
 ```
@@ -215,13 +215,21 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 
 所有 skills 默认把 `.x-matt/work/shipped/` 视为不存在：feature 枚举、Wayfinder frontier、`matt-to-spec` / `matt-to-tickets` 输入、`matt-implement` 入口与 `matt-code-review` Spec 轴都跳过归档内容，找不到 active spec 时返回“无可用 spec”，不回退到 shipped。只有用户在同一会话明确点名某个归档标题或路径时，才可只读对应对象作为历史依据；授权不允许重开 ticket、改状态、生成新 ticket、进入 frontier/implement 或成为 Spec 轴。
 
-需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/CONTEXT.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。shared understanding 确认后必须停止并把控制权交还给用户，由用户显式选择 `/skill:matt-to-spec`、一个 `/skill:matt-implement` 单 slice 或暂停；不得在同一连续流程中直接确认测试 seam 或启动 TDD。greenfield、多业务流程、多个 seam、部署/迁移、跨 session，或依赖用户提供且不能安全压缩的事实、说明、样例与约束的工作默认进入 spec → tickets；这些材料不限于任何项目或技术格式。目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
+需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/GLOSSARY.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。shared understanding 确认后必须停止并把控制权交还给用户，由用户显式选择 `/skill:matt-to-spec`、一个 `/skill:matt-implement` 单 slice 或暂停；不得在同一连续流程中直接确认测试 seam 或启动 TDD。greenfield、多业务流程、多个 seam、部署/迁移、跨 session，或依赖用户提供且不能安全压缩的事实、说明、样例与约束的工作默认进入 spec → tickets；这些材料不限于任何项目或技术格式。目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
 
 讨论无法回答一个明确的状态/逻辑或 UI 设计问题时，使用 model-invoked `matt-prototype`。父会话先确认唯一 question 与 logic/UI branch，再由单 worker 构建：logic 是可双击的单文件 HTML；UI 是真实页面上下文中通过 `?variant=` 切换的 3–5 个结构差异方案。用户本人给出 verdict 后，artifact 只提交到本机 `prototype/<slug>` 分支，禁止 push、PR、merge 或 rebase 进共享分支；原 branch 只接收可核验 context pointer，生产实现仍进入 `matt-to-spec`/`matt-implement`。
 
-`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得本地 prototype 分支 context pointer（不 push）与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
+`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得本地 prototype 分支 context pointer（不 push）与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。real tracker 的 map/child 只带 `wayfinder:map` / `wayfinder:<type>`，不附加 triage label；交叉引用只写第一遍创建得到的真实 identifier，不用占位符。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
 
-需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次执行带内置双轴复核的 `matt-tdd` 和父会话完整验证，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。当前没有实现批量 ticket 或 push/PR 的自动化。
+需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets；源是既有 issue 时把每张 ticket 建成它的 sub-issue，blocker 已用 native edges 表达时正文省略 `## Blocked by`。每次使用 `matt-implement` 只实现一个已确认 ticket，依次执行带内置双轴复核的 `matt-tdd` 和父会话完整验证，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。批量串行处理必须显式使用下面的 `matt-implement-spec`，仍不支持 push/PR 自动化。
+
+整份 spec 已拆好 tickets、希望在同一父会话逐票执行时，使用串行轻量版：
+
+```text
+/skill:matt-implement-spec .x-matt/work/<feature-slug>/spec.md
+```
+
+它只支持 Local Markdown，在干净的当前分支按依赖 frontier 串行复用 `matt-implement`。每票仍需确认公开 seam，并由 TUI/RPC 对具体 ticket/scope/allowedFiles 授权；批量入口不授予整份 spec 写入通行证，无 UI 时停止。提交成功且本地 `resolved` 与 `Implementation commit` 写回核验后才开始下一票；任何阻塞或失败暂停整批，已成功提交不回滚。全部 tickets 达到经核验的终态后，才从原始 fixed point 到 HEAD 做一次 committed 整份 spec 双轴评审，不能只评最后一票或在半途以全 spec 判断未实现需求。最终 review 失败只报告并停止，不自动开修复票或循环广域 review。续跑需提供原始 fixed-point SHA，重新核验 resolved 提交的 ancestry，不能把当前 HEAD 当新基线；成功和暂停报告都会保留该 SHA。该入口不创建 worktree/分支、不 push/PR，parent spec 保持 `spec-ready`，归档仍需用户另行运行 `matt-archive`。
 
 具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；需要新回归测试但不想移动原工作区快照时，使用上述宿主隔离的内联 `testFiles` 路径。没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
 
@@ -234,9 +242,9 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 }
 ```
 
-代码评审使用 `workflow: "matt-code-review"`。父会话声明 `reviewKind=worktree|committed|files`，优先提供 Review Evidence Pack：fixed point/current HEAD、状态、完整 manifest、完整 combined diff、新文件全文/hash、deleted/rename old/new 和注明来源的测试记录。Standards lane 只接收适用工程规范与安全/正确性边界；Spec lane 只接收 ticket acceptance matrix 和 parent spec 相关条款。独立评审指独立判断，不是重复发现上下文；已内联内容无需再次 `read`。没有 Pack 的 standalone review 按精确 allowlist 取证，允许一次完整、未截断的 combined diff，仅截断或需要深入检查时按文件补读；`worktree` 禁止以 `ref...HEAD` 替代当前工作区，`files` 不调用 Git。默认只读 manifest，仅在截断、symbol 不明、一层依赖待核验、hash 不符或安全/数据完整性风险时，说明缺口后定向扩展一层，不递归、不扫描整个 module。证据不足返回 `NO_EVIDENCE`。`matt-reviewer` 只保留 hard 50 的只读工具预算，不通过提高上限掩盖重复扫描。
+代码评审使用 `workflow: "matt-code-review"`。父会话声明 `reviewKind=worktree|committed|files`，优先提供 Review Evidence Pack：fixed point/current HEAD、状态、完整 manifest、完整 combined diff、新文件全文/hash、deleted/rename old/new 和注明来源的测试记录。Standards lane 只接收适用工程规范与安全/正确性边界，调度前必须搜索仓库标准文件，存在 `CODING_STANDARDS.md` / `CONTRIBUTING.md` 时必须在列；Spec lane 只接收 ticket acceptance matrix 和 parent spec 相关条款，issue 引用经 tracker 契约取回。两轴在一次 dispatch 中一起发出并前台聚合。独立评审指独立判断，不是重复发现上下文；已内联内容无需再次 `read`。没有 Pack 的 standalone review 按精确 allowlist 取证，允许一次完整、未截断的 combined diff，仅截断或需要深入检查时按文件补读；`worktree` 禁止以 `ref...HEAD` 替代当前工作区，`files` 不调用 Git。默认只读 manifest，仅在截断、symbol 不明、一层依赖待核验、hash 不符或安全/数据完整性风险时，说明缺口后定向扩展一层，不递归、不扫描整个 module。证据不足返回 `NO_EVIDENCE`。`matt-reviewer` 只保留 hard 50 的只读工具预算，不通过提高上限掩盖重复扫描。
 
-TDD 调度前，父会话按 [Context Pack 契约](.pi/skills/matt-tdd/context-packs.md) 提供 Implementation Context Pack：ticket/parent/blocker 核验、acceptance matrix、适用条款、known code map、expected change points、固定点/文件 hash、精确 manifest 与命令分层。源码通常给路径和 symbol，不全文内联；worker 从必须读取文件开始，只有 symbol 缺失、调用关系不一致或 Pack 与工作区不符时才定向搜索一次、一层。dispatcher 在入队前保存真实基线，implement gate 通过后由受信任的 `pi-x-matt.tdd` named resource 执行固定 collector 命令，在 OS temp 生成只读 Review Evidence Pack，再启动两个 fresh reviewer。采集失败或基线漂移会停止工作流，不回退到原始脚本执行 host 命令。测试 phase/exitCode/testCount/outcome 仍标为 worker-reported，不冒充独立验证；父会话最终检查 Pack 新鲜度并运行最终验证。
+TDD 调度前，父会话按 [Context Pack 契约](.pi/skills/matt-tdd/context-packs.md) 提供 Implementation Context Pack：ticket/parent/blocker 核验、acceptance matrix、适用条款、known code map、expected change points、固定点/文件 hash、精确 manifest 与命令分层。源码通常给路径和 symbol，不全文内联；worker 从必须读取文件开始，只有 symbol 缺失、调用关系不一致或 Pack 与工作区不符时才定向搜索一次、一层。dispatcher 在入队前保存真实基线，implement gate 通过后由受信任的 `pi-x-matt.tdd` named resource 执行固定 collector 命令，在 OS temp 生成只读 Review Evidence Pack，再启动两个 fresh reviewer。采集失败或基线漂移会停止工作流，不回退到原始脚本执行 host 命令。测试 phase/exitCode/testCount/outcome 仍标为 worker-reported，不冒充独立验证；父会话最终检查 Pack 新鲜度并运行最终验证。每个候选 seam 需附一行“能抓到什么/漏掉什么”；forced RED 必须用 pristine 副本 `diff` 证明 mutation 落地。
 
 执行型 workflow 按角色保留运行余量：worker lane 为 20 分钟，reviewer lane 为 15 分钟，reader/researcher lane 为 10 分钟；timeout 缺少结构化结果后的 settlement-only resume 为 5 分钟。正常漏交由 runtime 在原 timeout 内补交，不增加 dispatcher 恢复轮次。预算只限制单个 lane，不替代任务范围、最小验证和 fail-closed gate。授权等待、证据准备、queue/RPC、执行与 settlement 分开记录；原生 trace 的 run-operation duration 也包含该次 runtime 操作的准备/收尾，不直接等同模型推理时间。阶段通过 `pi-matt:dispatch-phase` 事件报告，不要求模型轮询；原始 timeout 与恢复失败保留在 gate 前快照和 `recoveryHistory`。RPC 回应丢失只按原 alias 对账，不重新 spawn。
 
