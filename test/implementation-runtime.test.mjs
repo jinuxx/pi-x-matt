@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -23,8 +24,8 @@ const finding = {
   expected: "reject null", actual: "throws", locations: ["parser.mjs:1"],
   classification: "original", relatedFindingIds: [], affectedBy: [], recommendation: "validate first",
 };
-const review = (axis, fail = false) => ({ key: axis, ok: true,
-  structuredOutput: { axis, verdict: fail ? "FAIL" : "PASS", summary: "review", findings: fail ? [finding] : [], notes: [] } });
+const review = (axis, fail = false, item = finding) => ({ key: axis, ok: true,
+  structuredOutput: { axis, verdict: fail ? "FAIL" : "PASS", summary: "review", findings: fail ? [item] : [], notes: [] } });
 
 async function fixture(run) {
   const cwd = await mkdtemp(join(tmpdir(), "matt-runtime-project-"));
@@ -66,7 +67,7 @@ async function fixture(run) {
     laneTasks: { implement: "implement parser", standards: "standards only", spec: "AC1 only" },
     implementation: { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] },
   };
-  const settle = async ({ fail = false, executionFailure = false, value = "patched\n" } = {}) => {
+  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", findingOverride } = {}) => {
     const launch = launches.at(-1), calls = [], emits = [];
     const runs = {
       all: async items => {
@@ -78,7 +79,7 @@ async function fixture(run) {
             results.push({ key: "implement", ok: true, structuredOutput: worker });
           } else if (item.key === "spec" && executionFailure) {
             results.push({ key: "spec", ok: false, error: "fetch failed" });
-          } else results.push(review(item.key, item.key === "spec" && fail));
+          } else results.push(review(item.key, item.key === "spec" && fail, findingOverride));
         }
         return results;
       },
@@ -284,5 +285,126 @@ test("ticket digests are read by the host, including ignored artifacts, and ship
     assert.notEqual(first.ticketDigest, changed.ticketDigest);
     await assert.rejects(() => resolveImplementationScope(f.ctx.cwd,
       { ...input, ticket: ".x-matt/work/shipped/../feature/ticket.md" }), /shipped history/);
+  });
+});
+
+test("failed isolated commands do not persist reproduction output in the diagnosis trace", async () => {
+  await fixture(async f => {
+    await writeFile(join(f.ctx.cwd, "parser.test.mjs"), "process.exit(0);\n");
+    await exec("git", ["add", "parser.test.mjs"], { cwd: f.ctx.cwd });
+    await exec("git", ["commit", "-qm", "diagnostic baseline"], { cwd: f.ctx.cwd });
+    const params = { ...f.params, implementation: { ...f.params.implementation,
+      allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticFiles: ["parser.test.mjs"],
+      diagnosticCommands: ["node parser.test.mjs"],
+    } };
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true, value: 'export const state = "reviewed";\n',
+      findingOverride: { ...finding, classification: "regression" } });
+    const marker = "SYNTHETIC-FAILED-REPRODUCTION-MARKER";
+    const content = 'import { readFileSync } from "node:fs";\n' +
+      'process.stderr.write(readFileSync(new URL(import.meta.url), "utf8"));\n' +
+      `process.exit(2); // ${marker}\n`;
+    let failure;
+    await assert.rejects(() => f.runtime.dispatch({ ...params, repair: {
+      previousDispatchId: initial.details.dispatchId,
+      groups: [{ id: "parser", findingIds: ["spec:parse"], contract: "preserve reviewed state",
+        preserve: ["valid input"], validationOrder: "validate -> parse",
+        callPath: ["public -> parser"], examples: ["invalid input rejects"] }],
+      diagnosis: { rootCauseIds: ["parser"], explanation: "diagnostic failure",
+        prediction: "the approved command reports the target symptom",
+        command: "node parser.test.mjs", expectedFailure: "target regression",
+        testFiles: [{ path: "parser.test.mjs", content }] },
+    } }, undefined, f.ctx), error => { failure = error; return error.code === 2; });
+    assert.equal(failure.message.includes(marker), false);
+    assert.equal(JSON.stringify(f.entries).includes(marker), false);
+    const trace = f.entries.findLast(entry => entry.customType === "pi-x-matt.dispatch-phase" &&
+      entry.data.phase === "diagnosis" && entry.data.state === "failed");
+    assert.equal(trace.data.error.code, 2);
+    assert.match(trace.data.error.message, /outputSha256=[0-9a-f]{64}/);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    assert.equal(f.runtime.plans.size, 0);
+  });
+});
+
+test("an isolated diagnosis reproduces the regression, hands off only path/hash evidence, and preserves the original repair chain", async () => {
+  await fixture(async f => {
+    const green = [
+      'import assert from "node:assert/strict";',
+      'import { state } from "./parser.mjs";',
+      'assert.ok(["head", "reviewed"].includes(state));',
+      "",
+    ].join("\n");
+    const inlineMarker = "SYNTHETIC-INLINE-MARKER-4c7a2f18";
+    const red = [
+      'import assert from "node:assert/strict";',
+      'import { state } from "./parser.mjs";',
+      'assert.equal(state, "fixed", "target regression: parser still returns " + state);',
+      `// synthetic inline marker: ${inlineMarker}`,
+      "",
+    ].join("\n");
+    const inlineSha256 = createHash("sha256").update(red).digest("hex");
+    const reviewed = 'export const state = "reviewed";\n';
+    await writeFile(join(f.ctx.cwd, "parser.test.mjs"), green);
+    for (const args of [["add", "."], ["commit", "-qm", "green regression check"]]) {
+      await exec("git", args, { cwd: f.ctx.cwd });
+    }
+    const params = { ...f.params, implementation: {
+      ticket: "slice:parser", scope: "preserve parser contract",
+      allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticFiles: ["parser.test.mjs"],
+      diagnosticCommands: ["node parser.test.mjs"],
+    } };
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true, value: reviewed,
+      findingOverride: { ...finding, classification: "regression" } });
+    f.reload();
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.test.mjs"), "utf8"), green);
+    const before = await exec("node", ["parser.test.mjs"], { cwd: f.ctx.cwd });
+    assert.equal(before.stderr, "");
+    const repair = {
+      previousDispatchId: initial.details.dispatchId,
+      groups: [{ id: "parser", findingIds: ["spec:parse"], contract: "validate before exposing state",
+        preserve: ["reviewed module loads"], validationOrder: "validate -> expose",
+        callPath: ["public -> parser"], examples: ["reviewed state is not fixed"] }],
+      diagnosis: {
+        rootCauseIds: ["parser"], explanation: "the reviewed module still exposes the pre-fix state",
+        prediction: "the inline regression check fails on the reviewed source",
+        command: "node parser.test.mjs",
+        expectedFailure: "target regression: parser still returns reviewed",
+        testFiles: [{ path: "parser.test.mjs", content: red }],
+      },
+    };
+    const repairDispatch = await f.runtime.dispatch({ ...params, repair }, undefined, f.ctx);
+    assert.equal(f.runtime.plans.size, 1);
+    const status = await exec("git", ["status", "--porcelain"], { cwd: f.ctx.cwd });
+    assert.equal(status.stdout, " M parser.mjs\n");
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.test.mjs"), "utf8"), green);
+    const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(record.repair.diagnosis.isolation.reviewedDispatchId, initial.details.dispatchId);
+    assert.equal(record.repair.diagnosis.isolation.reviewedSnapshotId, record.repair.previousSnapshotId);
+    assert.deepEqual(record.repair.diagnosis.isolation.testFiles,
+      [{ path: "parser.test.mjs", sha256: inlineSha256 }]);
+    assert.equal(JSON.stringify(record).includes(inlineMarker), false);
+    const queuedImplement = repairDispatch.details.lanes.find(lane => lane.key === "implement");
+    assert.match(queuedImplement.task, /Root-cause repair contract/);
+    assert.equal(queuedImplement.task.includes(inlineMarker), false);
+    assert.match(queuedImplement.task, new RegExp(inlineSha256));
+    const previousRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY)
+      .map(entry => entry.data).find(data => data.id === initial.details.dispatchId);
+    const reviewedPack = JSON.parse(await readFile(previousRecord.evidence.snapshotPath, "utf8"));
+    assert.equal(reviewedPack.manifest.find(entry => entry.path === "parser.mjs").content, reviewed);
+    const head = await exec("git", ["show", "HEAD:parser.mjs"], { cwd: f.ctx.cwd });
+    assert.notEqual(head.stdout, reviewed);
+    await assert.rejects(() => f.runtime.dispatch({ ...params, repair }, undefined, f.ctx),
+      /still active|latest host dispatch/);
+    assert.equal(f.runtime.plans.size, 1);
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: 'export const state = "fixed";\n' });
+    assert.equal(repaired.status.state, "complete");
+    const finalRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    const finalPack = JSON.parse(await readFile(finalRecord.evidence.snapshotPath, "utf8"));
+    assert.deepEqual(finalPack.incremental.changes.map(change => change.path), ["parser.mjs"]);
   });
 });

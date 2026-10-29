@@ -69,6 +69,9 @@ export default function (pi: ExtensionAPI) {
         ticket: Type.String({ minLength: 1, description: "Exact active project-relative ticket path, or slice:<stable-id> for an approved direct slice." }),
         scope: Type.String({ minLength: 1, description: "Stable approved behavior/contract and architecture boundaries; unchanged across repairs." }),
         allowedFiles: strings(),
+        diagnosticFiles: Type.Optional(Type.Array(text(), {
+          description: "Exact subset of allowedFiles the host may add or replace only inside its isolated diagnostic workspace.",
+        })),
         diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands; runtime diagnosis is bounded to 30 seconds." })),
       })),
       repair: Type.Optional(Type.Object({
@@ -80,6 +83,10 @@ export default function (pi: ExtensionAPI) {
         diagnosis: Type.Optional(Type.Object({
           rootCauseIds: strings(), explanation: text(), prediction: text(),
           command: text(), expectedFailure: text(),
+          testFiles: Type.Optional(Type.Array(Type.Object({
+            path: text(),
+            content: Type.String({ minLength: 1, description: "Inline reproduction test/fixture content; never a trusted path, cwd or snapshot claim." }),
+          }), { minItems: 1, description: "Host writes these only to implementation.diagnosticFiles inside the reviewed-state isolation." })),
         })),
       })),
       recovery: Type.Optional(Type.Object({

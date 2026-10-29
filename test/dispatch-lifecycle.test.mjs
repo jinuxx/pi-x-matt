@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { AUTH_ENTRY, AUTH_TTL_MS, AUTH_WAIT_MS, authorizeWorkflowDispatch, createDispatchAuthorization } from "../lib/dispatch-authorization.mjs";
+import { AUTH_ENTRY, AUTH_TTL_MS, AUTH_WAIT_MS, authorizeWorkflowDispatch, createDispatchAuthorization, normalizeImplementationScope } from "../lib/dispatch-authorization.mjs";
 import { createDispatchTrace, requestRpc, withDeadline } from "../lib/dispatch-runtime.mjs";
 import { diagnoseRepair, prepareRepair, reviewRecovery } from "../lib/repair-contract.mjs";
 import { validateReviewResult } from "../lib/review-contract.mjs";
+import { normalizeDiagnosticTestFiles } from "../lib/diagnostic-workspace.mjs";
 
 const identity = { sessionId: "session", projectRoot: "/project", branch: "main", head: "fixed" };
 const scope = { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"],
@@ -62,6 +63,48 @@ test("cancelled or aborted confirmations never create a reusable grant", async (
   }, scope, controller.signal), /cancel/);
   authorization.start("session", entries);
   await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
+});
+
+test("diagnostic file permission extends the exact scope without changing the default approved shape", () => {
+  const base = { ticket: "slice:parser", scope: "preserve parser contract",
+    allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticCommands: ["node parser.test.mjs"] };
+  assert.deepEqual(Object.keys(normalizeImplementationScope(base)),
+    ["ticket", "scope", "allowedFiles", "diagnosticCommands"]);
+  assert.deepEqual(normalizeImplementationScope({ ...base, diagnosticFiles: ["parser.test.mjs", "parser.test.mjs"] })
+    .diagnosticFiles, ["parser.test.mjs"]);
+  assert.throws(() => normalizeImplementationScope({ ...base, diagnosticFiles: ["other.test.mjs"] }),
+    /subset of allowedFiles/);
+  assert.throws(() => normalizeImplementationScope({ ...base, diagnosticFiles: ["../parser.test.mjs"] }),
+    /project-relative/);
+  assert.throws(() => normalizeImplementationScope({ ...base, diagnosticFiles: "/tmp/parser.test.mjs" }),
+    /project-relative/);
+  assert.throws(() => normalizeImplementationScope({ ...base, diagnosticFiles: "parser.test.mjs" }),
+    /diagnosticFiles/);
+});
+
+test("production source paths never receive isolated diagnostic write permission", () => {
+  const approved = { ticket: "slice:parser", scope: "preserve parser contract",
+    allowedFiles: ["src/parser.mjs", "parser.test.mjs"], diagnosticCommands: ["node src/parser.mjs"],
+    diagnosticFiles: ["src/parser.mjs"] };
+  assert.throws(() => normalizeImplementationScope(approved), /test or fixture/);
+  assert.throws(() => normalizeDiagnosticTestFiles({ diagnosticFiles: ["src/parser.mjs"] },
+    [{ path: "src/parser.mjs", content: 'console.error("target regression"); process.exit(1);\n' }]),
+  /test or fixture/);
+  assert.deepEqual(normalizeImplementationScope({ ...approved, diagnosticFiles: ["parser.test.mjs"] })
+    .diagnosticFiles, ["parser.test.mjs"]);
+});
+
+test("the authorization dialog shows isolated diagnostic files and the grant binds them exactly", async () => {
+  const { authorization, entries } = host();
+  let message;
+  const extended = { ...scope, allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticFiles: ["parser.test.mjs"] };
+  const ctx = { hasUI: true, ui: { confirm: async (_title, text) => { message = text; return true; } } };
+  assert.equal(await authorize(authorization, ctx, extended), "user-confirmed");
+  assert.match(message, /Diagnostic files.*parser\.test\.mjs/);
+  const restored = host().authorization;
+  restored.start("session", entries);
+  assert.equal(await authorize(restored, { hasUI: false }, extended), "reused-implement-grant");
+  await assert.rejects(() => authorize(restored, { hasUI: false }), /authorization/);
 });
 
 test("a late confirmation cannot grant or revoke authorization in a replacement session", async () => {

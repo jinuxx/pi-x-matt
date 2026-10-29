@@ -11,11 +11,12 @@
   "ticket": ".x-matt/work/feature/ticket.md",
   "scope": "已批准的行为、既有行为与架构边界；修复期间保持不变",
   "allowedFiles": ["src/parser.ts", "test/parser.test.ts"],
+  "diagnosticFiles": ["test/parser.test.ts"],
   "diagnosticCommands": ["npm test -- parser.test.ts"]
 }
 ```
 
-`ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。
+`ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticFiles` 可选，必须是 `allowedFiles` 的精确子集，且只能列测试/fixture 路径，不得把生产源码列入；测试/fixture 路径按最小命名规则识别：任一路径目录段恰为 `test`、`tests`、`__tests__`、`fixture` 或 `fixtures`，或文件名匹配 `*.test.*` / `*.spec.*`；未命中一律 fail closed，不读取文件内容、不探测测试框架、不提供配置项。它只为宿主隔离诊断区授予添加/替换文件的权限，不授予原工作区写权限，缺省时范围规范化对象保持 v0.2.27 形状。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。授权确认会展示隔离诊断文件清单。
 
 用户显式 `/skill:matt-implement` 产生一次 invocation intent，只能绑定第一个限定范围；缺少该记录时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 invocation/ticket/内容 hash/项目/branch/HEAD/范围不重复入口确认。宿主以非模型上下文 custom entry 保存真实输入/确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
 
@@ -63,12 +64,19 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
     "explanation": "能解释全部相关失败的当前根因",
     "prediction": "可证伪预测与已观测结果",
     "command": "npm test -- parser.test.ts",
-    "expectedFailure": "能识别原始症状的精确失败文本"
+    "expectedFailure": "能识别原始症状的精确失败文本",
+    "testFiles": [{ "path": "test/parser.test.ts", "content": "内联复现测试或 fixture 内容" }]
   }
 }
 ```
 
 宿主只执行范围内预先批准的精确命令，最多 30 秒；必须退出码为 1 且出现目标失败文本。成功命令、环境失败、超时或其他症状不能解锁。保存命令、退出码与输出 hash，不把原始日志/敏感数据复制进事件。结论仍由父会话据真实证据判断；这个检查不宣称自动证明根因。没有可用 repro/权限时停止，而非继续第三轮补丁。
+
+若 `testFiles` 提供内联复现内容，父流程必须在提交前完成脱敏并只使用合成或已脱敏 fixture；凭据只经环境变量传入，不写入测试、fixture 或输出。宿主先严格确认原工作区仍等于最近已审 `snapshotId`，并重算 pack 的实际 head/cwd/manifest/diff 绑定：必须匹配宿主记录的 `snapshotId`、`diffSha256` 与实际项目/Git root，内容/hash 被改写即拒绝。随后在自己的 OS temp 目录中从该已审状态重建完整项目：HEAD 中未变化源码，加上已审未提交的 tracked/untracked/删除/重命名变更；只把内联内容写入 `diagnosticFiles` 中的精确路径。随后在隔离区的项目根执行同一个已批准命令，仍要求退出码 1 与目标失败文本。原工作区、HEAD 与 index 不变；运行前后各校验一次原快照，漂移则禁止 writer 入队。GREEN、其他症状、超时、取消、缺少运行前提以及隔离区生产源码/未获批文件变化，都不能作为可信诊断；任何命令结局都复核原快照并清理自有临时区，原始错误与漂移/清理错误保持因果链。宿主把原 dispatchId、已审 snapshotId、范围 hash、根因 IDs、命令、退出码、输出 hash 与测试 path/内容 sha256 记录到 `repair.diagnosis.isolation`，并继续同一个 repair；内联正文只在该次临时区使用，长期 repair 证据与 implement lane handoff 不含原文。该隔离是本机故障隔离，不是安全 sandbox：不联网安装依赖，不复制个人 ignored 资料，也不把原源码路径链接进隔离区。隔离区不含原 `.git`、submodule 内容或未复制的依赖；依赖这些前提的命令按缺少运行前提失败，而不是伪装成目标 RED。该门禁不自动识别任意 secret/PII，也不能从会话记录中抹去已经提交的工具输入。未提供 `testFiles` 时保留原路径：直接在项目根执行已批准命令。
+
+隔离区的非诊断文件指纹同时包含内容与权限；失败子进程输出不进入持久化 trace，仅保留退出状态、信号和输出摘要。准备失败且清理也失败时，两者错误都保留，不用清理错误覆盖原始原因。
+
+“原测试 GREEN、补测试后 RED”是本路径要支持的场景，不是强制先 GREEN 的新增门禁；原已能复现的目标 RED 同样有效。宿主仍只接受获批命令真实产生的目标失败，worker 后续必须独立完成自己的 RED→GREEN。
 
 ## 增量 findings
 

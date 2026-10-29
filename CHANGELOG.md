@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- TDD 新增可选 `implementation.diagnosticFiles`（`allowedFiles` 的精确子集）与 `repair.diagnosis.testFiles`；缺省时保持 v0.2.27 的范围对象形状，既有 grant/reload/repair 不受影响，授权确认会展示隔离诊断文件权限。
+- 需要内联复现测试时，宿主先严格确认原工作区等于最近已审 `snapshotId`，再在自己的 OS temp 区从 HEAD 与已审未提交变更（含删除/重命名）重建项目，只写入获批诊断文件并执行原批准命令；退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未变，才继续同一个 repair。GREEN、其他症状、超时、取消、快照漂移与越权改动均 fail closed。
+- 诊断证据绑定原 dispatchId、已审 snapshotId/范围 hash、根因 IDs、命令、退出码、输出 hash 与测试 path/内容 hash；成功、失败与取消都清理宿主临时区，不联网安装依赖、不复制个人 ignored 资料，也不把该本机故障隔离称为安全 sandbox。无 `testFiles` 时保留原项目根诊断路径；30 秒、授权、repair lineage、唯一 writer 与 gate 不变。
+- 内联诊断正文只在宿主 owned 临时区用于取得 RED；`repair.diagnosis.isolation` 与 implement lane handoff 仅保存准确 path 与内容 sha256，不再复制原文。父流程必须在提交 `testFiles` 前脱敏并只用合成/已脱敏 fixture；凭据只经环境变量，不写入测试/fixture/输出。不新增自动 DLP/redactor，也不承诺识别任意 secret/PII 或从会话记录抹去已提交的工具输入。
+- 隔离诊断失败时不向持久化 trace 复制子进程输出，保留退出状态与输出摘要；非诊断文件的权限变化也被拒绝。准备失败与清理失败同时保留因果；不增加“原测试必须先 GREEN”门禁，原已失败的复现仍可使用。
+- README、Dispatch Lifecycle、diagnosing-bugs skill 与生成 registry 同步更新；131/131 测试、registry、upstream drift 与打包检查通过。
+
 ## 0.2.27
 
 - Implement 授权改为 invocation/ticket/hash/项目/branch/HEAD/精确范围绑定的宿主记录；运行时确认可复用，reload 从当前 session branch 恢复。取消/过期/无可信来源仍 fail closed，保留新范围与架构/破坏性决定确认。

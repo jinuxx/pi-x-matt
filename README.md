@@ -179,6 +179,8 @@ npm run pack:check     # 检查 package 文件清单
 
 TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时确认绑定到 ticket/hash、项目/branch/HEAD 和精确范围，由宿主 custom entry 保存并在 reload 时恢复。同范围连续修复不重复入口确认；新 ticket、实质范围/架构变化和破坏性决定仍需确认。授权最多 24 小时，对话等待最多 5 分钟；取消、过期或无可信来源且无 UI 时 fail closed。完整输入、修复、诊断、增量 review 与局部恢复见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
 
+受限诊断可用可选的 `implementation.diagnosticFiles`（`allowedFiles` 的精确子集）与 `repair.diagnosis.testFiles` 提供内联复现内容；授权确认会展示这份隔离权限，缺省时保持既有范围对象形状。父流程必须在提交 `testFiles` 前完成脱敏，只使用合成或已脱敏 fixture；凭据只经环境变量，不写入测试、fixture 或输出。宿主先严格确认原工作区等于最近已审快照，再在自己的 OS temp 区从该已审状态（HEAD 加已审未提交变更，含删除/重命名）重建项目，只写入获批诊断文件并运行原批准命令；要求退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未被改动，否则 fail closed 且不排 writer。成功、失败与取消都清理宿主临时区；GREEN、其他症状、超时、取消、快照漂移和越权改动都不能解锁。该隔离只用于本机故障隔离，不是安全 sandbox，不联网安装依赖，也不复制个人 ignored 资料；宿主只在该次临时区使用正文，repair 证据与 implement lane handoff 仅保留准确 path 与内容 sha256。该门禁不自动识别任意 secret/PII，也不能从会话记录抹去已经提交的工具输入；没有 `testFiles` 时保留原项目根诊断路径。
+
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
 ## 当前使用方式
@@ -221,7 +223,7 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 
 需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高测试 seam，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets。每次使用 `matt-implement` 只实现一个已确认 ticket，依次执行带内置双轴复核的 `matt-tdd` 和父会话完整验证，全部通过后提交当前 branch；缺少规划 artifact 时 implement/TDD 不得手写 `.x-matt/work/` 解阻。当前没有实现批量 ticket 或 push/PR 的自动化。
 
-具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
+具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；需要新回归测试但不想移动原工作区快照时，使用上述宿主隔离的内联 `testFiles` 路径。没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
 
 周期性 architecture upkeep、build 前 seam 评估或诊断确认缺少正确 seam 时，手动运行 `matt-improve-codebase-architecture`。它按用户方向或近期 hot paths 限定 scope，调用 `architecture-scan` 在 OS temp 生成 deletion-test report；用户可以只保留报告，或选择一个 candidate 进入 `matt-grilling`/`matt-domain-modeling`。需要比较 interface 时再调用三个只读 `architecture-design` lanes。最终只产生可进入 `matt-to-spec` 的决定，不修改生产代码。
 
