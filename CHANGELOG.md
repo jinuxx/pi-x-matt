@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Implement 授权改为 invocation/ticket/hash/项目/branch/HEAD/精确范围绑定的宿主记录；运行时确认可复用，reload 从当前 session branch 恢复。取消/过期/无可信来源仍 fail closed，保留新范围与架构/破坏性决定确认。
+- 修复任务采用结构化根因契约与宿主轮次记录；同根因两次未解或相关回归先受限诊断，第三轮补丁不能机械启动。必要测试数量不设上限。
+- Evidence Pack 增加前后 snapshotId、获批 finding 集合、宿主计算的真实增量与内容/hash；review finding 增加依据、预期/实际、根因及回归分类。无影响的已审内容不重审，真实新安全/完整性风险不隐藏，双轴 PASS 条件不变。
+- 授权/证据/入队/RPC/执行/结算分别记录时间与状态，通过事件通知而非模型轮询；丢失 RPC 回应按原 requestId 对账，禁止盲目重派发。超时与 settlement 再失败均保留原始因果链。
+- 在授权/快照有效时，仅允许一次失败 reviewer 的显式局部恢复，复用已完成实现、证据和有效另一轴；不替换有效 FAIL，不叠加已有 settlement 恢复。writer 前增加宿主原子 claim，阻止上游 autoResume 重放同一脚本重复实现，不修改用户全局配置。
+
 ## 0.2.26
 
 - Dispatcher 在每阶段 gate 校验前通过 runtime `emit(...)` 发布完整累积结果到 `status.json → workflow.emits`；两个 reviewer 同时不通过时仍保留两轴全部 findings，workflow 继续 fail closed。

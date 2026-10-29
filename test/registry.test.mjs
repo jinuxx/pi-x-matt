@@ -272,36 +272,38 @@ test("package manifest exposes namespaced resources", async () => {
 
 test("dispatcher keeps the package root in the extension", async () => {
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
+  const runtime = await readFile(join(ROOT, "lib", "implementation-runtime.mjs"), "utf8");
   assert.match(extension, /const PACKAGE_ROOT = resolve\(dirname\(fileURLToPath\(import\.meta\.url\)\), "\.\.\/\.\.\/\.\."\)/);
-  assert.match(extension, /loadCurrentRegistry\(PACKAGE_ROOT\)/);
+  assert.match(extension, /createImplementationRuntime\(pi, PACKAGE_ROOT\)/);
+  assert.match(runtime, /loadCurrentRegistry\(packageRoot\)/);
   assert.match(extension, /registerWorkflowResource/);
-  assert.match(extension, /const \{ script: _script, \.\.\.options \} = plan\.rpcParams/);
-  assert.match(extension, /workflow: "pi-x-matt\.tdd"/);
+  assert.match(runtime, /const \{ script: _script, \.\.\.options \} = plan\.rpcParams/);
+  assert.match(runtime, /workflow: "pi-x-matt\.tdd"/);
 });
 
 test("project dispatcher defers pi-subagents RPC until turn_end", async () => {
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
-  assert.match(extension, /const pendingDispatches: PendingDispatch\[\] = \[\]/);
-  assert.match(extension, /pi\.on\("turn_end"/);
-  assert.match(extension, /pendingDispatches\.push/);
+  const runtime = await readFile(join(ROOT, "lib", "implementation-runtime.mjs"), "utf8");
+  assert.match(runtime, /const pending = \[\]/);
+  assert.match(extension, /pi\.on\("turn_end", \(\) => runtime\.flush\(\)\)/);
+  assert.match(runtime, /pending\.push/);
   assert.match(extension, /const PACKAGE_ROOT = resolve\(dirname\(fileURLToPath\(import\.meta\.url\)\), "\.\.\/\.\.\/\.\."\)/);
-  assert.match(extension, /loadCurrentRegistry\(PACKAGE_ROOT\)/);
-  assert.match(extension, /await requestRpc\(pi, "spawn", dispatch\.rpcParams\)/);
-  assert.doesNotMatch(extension, /const result = await requestRpc/);
+  assert.match(runtime, /loadCurrentRegistry\(packageRoot\)/);
+  assert.match(runtime, /rpc\("spawn", dispatch\.rpcParams/);
 });
 
 test("project dispatcher requires runtime user authorization before queuing matt-tdd", async () => {
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
-  assert.match(extension, /import \{ createDispatchAuthorization, authorizeWorkflowDispatch \} from "\.\.\/\.\.\/\.\.\/lib\/dispatch-authorization\.mjs"/);
-  assert.match(extension, /createDispatchAuthorization\(\)/);
+  const runtime = await readFile(join(ROOT, "lib", "implementation-runtime.mjs"), "utf8");
+  assert.match(runtime, /createDispatchAuthorization/);
   assert.match(extension, /pi\.on\("input"/);
-  assert.match(extension, /authorization\.observeInput\(event\.text, event\.source\)/);
+  assert.match(runtime, /authorization\.observeInput\(event\.text, event\.source\)/);
   assert.match(extension, /pi\.on\("session_start"/);
-  assert.match(extension, /authorization\.reset\(\)/);
-  assert.match(extension, /await authorizeWorkflowDispatch\(workflow\.name, signal, ctx, authorization\)/);
-  assert.match(extension, /authorization: authorizationReason/);
-  const authorizationIndex = extension.indexOf("await authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization)");
-  const queueIndex = extension.indexOf("pendingDispatches.push");
+  assert.match(runtime, /authorization\.start\(sessionId, entries/);
+  assert.match(runtime, /authorizeWorkflowDispatch\(workflow\.name, signal, ctx, authorization, scope, identity/);
+  assert.match(runtime, /authorization: authorizationReason/);
+  const authorizationIndex = runtime.indexOf("authorizeWorkflowDispatch(workflow.name, signal, ctx, authorization");
+  const queueIndex = runtime.indexOf("pending.push");
   assert.notEqual(authorizationIndex, -1);
   assert.notEqual(queueIndex, -1);
   assert.ok(authorizationIndex < queueIndex, "matt-tdd authorization must happen before the dispatch is queued");
@@ -739,9 +741,9 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(tdd, /`matt-implement` 使用的内部执行 parent/);
   assert.match(tdd, /不得使用 `write`\/`edit` 创建 spec 或 ticket 解阻/);
   assert.match(tdd, /没有明确 spec\/验收行为.*时停止/);
-  assert.match(tdd, /只在无法确认用户显式发起实现时才拦截/);
-  assert.match(tdd, /本 session 由用户执行 `\/skill:matt-implement` 启动时直接放行/);
-  assert.match(tdd, /没有可响应的 UI 时必须拒绝调度/);
+  assert.match(tdd, /真实用户 invocation\/运行时确认绑定到 ticket 内容 hash/);
+  assert.match(tdd, /从宿主可信记录恢复 reload/);
+  assert.match(tdd, /无可靠授权且无 UI.*时拒绝调度/);
   assert.match(tdd, /位于 `\.x-matt\/work\/shipped\/` 就立即 fail closed/);
 
   const research = await readFile(join(ROOT, ".pi", "skills", "matt-research", "SKILL.md"), "utf8");
@@ -769,9 +771,9 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /shared understanding 确认后必须停止并把控制权交还给用户/);
   assert.match(readme, /`Reference Inputs`/);
   assert.match(readme, /TDD 使用内部 `workflow: "matt-tdd"`/);
-  assert.match(readme, /`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI\/RPC 授权/);
-  assert.match(readme, /本 session 以 `\/skill:matt-implement` 启动时直接放行/);
-  assert.match(readme, /取消或 print\/JSON mode 没有 UI 时 fail closed/);
+  assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
+  assert.match(readme, /同范围连续修复不重复入口确认/);
+  assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
   assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.26/);
   assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.26/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);

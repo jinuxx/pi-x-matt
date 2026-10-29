@@ -102,7 +102,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.26
 }
 ```
 
-这是影响所有项目的用户级设置，不是 `.pi/settings.json` 的 `subagents` 字段；package 安装不会自动修改它。恢复前仍须核验中断状态与工作区，不得自动重派发写者。
+这是影响所有项目的用户级设置，不是 `.pi/settings.json` 的 `subagents` 字段；package 安装不会自动修改它。TDD 另外在 writer 前使用宿主原子 claim，阻止同一脚本重放再次启动 writer，不依赖该全局设置。恢复前仍须核验中断状态与工作区，不得自动重派发写者。
 
 因此本地开发配置不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。package manifest 只加载本 package 的 dispatcher，并只暴露四个 `matt-*` 自定义 agents；reviewer 默认继承用户当前模型，不要求 DeepSeek provider（可按角色覆盖，见[为子代理指定模型](#为子代理指定模型)）。`pi-subagents` 由上面的 project-local package 配置提供：
 
@@ -171,7 +171,9 @@ npm run pack:check     # 检查 package 文件清单
 
 生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema` 与正数 `timeoutMs`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
 
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口。它在每次 dispatch 时重新验证 registry 中所有 port 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`laneTasks` 可为指定 lane 提供完整任务替换；`matt-tdd` 强制同时提供 implement/standards/spec 三项，`matt-code-review` 强制提供 standards/spec 两项，避免实现、恢复指令或轴专属证据跨角色泄漏。工具调用把已验证 plan 放入内存队列，TDD 另保存调度前 Git 快照；随后在 `turn_end` 的有效 extension context 中通过 pi-subagents 进程内 RPC 发起异步 run。TDD 使用 session-scoped trusted workflow resource，只授予包内 collector 的固定命令；其他 workflow 继续使用无 host 权限的原始脚本。正常结束但漏调用 `structured_output` 时，由新版 runtime 在原 session 与原 timeout 内补交一次，仍失败则 fail closed，dispatcher 不再追加第二轮；缺少结构化结果的 timeout 仍在 retained child 可恢复时追加一次只结算、不继续工作的 resume。`matt-tdd` 只在无法确认本次实现由用户显式发起时才要求 TUI/RPC 授权：本 session 以 `/skill:matt-implement` 启动时直接放行，模型自行进入 TDD 时才要求确认；取消或 print/JSON mode 没有 UI 时 fail closed，不会排队 workflow。普通 prose output 被禁用；生成的 workflow script 会核对每个 stage 的结果数量、lane key 与运行时 schema 捕获的 `structuredOutput`，在 `ok !== true`、缺失、错序或 gate 不满足时让整个 workflow fail closed。不存在的 workflow、过期 registry、错误 scope、跨 agent skill 或不支持的 dispatch mode 同样会被拒绝。
+项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口，宿主生命周期逻辑位于 `lib/implementation-runtime.mjs`。每次 dispatch 重新验证 registry 的 source/workflow digest 和项目内路径，计算 leaf 闭包并校验 agent 绑定；`matt-tdd` 强制提供 implement/standards/spec 三项完整 `laneTasks`，`matt-code-review` 强制提供 standards/spec 两项，避免角色或轴专属证据泄漏。已验证 plan 在 `turn_end` 经进程内 RPC 异步启动；TDD 使用 session-scoped trusted resource，只授予包内 collector 固定命令，其他 workflow 仍使用无 host 权限脚本。普通 prose output 被禁用；结果数量、lane key、`ok === true`、结构化 schema 与双轴 `PASS` gate 不变，任何不满足均 fail closed。
+
+TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时确认绑定到 ticket/hash、项目/branch/HEAD 和精确范围，由宿主 custom entry 保存并在 reload 时恢复。同范围连续修复不重复入口确认；新 ticket、实质范围/架构变化和破坏性决定仍需确认。授权最多 24 小时，对话等待最多 5 分钟；取消、过期或无可信来源且无 UI 时 fail closed。完整输入、修复、诊断、增量 review 与局部恢复见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -230,11 +232,11 @@ npm run pack:check     # 检查 package 文件清单
 
 TDD 调度前，父会话按 [Context Pack 契约](.pi/skills/matt-tdd/context-packs.md) 提供 Implementation Context Pack：ticket/parent/blocker 核验、acceptance matrix、适用条款、known code map、expected change points、固定点/文件 hash、精确 manifest 与命令分层。源码通常给路径和 symbol，不全文内联；worker 从必须读取文件开始，只有 symbol 缺失、调用关系不一致或 Pack 与工作区不符时才定向搜索一次、一层。dispatcher 在入队前保存真实基线，implement gate 通过后由受信任的 `pi-x-matt.tdd` named resource 执行固定 collector 命令，在 OS temp 生成只读 Review Evidence Pack，再启动两个 fresh reviewer。采集失败或基线漂移会停止工作流，不回退到原始脚本执行 host 命令。测试 phase/exitCode/testCount/outcome 仍标为 worker-reported，不冒充独立验证；父会话最终检查 Pack 新鲜度并运行最终验证。
 
-执行型 workflow 按角色保留运行余量：worker lane 为 20 分钟，reviewer lane 为 15 分钟，reader/researcher lane 为 10 分钟；timeout 缺少结构化结果后的 settlement-only resume 为 5 分钟。正常漏交由 runtime 在原 timeout 内补交，不增加 dispatcher 恢复轮次。预算只限制单个 lane，不替代任务范围、最小验证和 fail-closed gate。
+执行型 workflow 按角色保留运行余量：worker lane 为 20 分钟，reviewer lane 为 15 分钟，reader/researcher lane 为 10 分钟；timeout 缺少结构化结果后的 settlement-only resume 为 5 分钟。正常漏交由 runtime 在原 timeout 内补交，不增加 dispatcher 恢复轮次。预算只限制单个 lane，不替代任务范围、最小验证和 fail-closed gate。授权等待、证据准备、queue/RPC、执行与 settlement 分开记录；原生 trace 的 run-operation duration 也包含该次 runtime 操作的准备/收尾，不直接等同模型推理时间。阶段通过 `pi-matt:dispatch-phase` 事件报告，不要求模型轮询；原始 timeout 与恢复失败保留在 gate 前快照和 `recoveryHistory`。RPC 回应丢失只按原 alias 对账，不重新 spawn。
 
-TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。该 workflow 只在用户于本 session 以 `/skill:matt-implement` 显式发起时直接放行；模型自行请求时，dispatcher 会在入队前要求用户确认当前确实要实现一个已核验 ticket 或已批准 direct slice，取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
+TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。显式 invocation 或运行时确认只授予一个限定范围；同范围修复和 reload 复用可信授权，无法核验时仍要求确认，取消或无 UI 时不会启动。调度前必须由用户确认公开 seam、待验证行为和测试价值判断：显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
 
-`matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。review finding 会按同一轮合并请求一次授权；获批修复使用聚焦 `matt-tdd`，只复核修复增量、原 finding 与必要的一层依赖，不重新裁决未变化且已通过的文件。
+`matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。review findings 按同一轮合并根因但保留两轴结论；已有连续修复授权覆盖时不重复询问，新增范围/决定才确认。聚焦修复使用结构化 `repair` 和宿主增量快照；同根因两次未解或相关回归先受限诊断，不机械开启第三轮补丁。仅执行失败的 reviewer 可有界 `recovery`，不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
 
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。RPC 使用 inline `script`，TDD 使用 named `workflow`，两者不能同时发送。每条 lane 必须 `ok === true`，失败后保留的结构化结果不能通过 gate 或启动后续 stage。
 

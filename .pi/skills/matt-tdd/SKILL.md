@@ -29,10 +29,11 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
+- `implementation`、连续修复的 `repair` 或失败 reviewer 的 `recovery`：完整遵循 [Dispatch Lifecycle](dispatch-contract.md)。保存宿主 dispatchId；不得以重复初始实现代替修复/恢复。
 - `task`: 只放三条 lane 都可安全读取的共享事实：需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、module/package 搜索边界和停止条件。不得把仅适用于 implement 的 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等指令放入共享 task。
 - `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换，不自动继承 `task`。`implement` 包含 Implementation Context Pack、RED/GREEN 与相关回归命令，明确完整测试套件/全量 build/最终验证由父会话执行、worker 不得运行。`standards` 只需共同证据边界、适用工程规范与安全/正确性边界；`spec` 只需共同边界、ticket acceptance matrix 与 parent spec 相关条款。两者先消费 workflow 生成的 Review Evidence Pack，额外读取仅限已说明的缺口、一层直接依赖；不得要求 `status COMPLETE` 或用旧 transcript 代替 diff。report-only、resume 或失败恢复也必须提供三项，不退回共享 task。
 
-Dispatcher 只在无法确认用户显式发起实现时才拦截：本 session 由用户执行 `/skill:matt-implement` 启动时直接放行；模型自行走到 TDD 时会要求用户确认当前调用来自已核验的 ticket/direct-slice handoff。用户取消或当前 mode 没有可响应的 UI 时必须拒绝调度；不得把失败解释为已经授权，也不得绕过 `pi_matt_dispatch`。
+Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。相同范围的连续修复复用授权，不重复询问入口或已经批准的 seams/范围；新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消、未响应或过期时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
 
 工作流按代码强制的阶段执行：
 
@@ -48,5 +49,5 @@ Dispatcher 只在无法确认用户显式发起实现时才拦截：本 session 
 1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON，再只消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`。
 2. 区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效；失败 workflow 按契约读取最新阶段快照，不要求异常分支存在 `workflow.value`。检查所有已返回 lane，保留两个轴的完整结果；不得回退到普通 prose。
 3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令。
-4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口，并等待用户决定是否进入修复循环，不自动重跑实现。
+4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口。已有连续修复授权覆盖的真实 findings 按结构化根因契约聚焦修复，不再重复询问；新增决定/范围才询问。`NO_EVIDENCE`、执行失败或无效报告先有界恢复 reviewer，不重复 writer。同根因两轮未解或相关回归触发受限诊断，不机械开启下一轮补丁。
 5. 即使 reviewer 均通过，也由父会话核对 Review Evidence Pack 与当前 HEAD、status、文件 hash，检查最终 diff，确认没有越过批准 seams、范围或既有改动。Pack 过期不得沿用 PASS。

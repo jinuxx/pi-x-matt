@@ -16,6 +16,12 @@ metadata:
 
 开始时完整读取依赖 [matt-implement](../matt-implement/SKILL.md)，但在达到 Root-cause gate 前不得进入实现。父会话拥有用户 checkpoint、证据归属和最终判断；任何时刻最多一个写者，禁止与 `matt-worker` 并行修改同一工作区。
 
+## Implement 内的受限修复诊断
+
+只有 dispatcher 已对当前 ticket 返回 `DIAGNOSIS_REQUIRED` 时使用本分支，而非重新启动下方独立 hard-bug 流程。复用现有 Pack、全部相关 findings、不变量与共享调用路径；只补当前根因必需的一层依赖，不全读 context/ADR，不重开 ticket/invocation，不重新设计模块。
+
+先复跑并最小化原始失败，明确输入检查/归一化顺序、必须保留行为、可证伪预测和必要正反例。使用 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 中获批的精确本地诊断命令取得目标 RED，报告根因与反证，再以结构化 `repair.diagnosis` 回到原 TDD。已有授权涵盖的读取/命令不重复要求用户挑选假设；只有新增权限、范围、架构决定或缺少关键事实时才确认。没有目标 repro 或证据不足则停止，不为满足轮数门禁编造根因。临时文件仍受单写者、隐私和 cleanup 边界限制。
+
 ## Redact gate
 
 诊断会展示命令、输出、日志和捕获 artifact。任何展示或持久化前先删除 secret、token、cookie、Authorization header、个人数据与生产标识，统一用 `<REDACTED>` 替换。凭据只通过环境变量传入命令，不写进 task、测试、fixture、日志、截图、Comments 或提交。

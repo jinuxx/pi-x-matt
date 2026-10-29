@@ -34,4 +34,6 @@ metadata:
 
 限定证据集足以证明问题时立即返回 `FAIL`；完成限定检查且没有 finding 时返回 `PASS`；限定证据不足时立即返回 `NO_EVIDENCE`。`NO_EVIDENCE` 是诚实的停止结果，不得为了制造 `PASS` 扩大文件范围、扫描目录或追踪更多调用层级。
 
+修复复核以 Pack 的上次已审 snapshotId、本次 snapshotId、获批 finding IDs 与宿主增量为边界。未变化且无依赖影响的内容不重新裁决；原问题未解决、修复回归及新证实的安全/完整性问题仍可阻断。每项必须提供 `id`、稳定 `rootCauseId`、`basis.kind=standard|safety|integrity` 与精确 `reference`、`expected`、`actual`、代码路径/复现 evidence；`classification=original|regression|independent`，前两者用 `relatedFindingIds` 引用获批的 `standards:<id>`，无引用时不得声称原问题或回归。`affectedBy` 列出造成一层依赖影响的本轮变化路径，且在 evidence 解释影响链，否则为空。非阻断建议只进 notes，不以 severity 代替证据。
+
 最终使用运行时结构化输出工具返回 schema 对象。

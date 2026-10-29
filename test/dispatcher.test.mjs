@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { authorizeWorkflowDispatch, createDispatchAuthorization, parseInvokedSkill } from "../lib/dispatch-authorization.mjs";
+import { authorizeWorkflowDispatch as authorizeDispatch, createDispatchAuthorization as createAuthorization, parseInvokedSkill } from "../lib/dispatch-authorization.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 import {
   buildDispatchRequest,
@@ -15,6 +15,15 @@ import {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REVIEW_LANE_TASKS = { standards: "Standards evidence only", spec: "Spec evidence only" };
+const AUTH_SCOPE = { ticket: "slice:test", scope: "test contract", allowedFiles: ["file.mjs"], ticketDigest: "host-digest" };
+const AUTH_IDENTITY = { sessionId: "session", projectRoot: ROOT, branch: "main", head: "fixed" };
+function createDispatchAuthorization() {
+  const authorization = createAuthorization();
+  authorization.start("session");
+  return authorization;
+}
+const authorizeWorkflowDispatch = (name, signal, ctx, authorization) =>
+  authorizeDispatch(name, signal, ctx, authorization, AUTH_SCOPE, AUTH_IDENTITY);
 
 async function withTempDispatcherProject(run) {
   const temp = await mkdtemp(join(tmpdir(), "pi-x-matt-dispatcher-"));
@@ -126,7 +135,7 @@ test("dispatcher still prompts when implement was not user-invoked", async () =>
 test("dispatcher authorization fails closed for matt-tdd without UI or confirmation", async () => {
   await assert.rejects(
     () => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false, ui: {} }, createDispatchAuthorization()),
-    /requires explicit user authorization outside an explicit \/skill:matt-implement session/,
+    /requires explicit user authorization/,
   );
 
   let prompt;
@@ -143,9 +152,9 @@ test("dispatcher authorization fails closed for matt-tdd without UI or confirmat
     /was not authorized by the user; no workflow was queued/,
   );
   assert.equal(prompt.title, "Authorize matt-tdd?");
-  assert.match(prompt.message, /No explicit \/skill:matt-implement invocation was seen/);
-  assert.match(prompt.message, /verified one ready ticket or approved a direct slice/);
-  assert.match(prompt.message, /publish a spec, split tickets, or pause/);
+  assert.match(prompt.message, /continuous repairs within the SAME scope/);
+  assert.match(prompt.message, /slice:test/);
+  assert.match(prompt.message, /Cancel to pause/);
 });
 
 test("dispatcher authorization records an explicit matt-tdd confirmation", async () => {
@@ -461,7 +470,7 @@ test("TDD host evidence is captured once after implement and before both reviewe
   assert.deepEqual(order, ["implement", "review-evidence", "standards,spec"]);
   assert.deepEqual(emitted.filter(value => value.type !== "pi-x-matt.stage-results"), [{ reviewEvidencePath: evidence.path }]);
   const snapshots = emitted.filter(value => value.type === "pi-x-matt.stage-results");
-  assert.deepEqual(snapshots.map(value => value.stage), [1, 2]);
+  assert.deepEqual(snapshots.map(value => value.stage), [1, 1, 2, 2]);
   assert.deepEqual(snapshots.at(-1).results, results);
   order.length = 0;
   await assert.rejects(() => execute({ ...runs, host: async () => { throw new Error("capture failed"); } }, () => {}), /capture failed/);
@@ -640,6 +649,32 @@ test("dispatcher does not repeat the runtime's structured-output recovery", asyn
     }];
   } }), /Missing structured_output call/);
   assert.equal(calls, 1, "the runtime already owns the one-shot missing-output follow-up");
+});
+
+test("review timeout and failed settlement retain both causes and never add another retry", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-code-review"], "review", ROOT, REVIEW_LANE_TASKS);
+  const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+  for (const throws of [false, true]) {
+    let calls = 0;
+    const emits = [];
+    await assert.rejects(() => new AsyncFunction("runs", "emit", plan.rpcParams.script)({
+      all: async () => {
+        if (++calls === 1) return [
+          { key: "standards", ok: true, structuredOutput: { verdict: "PASS" } },
+          { key: "spec", ok: false, timedOut: true, error: "Subagent timed out after 900000ms.",
+            runId: "retained", resumability: { state: "resumable" } },
+        ];
+        if (throws) throw new Error("fetch failed");
+        return [{ key: "spec-settlement", ok: false, error: "fetch failed" }];
+      },
+    }, value => emits.push(structuredClone(value))), /900000ms.*settlement failed.*fetch failed/);
+    assert.equal(calls, 2);
+    const snapshots = emits.filter(value => value.type === "pi-x-matt.stage-results");
+    assert.equal(snapshots[0].results[1].error, "Subagent timed out after 900000ms.");
+    assert.equal(snapshots.at(-1).results[1].recoveryHistory[0].timedOut, true);
+    assert.equal(snapshots.at(-1).results[0].structuredOutput.verdict, "PASS");
+  }
 });
 
 test("dispatcher fails closed on malformed lanes and cross-agent grants", async () => {

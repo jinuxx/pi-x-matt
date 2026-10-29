@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { collectReviewEvidence, writeReviewEvidence } from "../lib/review-evidence.mjs";
+import { collectReviewEvidence, repairDelta, writeReviewEvidence } from "../lib/review-evidence.mjs";
 import { prepareTddEvidence } from "../lib/review-workflow.mjs";
 
 async function fixture(run) {
@@ -97,6 +97,9 @@ test("the actual finite host command writes a read-only pack outside the target 
   await fixture(async (cwd) => {
     const evidence = await prepareTddEvidence(cwd, fileURLToPath(new URL("..", import.meta.url)));
     try {
+      assert.equal(JSON.parse(execSync(evidence.claimCommand, { cwd, encoding: "utf8" })).claimed, true);
+      assert.throws(() => execSync(evidence.claimCommand, { cwd, stdio: "pipe" }), /Command failed/,
+        "a replay cannot claim a writer again, even when upstream autoResume replays the script");
       await writeFile(join(cwd, "tracked.txt"), "implemented\n");
       const result = JSON.parse(execSync(evidence.command, { cwd, encoding: "utf8" }));
       assert.equal(result.path, evidence.path);
@@ -117,5 +120,24 @@ test("evidence collector preserves pre-existing changes and flags non-text evide
     assert.match(pack.baseline.diff, /user change/);
     assert.equal(pack.complete, false);
     assert.equal(pack.manifest.find(f => f.path === "binary.bin").encoding, "base64");
+  });
+});
+
+test("repair increments bind reviewed snapshots, ignore unchanged work and retain restored HEAD contents", async () => {
+  await fixture(async cwd => {
+    await writeFile(join(cwd, "tracked.txt"), "first reviewed implementation\n");
+    await writeFile(join(cwd, "other.txt"), "already reviewed unchanged file\n");
+    const reviewed = await collectReviewEvidence(cwd);
+    await writeFile(join(cwd, "tracked.txt"), "before\n");
+    const current = await collectReviewEvidence(cwd, { baseline: reviewed });
+    const delta = repairDelta(reviewed, current, {
+      previousSnapshotId: reviewed.snapshotId, approvedFindingIds: ["spec:F1"], allowedFiles: ["tracked.txt"],
+    });
+    assert.deepEqual(delta.changes.map(change => change.path), ["tracked.txt"]);
+    assert.equal(delta.changes[0].before.content, "first reviewed implementation\n");
+    assert.equal(delta.changes[0].after.content, "before\n");
+    assert.equal(delta.currentSnapshotId, current.snapshotId);
+    assert.throws(() => repairDelta(reviewed, current, { previousSnapshotId: "stale" }), /stale/);
+    assert.throws(() => repairDelta(reviewed, current, { allowedFiles: ["other.txt"] }), /outside/);
   });
 });

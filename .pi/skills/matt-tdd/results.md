@@ -25,3 +25,5 @@
    - `implement` 返回合法 `BLOCKED`：属于**实现受阻**；stage 1 快照不应含 reviewer，未启动的后续阶段不是复核不通过。实现执行失败、结果缺失或无效时同样禁止启动后续证据采集与复核。
 5. 不得从 `output`、`outputReference`、`outputArtifactPath`、文件扩展名、自然语言或 workflow receipt 重建结构化结果，也不从 `workflow-children.jsonl`、旧 transcript 或通知拼装结果。上述 `status.json` 字段是本项目所有 dispatcher workflow 的完整结果来源。
 6. 来源缺失、不可读或 JSON 无效，失败快照缺失/标识不符，或阶段结果不完整时 fail closed，报告准确的 workflow run ID、lane key 与路径；不得自动重派发、改变执行模式或回退到预览。已有的阶段结果可作诊断，但不授权继续执行或提交。
+
+超时 settlement 前后均保留 gate 前快照。恢复后的 lane 使用 `recoveryHistory` 保留原始失败；settlement 再失败时同时报告原 timeout 与恢复错误，不只报告最后的 fetch failed。`pi-x-matt.recovery` emit 记录恢复边界，不是成功结果来源。只有授权/快照仍有效且符合 [局部恢复契约](dispatch-contract.md) 时，显式恢复失败 reviewer；不重新启动 implement，也不以有效 FAIL 为执行故障重跑。

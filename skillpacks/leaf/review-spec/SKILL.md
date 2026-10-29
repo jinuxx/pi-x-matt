@@ -29,4 +29,6 @@ metadata:
 
 证据足以证明问题时立即返回 `FAIL`；完成限定检查且没有 finding 时返回 `PASS`；限定证据不足时返回 `NO_EVIDENCE`、空 findings，并在 notes 说明缺失来源。不要把缺少 spec 本身报告成实现缺陷，也不得为了制造 `PASS` 扩大文档或代码范围。
 
+修复复核以 Pack 的上次已审 snapshotId、本次 snapshotId、获批 finding IDs 与宿主增量为边界。未变化且无依赖影响的内容不重新裁决；原验收问题未解决或修复回归仍可阻断。每项必须提供 `id`、稳定 `rootCauseId`、`basis: {kind: "acceptance", reference: 精确验收原文/条款}`、`expected`、`actual`、代码路径/复现 evidence；`classification=original|regression|independent`，前两者用 `relatedFindingIds` 引用获批的 `spec:<id>`。`affectedBy` 列出造成一层依赖影响的本轮变化路径并解释影响链，否则为空。不把个人意见、规格外内容或 severity 本身作为阻断依据；新安全/完整性风险交 Standards 轴核验，不扩写 Spec。
+
 最终使用运行时结构化输出工具返回 schema 对象。

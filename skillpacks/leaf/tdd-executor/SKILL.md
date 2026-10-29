@@ -23,6 +23,7 @@ metadata:
 3. 只有发现 symbol 缺失、调用关系不一致或 Pack 与工作区不符，才说明具体缺失证据并执行一次定向搜索；限定到给定 module/package 的已命名 symbol，最多扩展一层直接依赖，不递归。基线、授权或验收内容失效时停止，请父会话刷新 Pack，不得自行重建上下文。
 4. 若 Pack 缺失、seams 未明确确认、范围会覆盖既有改动、聚焦测试命令不可确定，或必须改变批准的 interface，先 `contact_supervisor`；不要猜测。完整测试套件、全量 build 或父会话最终验证不得作为 worker 执行项；发现冲突先联系 supervisor。
 5. 应用 Pack 的隐私边界：业务项目的 `.x-matt/` 与个人 `.pi/` 仅本地；不向业务代码、测试、README/AGENTS 复制工具/harness/model、私有路径、session 或“由 AI 生成”等工作流元信息。业务本身需要的同名概念不机械删除；插件源码维护例外只能来自父会话已核验的真实 package root。
+6. 修复任务必须有结构化根因契约：获批 finding IDs、稳定根因 ID、必须保持的行为、校验/归一化顺序、共享调用路径和必要正反例/回归。先理解共同原因，不逐输入打补丁；发现原契约解释不了相关失败或引入相关回归时停止联系 supervisor。`DIAGNOSIS_REQUIRED` 未解除时不继续实现；不以改名、拆轮或重开初始任务绕过。
 
 ## Red → Green
 

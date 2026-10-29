@@ -130,6 +130,35 @@ test("TDD PASS remains readable from persisted workflow.value", async () => {
     });
 });
 
+test("controlled incremental review and selective recovery run in the pinned native sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md", controlled: true };
+  const workflow = registry.skills["matt-tdd"];
+  const laneTasks = { implement: "Implementation pack", standards: "Standards only", spec: "Spec only" };
+  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks, evidence);
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const result = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async key => key === "implement" ? implementResult(plan) : reviewResult(plan, key, "PASS"),
+    host: async key => ({ key, kind: "command", ok: true, state: "passed", exitCode: 0,
+      stdout: JSON.stringify({ boundary: { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: [] } }),
+      stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 }),
+  });
+  assert.deepEqual(result.value.map(row => row.key), ["implement", "standards", "spec"]);
+  const prior = result.value.map(row => row.key === "spec" ? { key: "spec", ok: false, error: "fetch failed" } : row);
+  const recovery = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks, evidence, {
+    results: prior, keys: ["spec"], boundary: { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: [] },
+  });
+  const calls = [];
+  const recovered = await runWorkflowScript({
+    script: recovery.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async key => { calls.push(key); return reviewResult(plan, key, "PASS"); },
+    host: async () => { throw new Error("Recovery must not recapture evidence"); },
+  });
+  assert.deepEqual(calls, ["spec"]);
+  assert.equal(recovered.value[2].recoveryHistory[0].error, "fetch failed");
+});
+
 test("each reviewer FAIL or NO_EVIDENCE fails closed with both full results persisted", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md" };

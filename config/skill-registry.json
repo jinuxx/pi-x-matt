@@ -794,9 +794,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "e8e9cc49e64629091ed4f9aea10b3df3ef56bcb1c400cb7aca7968e922102ba4",
+      "sourceDigest": "09465130869b890cf3e275486ce172b7b4af5daa2728a66126755ee981f4a1c9",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
-      "workflowDigest": "07511aff0564caf8851fd1b1240aa88b72ce22ec2473f48ec3b34e6d80ac8993",
+      "workflowDigest": "608e4d1ad30c56e420f973a12613daae517cc363d92767eab91e6d6ee596cc6e",
       "workflow": {
         "version": 1,
         "name": "matt-code-review",
@@ -851,16 +851,80 @@
                         "type": "string"
                       },
                       "evidence": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       "locations": {
                         "type": "array",
+                        "minItems": 1,
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1
                         }
                       },
                       "recommendation": {
                         "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "rootCauseId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "basis": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "acceptance",
+                              "standard",
+                              "safety",
+                              "integrity"
+                            ]
+                          },
+                          "reference": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "reference"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "expected": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "actual": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "classification": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "regression",
+                          "independent"
+                        ]
+                      },
+                      "relatedFindingIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "affectedBy": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
                       }
                     },
                     "required": [
@@ -868,7 +932,15 @@
                       "title",
                       "evidence",
                       "locations",
-                      "recommendation"
+                      "recommendation",
+                      "id",
+                      "rootCauseId",
+                      "basis",
+                      "expected",
+                      "actual",
+                      "classification",
+                      "relatedFindingIds",
+                      "affectedBy"
                     ],
                     "additionalProperties": false
                   }
@@ -939,16 +1011,80 @@
                         "type": "string"
                       },
                       "evidence": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       "locations": {
                         "type": "array",
+                        "minItems": 1,
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1
                         }
                       },
                       "recommendation": {
                         "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "rootCauseId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "basis": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "acceptance",
+                              "standard",
+                              "safety",
+                              "integrity"
+                            ]
+                          },
+                          "reference": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "reference"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "expected": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "actual": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "classification": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "regression",
+                          "independent"
+                        ]
+                      },
+                      "relatedFindingIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "affectedBy": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
                       }
                     },
                     "required": [
@@ -956,7 +1092,15 @@
                       "title",
                       "evidence",
                       "locations",
-                      "recommendation"
+                      "recommendation",
+                      "id",
+                      "rootCauseId",
+                      "basis",
+                      "expected",
+                      "actual",
+                      "classification",
+                      "relatedFindingIds",
+                      "affectedBy"
                     ],
                     "additionalProperties": false
                   }
@@ -995,7 +1139,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-diagnosing-bugs/SKILL.md",
-      "sourceDigest": "e90e6c40f831ae76092bb43017f08caf230c41ea261af2dad7805fb618cdaf02",
+      "sourceDigest": "d01575272f055a6d03983d3ac092fe248bb4a9f1d447d18602d53d6e25b23c21",
       "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "77f3cf31bc99b2f49af943222526531fcc9fc41d047626d3640e875e85af3e84"
@@ -1056,7 +1200,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "d610319f8c5a6864a3d4b51a3caf238c0868f21dc6be6bba4164c87b24958f25",
+      "sourceDigest": "7bda0b9a07697418e8b68e05830536789a73bb5f9d19f7160ddae1481e5c1d83",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "6d3fd9e83b8f36e5213854779db49b256a457a7ebb4a503e53fa7dcff696adc3"
@@ -1389,9 +1533,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "822ee3870efe49aa6b72d18b5113e6de5a58d95e1e3b640ea2ba72df15d4175f",
+      "sourceDigest": "19b2e62df416ccea9f0ce95102d7da6a3d634646b158f2515ac5c13e26c8f1e1",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "a8b004363c0a728e9232194b10f76b362960e39a80ce0e915f90750ec54b8fdc",
+      "workflowDigest": "ddf2e11029ef3d06d196629bba6e0225d6d4ccc7623d25280f40607e08524d40",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1617,16 +1761,80 @@
                         "type": "string"
                       },
                       "evidence": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       "locations": {
                         "type": "array",
+                        "minItems": 1,
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1
                         }
                       },
                       "recommendation": {
                         "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "rootCauseId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "basis": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "acceptance",
+                              "standard",
+                              "safety",
+                              "integrity"
+                            ]
+                          },
+                          "reference": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "reference"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "expected": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "actual": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "classification": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "regression",
+                          "independent"
+                        ]
+                      },
+                      "relatedFindingIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "affectedBy": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
                       }
                     },
                     "required": [
@@ -1634,7 +1842,15 @@
                       "title",
                       "evidence",
                       "locations",
-                      "recommendation"
+                      "recommendation",
+                      "id",
+                      "rootCauseId",
+                      "basis",
+                      "expected",
+                      "actual",
+                      "classification",
+                      "relatedFindingIds",
+                      "affectedBy"
                     ],
                     "additionalProperties": false
                   }
@@ -1706,16 +1922,80 @@
                         "type": "string"
                       },
                       "evidence": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       "locations": {
                         "type": "array",
+                        "minItems": 1,
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1
                         }
                       },
                       "recommendation": {
                         "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "rootCauseId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "basis": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "acceptance",
+                              "standard",
+                              "safety",
+                              "integrity"
+                            ]
+                          },
+                          "reference": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "reference"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "expected": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "actual": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "classification": {
+                        "type": "string",
+                        "enum": [
+                          "original",
+                          "regression",
+                          "independent"
+                        ]
+                      },
+                      "relatedFindingIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "affectedBy": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
                       }
                     },
                     "required": [
@@ -1723,7 +2003,15 @@
                       "title",
                       "evidence",
                       "locations",
-                      "recommendation"
+                      "recommendation",
+                      "id",
+                      "rootCauseId",
+                      "basis",
+                      "expected",
+                      "actual",
+                      "classification",
+                      "relatedFindingIds",
+                      "affectedBy"
                     ],
                     "additionalProperties": false
                   }
@@ -1865,7 +2153,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "955fbe088d0ac296fdeae15230988eb3dbff3f50823b1298450f5d22c34e1263",
+      "sourceDigest": "38e822db8904a9bac54698c15bece89c257727a294112c5676f7c0fc1b567831",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
@@ -1879,7 +2167,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "6a4d03745adab760e88bdfdb31a7d3ec6bcfd673a4441c78c2d9828dab4004eb",
+      "sourceDigest": "75ec7427b8aa61298dd179a4a99b1d655abd6426c52dc8a1b8a71a7b798de934",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "47f4e52c21694def9c7c11cbfbf891ca35eac7a93e395797515be3c8a409ae50"
@@ -1895,7 +2183,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "6560763f39f8e4c62adc76582500034312cf8d2fa496730ffd6814580b5f0f8a",
+      "sourceDigest": "cba8c94e76cf18e769c0286dcfc4cc9043c0d92d6859c72561764be3ef30b693",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "3cca18b368ae95cdbdebbff572ccafa662551015",
       "upstreamDigest": "cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927"
