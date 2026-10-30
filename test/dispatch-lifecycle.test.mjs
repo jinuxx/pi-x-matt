@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 import { AUTH_ENTRY, AUTH_TTL_MS, AUTH_WAIT_MS, authorizeWorkflowDispatch, createDispatchAuthorization, normalizeImplementationScope } from "../lib/dispatch-authorization.mjs";
-import { createDispatchTrace, requestRpc, withDeadline } from "../lib/dispatch-runtime.mjs";
+import { createDispatchTrace, failureDetails, requestRpc, withDeadline } from "../lib/dispatch-runtime.mjs";
 import { diagnoseRepair, prepareReconsideration, prepareRepair, reviewRecovery, reviewReportCorrections } from "../lib/repair-contract.mjs";
 import { adjudicateReviewDecisions, validateReviewResult } from "../lib/review-contract.mjs";
 import { normalizeDiagnosticTestFiles } from "../lib/diagnostic-workspace.mjs";
@@ -240,6 +240,61 @@ test("two failed patches to one parsing root cause require diagnosis before the 
     }
     previous = { id: `repair-${attempt}`, snapshotId: "snapshot", repair };
   }
+});
+
+test("diagnostic command failures expose exit attribution without persisting raw output", async () => {
+  const repair = { needsDiagnosis: ["parser"], previousSnapshotId: "snapshot" };
+  const marker = "SYNTHETIC-RAW-DIAGNOSTIC-OUTPUT";
+  const command = "/absolute/project/.venv/bin/python -B -m venv_only_runner tests/repro.py";
+  const input = {
+    rootCauseIds: ["parser"], explanation: "the relative interpreter misses the venv-only dependency",
+    prediction: "the approved absolute interpreter reaches the dependency",
+    command, expectedFailure: "target regression: parser still returns reviewed",
+  };
+  const scopeOf = candidate => ({ diagnosticCommands: [candidate.command] });
+  await assert.rejects(() => diagnoseRepair(repair, input, scopeOf(input), "/project", undefined,
+    async () => {
+      throw Object.assign(new Error(`Command failed: ${marker}`), { code: 127, stderr: marker });
+    }), error => error.code === 127 && /exit 127/.test(error.message) &&
+    /interpreter/.test(error.message) && /outputSha256=[0-9a-f]{64}/.test(error.message) &&
+    !JSON.stringify(failureDetails(error)).includes(marker));
+  await assert.rejects(() => diagnoseRepair(repair, input, scopeOf(input), "/project", undefined,
+    async () => {
+      throw Object.assign(new Error(`Command failed: ${marker}`), { code: 1, stdout: marker });
+    }), error => /different symptom/.test(error.message) && /interpreter/.test(error.message) &&
+    /dependencies/.test(error.message) && /outputSha256=[0-9a-f]{64}/.test(error.message) &&
+    error.cause?.code === 1 && !JSON.stringify(failureDetails(error)).includes(marker));
+});
+
+test("failure projection preserves defined zero and termination status without raw output", async () => {
+  const marker = "SYNTHETIC-PROJECTED-RAW-MARKER";
+  const outputSha256 = "b".repeat(64);
+  const emitted = [];
+  const trace = createDispatchTrace({ id: "dispatch", emit: event => emitted.push(event) });
+  const terminated = Object.assign(new Error("Diagnostic command timed out or was terminated"), {
+    code: null, signal: "SIGTERM", killed: true, outputSha256,
+    stdout: marker, stderr: marker, arbitrary: marker,
+  });
+  await assert.rejects(() => trace.step("diagnosis", async () => { throw terminated; }),
+    error => error === terminated);
+  const failure = emitted.find(event => event.phase === "diagnosis" && event.state === "failed");
+  assert.deepEqual(failure.error, {
+    name: "Error", message: "Diagnostic command timed out or was terminated",
+    code: null, signal: "SIGTERM", killed: true, outputSha256,
+  });
+  assert.equal(JSON.stringify(failure).includes(marker), false);
+  assert.deepEqual(failureDetails(Object.assign(
+    new Error("Diagnosis did not reproduce the failure (exit 0)"), { code: 0, outputSha256 },
+  )), {
+    name: "Error", message: "Diagnosis did not reproduce the failure (exit 0)", code: 0, outputSha256,
+  });
+  const cause = Object.assign(new Error("Diagnostic command failed (exit 2)"), { code: 2, outputSha256 });
+  assert.deepEqual(failureDetails(new Error("Original worktree no longer matches", { cause })), {
+    name: "Error", message: "Original worktree no longer matches",
+    cause: { name: "Error", message: "Diagnostic command failed (exit 2)", code: 2, outputSha256 },
+  });
+  assert.deepEqual(failureDetails(new Error("dispatch failed")),
+    { name: "Error", message: "dispatch failed" });
 });
 
 test("a related regression diagnoses immediately; renaming a recurring group or omitting evidence is rejected", () => {

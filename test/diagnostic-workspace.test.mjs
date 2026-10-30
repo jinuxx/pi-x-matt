@@ -10,6 +10,7 @@ import test, { mock } from "node:test";
 import { collectReviewEvidence } from "../lib/review-evidence.mjs";
 import { prepareDiagnosticWorkspace } from "../lib/diagnostic-workspace.mjs";
 import { diagnoseRepair } from "../lib/repair-contract.mjs";
+import { failureDetails } from "../lib/dispatch-runtime.mjs";
 
 const exec = promisify(execFile);
 const GREEN = [
@@ -353,6 +354,130 @@ test("isolated diagnosis rejects GREEN, other symptoms, production edits and can
     assert.deepEqual(await readdir(f.tmpRoot), []);
     assert.equal(await readFile(join(f.project, "parser.test.mjs"), "utf8"), GREEN);
     assert.equal((await collectReviewEvidence(f.project)).snapshotId, f.pack.snapshotId);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("isolated command failures keep their exit classification without leaking raw output", async () => {
+  const f = await reviewedFixture();
+  const marker = "SYNTHETIC-RAW-DIAGNOSTIC-MARKER";
+  const nonExecutable = "test/not-executable.sh";
+  const scopeOf = input => ({
+    diagnosticFiles: input.testFiles.map(file => file.path),
+    diagnosticCommands: [input.command],
+  });
+  try {
+    for (const [input, expected] of [
+      [diagnosis({
+        command: `./${nonExecutable}`,
+        testFiles: [{ path: nonExecutable, content: "#!/bin/sh\nexit 1\n" }],
+      }), error => error.code === 126 && /exit 126/.test(error.message) &&
+        /not executable/.test(error.message) && /outputSha256=[0-9a-f]{64}/.test(error.message) &&
+        !error.message.includes("Permission denied")],
+      [diagnosis({ command: `node -e 'process.stderr.write("${marker}"); process.exit(2)'` }),
+        error => error.code === 2 && /exit 2/.test(error.message) &&
+          /outputSha256=[0-9a-f]{64}/.test(error.message) &&
+          /(verify|inspect|check)/.test(error.message) && /approved command/.test(error.message) &&
+          /(parameters|arguments)/.test(error.message) && /exit semantics/.test(error.message) &&
+          /(local environment|local runtime|environment)/.test(error.message) &&
+          !JSON.stringify(failureDetails(error)).includes(marker)],
+      [diagnosis({ expectedFailure: "never printed" }),
+        error => /different symptom/.test(error.message) && /interpreter/.test(error.message) &&
+          /dependencies/.test(error.message) && /outputSha256=[0-9a-f]{64}/.test(error.message) &&
+          error.cause?.code === 1 && !error.message.includes("parser still returns")],
+    ]) {
+      await assert.rejects(() => diagnoseRepair(contract(f), input, scopeOf(input), f.project,
+        undefined, exec, options(f)), expected);
+      assert.deepEqual(await readdir(f.tmpRoot), []);
+      assert.equal((await collectReviewEvidence(f.project)).snapshotId, f.pack.snapshotId);
+    }
+    assert.equal(await readFile(join(f.project, "parser.test.mjs"), "utf8"), GREEN);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("isolated GREEN preserves a structured exit-0 hash and never unlocks the writer", async () => {
+  const f = await reviewedFixture();
+  const marker = "SYNTHETIC-GREEN-OUTPUT-MARKER";
+  const outputSha256 = createHash("sha256").update(`${marker}\n`).digest("hex");
+  try {
+    const run = async () => ({ stdout: marker, stderr: "" });
+    await assert.rejects(() => diagnoseRepair(contract(f), diagnosis(), diagnosticScope, f.project,
+      undefined, run, options(f)), error => error.code === 0 &&
+      error.outputSha256 === outputSha256 && /did not reproduce the failure/.test(error.message) &&
+      error.message.includes(`outputSha256=${outputSha256}`) &&
+      !JSON.stringify(failureDetails(error)).includes(marker));
+    assert.deepEqual(await readdir(f.tmpRoot), []);
+    assert.equal(await readFile(join(f.project, "parser.test.mjs"), "utf8"), GREEN);
+    assert.equal((await collectReviewEvidence(f.project)).snapshotId, f.pack.snapshotId);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+const PYTHON_RED = [
+  "import re",
+  "from pathlib import Path",
+  "import venv_only_dependency",
+  "",
+  'assert venv_only_dependency.VALUE == "venv-only"',
+  'source = Path("parser.mjs").read_text(encoding="utf-8")',
+  'state = re.search(r\'state = "([^"]+)"\', source).group(1)',
+  'assert state == "fixed", f"target regression: parser still returns {state}"',
+  "",
+].join("\n");
+const VENV_RUNNER = [
+  "from pathlib import Path",
+  "import sys",
+  "",
+  'if __name__ == "__main__":',
+  "    script = Path(sys.argv[1])",
+  '    exec(compile(script.read_text(encoding="utf-8"), str(script), "exec"),',
+  '         {"__name__": "__main__", "__file__": str(script)})',
+  "",
+].join("\n");
+
+test("approved absolute interpreters reach venv-only dependencies from the isolated cwd", async () => {
+  const f = await reviewedFixture();
+  try {
+    await writeFile(join(f.project, ".gitignore"), ".venv/\n");
+    const venv = join(f.project, ".venv");
+    await exec("python3", ["-m", "venv", "--without-pip", venv], { timeout: 120_000 });
+    const python = join(venv, "bin", "python");
+    const sitePackages = (await exec(python, ["-c",
+      "import sysconfig; print(sysconfig.get_paths()['purelib'])"], { timeout: 30_000 })).stdout.trim();
+    await writeFile(join(sitePackages, "venv_only_dependency.py"), 'VALUE = "venv-only"\n');
+    await writeFile(join(sitePackages, "venv_only_runner.py"), VENV_RUNNER);
+    f.pack = await collectReviewEvidence(f.project);
+    await writeFile(f.packPath, JSON.stringify(f.pack));
+    const repro = [{ path: "test/repro.py", content: PYTHON_RED }];
+    const isolatedScope = command => ({ diagnosticFiles: ["test/repro.py"], diagnosticCommands: [command] });
+    const relative = ".venv/bin/python -B -m venv_only_runner test/repro.py";
+    await assert.rejects(() => diagnoseRepair(contract(f), diagnosis({ command: relative, testFiles: repro }),
+      isolatedScope(relative), f.project, undefined, exec, options(f)), error => error.code === 127 &&
+      /exit 127/.test(error.message) && /interpreter/.test(error.message) &&
+      /outputSha256=[0-9a-f]{64}/.test(error.message) &&
+      !error.message.includes("No such file or directory"));
+    assert.deepEqual(await readdir(f.tmpRoot), []);
+    const command = `${python} -B -m venv_only_runner test/repro.py`;
+    let observed;
+    const run = async (file, args, runtime) => {
+      observed = { file, args, cwd: await realpath(runtime.cwd) };
+      return exec(file, args, runtime);
+    };
+    const result = await diagnoseRepair(contract(f), diagnosis({ command, testFiles: repro }),
+      isolatedScope(command), f.project, undefined, run, options(f));
+    assert.notEqual(observed.cwd, await realpath(f.project));
+    assert.ok(observed.cwd.startsWith(`${await realpath(f.tmpRoot)}/`));
+    assert.equal(observed.args[1], command);
+    assert.equal(result.diagnosis.exitCode, 1);
+    assert.equal(result.diagnosis.command, command);
+    assert.equal(result.diagnosis.isolation.testFiles[0].path, "test/repro.py");
+    assert.equal(await readFile(join(f.project, "parser.test.mjs"), "utf8"), GREEN);
+    assert.equal((await collectReviewEvidence(f.project)).snapshotId, f.pack.snapshotId);
+    assert.deepEqual(await readdir(f.tmpRoot), []);
   } finally {
     await f.cleanup();
   }
