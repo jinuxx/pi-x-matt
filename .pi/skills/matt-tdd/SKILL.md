@@ -29,7 +29,7 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `implementation`、连续修复的 `repair`、独立送审的 `review` 或失败 reviewer 的 `recovery`：完整遵循 [Dispatch Lifecycle](dispatch-contract.md)。保存宿主 dispatchId；不得以重复初始实现代替修复/送审/恢复。
+- `implementation`、连续修复的 `repair`、独立送审的 `review`、挑战有效 FAIL 的 `reconsider` 或失败 reviewer/report correction 的 `recovery`：完整遵循 [Dispatch Lifecycle](dispatch-contract.md)。保存宿主 dispatchId；不得以重复初始实现代替修复/送审/复核/恢复。
 - `task`: 只放三条 lane 都可安全读取的共享事实：需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、module/package 搜索边界和停止条件。不得把仅适用于 implement 的 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等指令放入共享 task。
 - `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换，不自动继承 `task`。`implement` 包含 Implementation Context Pack、RED/GREEN 与相关回归命令，明确完整测试套件/全量 build/最终验证由父会话执行、worker 不得运行。`standards` 只需共同证据边界、适用工程规范与安全/正确性边界；`spec` 只需共同边界、ticket acceptance matrix 与 parent spec 相关条款。两者先消费 workflow 生成的 Review Evidence Pack，额外读取仅限已说明的缺口、一层直接依赖；不得要求 `status COMPLETE` 或用旧 transcript 代替 diff。report-only、resume 或失败恢复也必须提供三项，不退回共享 task。
 
@@ -42,7 +42,7 @@ Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 has
 3. `standards` 与 `spec`：两个 fresh-context、只读 reviewer 并行消费同一个 Pack 与各自适用条款，独立判断最终变化，不重新发现上下文。
 4. 每个阶段在校验与 gate 前将全部已结算结果发布到 `status.json → workflow.emits` 的带标识快照。两个 reviewer 都必须返回 `PASS`；任一 `FAIL`/`NO_EVIDENCE` 仍触发 lane gate，使整个 workflow fail closed，快照不改变失败终态。
 
-修复与正式评审分开调度：`repair` resume 最近的 writer，完成后只采集累计修复证据并返回 implement lane 与 `pi-x-matt.review-pending` 标记，不运行 stage 2。父会话先逐项核对 findings、真实 diff 与聚焦验证；需要继续同范围修复时再次 `repair`，准备好后才用 `review: {dispatchId: "<最新 repair>"}`。送审复用该 implement 结果与候选快照，仅运行 fresh 双轴，范围是最近正式评审以来的全部修复而非最后一轮补丁。三项 laneTasks、授权、快照/范围、根因诊断与最终双轴 PASS gate 不变；writer 不可恢复或候选过期时停止，不自动重新实现。
+修复与正式评审分开调度：`repair` resume 最近的 writer，完成后只采集累计修复证据并返回 implement lane 与 `pi-x-matt.review-pending` 标记，不运行 stage 2。父会话先逐项核对 findings、真实 diff 与聚焦验证；需要继续同范围修复时再次 `repair`，准备好后才用 `review: {dispatchId: "<最新 repair>"}`。送审复用该 implement 结果与候选快照，仅运行 fresh 双轴，范围是最近正式评审以来的全部修复而非最后一轮补丁。三项 laneTasks、授权、快照/范围、根因诊断与最终双轴 PASS gate 不变；writer 不可恢复或候选过期时停止，不自动重新实现。父会话不能用 prose 撤回有效 FAIL：有争议的 finding 必须逐项带 reason/evidence 走 `reconsider`，只运行受影响轴，由 fresh reviewer 独立 `uphold`/`withdraw`；未 challenge finding 与另一轴原样保留，任一保留/upheld blocker 仍为有效 FAIL。每个候选快照每轴最多一次 reconsider。reviewer 报告契约错误走独立有界的 report correction（每轴每候选最多两次），不得与一次 execution recovery 互相消耗，也不得自动变成 PASS。
 
 reviewer 完成限定范围检查后一次报告全部有证据的阻断项，不在发现首个 finding 时提前返回 FAIL。保持证据边界；缺证据仍返回 NO_EVIDENCE，不能靠扩大扫描来追求穷尽。
 
@@ -50,8 +50,8 @@ reviewer 完成限定范围检查后一次报告全部有证据的阻断项，�
 
 ## 汇总
 
-1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON。初次实现/正式送审消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`；repair 只返回 implement，成功仍是待审候选，不能宣称 TDD 全流程完成或提交。
+1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON。初次实现/正式送审消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`；repair 只返回 implement，reconsider 返回合并后的 effective 双轴并带 `reconsiderationHistory`。repair 成功仍是待审候选，不能宣称 TDD 全流程完成或提交。
 2. 区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效；失败 workflow 按契约读取最新阶段快照，不要求异常分支存在 `workflow.value`。检查所有已返回 lane，保留两个轴的完整结果；不得回退到普通 prose。
 3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令；若 RED 靠临时改代码或 fixture 强制得到，要求提供对 pristine 副本的 `diff` 证明 mutation 确实落地，不采信未证明的 red。
-4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口。已有连续修复授权覆盖的真实 findings 按结构化根因契约聚焦修复，不再重复询问；新增决定/范围才询问。`NO_EVIDENCE`、执行失败或无效报告先有界恢复 reviewer，不重复 writer。同根因两轮未解或相关回归触发受限诊断，不机械开启下一轮补丁。
+4. 分离呈现 Standards 与 Spec 结果。任一 reviewer 返回 `FAIL`/`NO_EVIDENCE` 时，不宣称任务完成或允许提交；先完整报告两轴 finding/证据缺口。已有连续修复授权覆盖的真实 findings 按结构化根因契约聚焦修复，不再重复询问；新增决定/范围才询问。仅 disputed valid finding 走 `reconsider`，报告契约错误走独立 correction，`NO_EVIDENCE` 或执行失败走一次 execution recovery；都不重复 writer。reconsider 后必须以 effective remaining findings 修复，不能回到 reconsider 前 source。同根因两轮未解或相关回归触发受限诊断，不机械开启下一轮补丁。
 5. 即使 reviewer 均通过，也由父会话核对 Review Evidence Pack 与当前 HEAD、status、文件 hash，检查最终 diff，确认没有越过批准 seams、范围或既有改动。Pack 过期不得沿用 PASS。

@@ -63,6 +63,34 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和完整三项 laneTasks；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，只有二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
 
+父会话不能凭 prose 抹掉有效 FAIL。若认为某条已记录的有效 blocking finding 与已确认验收/标准冲突，使用唯一的结构化复核路径：
+
+```json
+{
+  "reconsider": {
+    "dispatchId": "<最新正式 review 或 reconsider dispatchId>",
+    "findings": [
+      { "findingId": "spec:F1", "reason": "与已确认 AC1 冲突", "evidence": "ticket AC1 原文或标准条款" }
+    ]
+  }
+}
+```
+
+`reconsider` 与 `repair`/`review`/`recovery` 互斥，必须引用同 ticket 最新宿主 dispatch。`findingId` 必须带轴前缀且指向当前有效 blocking finding，reason 与 evidence 均非空，ID 不得重复；未知、已撤回或轴前缀与 finding 不匹配的 ID 直接拒绝。宿主只选择受影响的 axis/axes，复用最近完成的 implement 结果和同一 Evidence Pack，不启动 writer、不重采证据、不运行未受影响轴；待审/未完成 repair、快照或引用漂移时拒绝。每个候选快照对每个轴最多一次 reconsider，可通过 reload、重新确认或 report correction 保留；新 writer 候选可建立新预算，但不会重置根因修复计数或原评审基线。
+
+fresh 只读 reviewer 对每个 challenge 只返回一个决定，不重报 verdict/findings：
+
+```json
+{
+  "axis": "spec",
+  "decisions": [
+    { "findingId": "spec:F1", "decision": "uphold|withdraw", "justification": "独立判断", "evidence": "复核依据" }
+  ]
+}
+```
+
+宿主校验决定数量、轴与目标集合完全一致后才合并：未 challenge 的 findings 逐字保留，另一轴逐字保留，只有 reviewer 明确 `withdraw` 的 finding 消失；任一 `uphold` 或未撤回 blocker 使 effective verdict 仍为 `FAIL`，不能当执行失败，也不能绕过最终双轴 `PASS` gate。原报告、全部决定与 effective verdict 保存在宿主结果及 `reconsiderationHistory`，不覆盖原始证据。后续 `repair` 必须使用 effective remaining findings，并继续引用最新可恢复 writer，而不是 reconsider 前的 source。
+
 ## 根因未收敛
 
 同一根因完成两次修复后仍需继续，第三次 writer 前触发 `DIAGNOSIS_REQUIRED`，无论两次修复之间是否正式送审；评审确认的修复相关回归立即触发。网络失败、缺失结果与授权等待不算根因修复轮次。阈值只触发诊断，不自动放行，不限制测试数量。诊断绑定最近候选快照；“已审 snapshot”在连续待审修复中指宿主已采集的最新修复候选，不表示 reviewer 已批准。
@@ -107,13 +135,15 @@ Spec 只以 acceptance 为依据；Standards 以 standard/safety/integrity 为�
 
 ## 局部恢复与耗时
 
-实现已 COMPLETE、快照/授权仍有效，但某 reviewer 执行失败、结果缺失、NO_EVIDENCE 或报告契约无效时，可传：
+实现已 COMPLETE、快照/授权仍有效，但某 reviewer 执行失败、结果缺失或 NO_EVIDENCE 时，可传：
 
 ```json
 {"recovery": {"dispatchId": "<最近 dispatchId>", "lanes": ["spec"]}}
 ```
 
-仍提供完整三项 laneTasks。宿主只启动所选失败 reviewer，复用已完成 implement、原 Evidence Pack 和另一轴有效结论；不重新实现、不重新取证，不替换有效 FAIL。最多一次显式恢复；已发生 settlement 的失败不能再叠加恢复，显式恢复不追加 settlement。
+仍提供完整三项 laneTasks。宿主只启动所选失败 reviewer，复用已完成 implement、原 Evidence Pack 和另一轴有效结论；不重新实现、不重新取证，不替换有效 FAIL。执行恢复最多一次；已发生 settlement 的失败不能再叠加恢复，显式恢复不追加 settlement。
+
+宿主检测到的报告契约错误（未知/不同轴 `relatedFindingIds`、缺少 approved predecessor 等）单独标记为 `contractError` 并保留原报告，不归一化为 PASS/FAIL，也不静默删除非法引用。此类 lane 仍通过同一 `recovery` 接口纠正，但每个候选快照对每个轴最多两次 report correction，与一次 execution recovery 分开计数；reload、重新确认或 correction 不重置。达到上限后停止，不提供自动 PASS 或无限重试。若无效报告来自 reconsideration 决定，correction 保持同一 challenged target 集合；只有全部决定合法后才重新计算 effective result。有效 FAIL 不能走 recovery/correction，只能 reconsider 或按 effective findings 修复。
 
 阶段记录保存在宿主 session custom entries，并通过 `pi-matt:dispatch-phase` 事件通知：authorization、admission（单次 writer claim）、evidence、diagnosis、queue、rpc、reconcile、execution、settlement、workflow。运行中的 keyed child/settlement 由原生 lifecycle 事件报告；不要求模型轮询。完整运行 trace 与 deadline 以原生 status.json/events.jsonl 为准，模型按 completion 读取最终结果。
 

@@ -48,6 +48,8 @@ metadata:
 
 修复返回后，父会话核对实际 diff、逐项 findings 和验证证据：仍有同范围且证据支持的修复时，引用最新 dispatchId 继续 `repair`；缺少依据或实质决定时停止。原 findings 与根因计数跨修复保留，不通过拆轮绕过诊断。候选代码已准备好时才发送 `review: {dispatchId: "<最新已完成 repair>"}`，仍提供完整三项 laneTasks；它只启动 fresh Standards/Spec，不重跑 writer 或重复采集证据。修复的 `state=complete`、`implement.status=COMPLETE` 或 `reviewPending=true` 都不代表交付通过。
 
+父会话不能以文字或重新实现抹掉有效 FAIL。若具体 finding 与已确认验收/标准冲突，逐项带 reason/evidence 使用 `reconsider: {dispatchId, findings}`；只运行受影响轴，由 fresh reviewer 独立决定 `uphold`/`withdraw`，未 challenge finding 与另一轴原样保留，任一保留/upheld blocker 仍是有效 FAIL。每个候选快照每轴最多一次 reconsider；后续 repair 只处理 effective remaining findings。reviewer 报告契约错误（含无效 reconsider 决定）走与执行恢复分开的 report correction，每轴每候选最多两次，不自动变成 PASS；合法 FAIL 仍只能 reconsider 或按 effective findings 修复。
+
 正式复审检查自最近一次正式评审以来的**累计修复增量**、原 findings 及必要的一层直接依赖，不只检查最后一次补丁；不得重新扫描或重新裁决已经 PASS 且未变化、无依赖影响的其他文件，真实新安全/完整性问题除外。该次双轴 `PASS` 取代此前失败结果，不再追加 standalone code review。
 
 同一根因两次修复仍失败，第三次 writer 前由 dispatcher 强制 `DIAGNOSIS_REQUIRED`；相关修复回归立即触发。按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 在当前 ticket 内做受限诊断，提交真实 repro 与根因契约后再继续；不是取消 review、限制必要测试数或重新设计模块。执行失败/结果缺失不计作根因修复轮次，使用有界 reviewer `recovery`，不得重做已完成实现。

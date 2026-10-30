@@ -332,6 +332,124 @@ test("a failed implement with retained COMPLETE output cannot run host evidence 
   assert.deepEqual(calls, ["implement"]);
 });
 
+test("reconsideration plans validate and merge exact decisions in the pinned native sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills["matt-tdd"];
+  const evidence = { command: "trusted-collector", path: "/tmp/review.md", controlled: true };
+  const finding = {
+    id: "parse", rootCauseId: "parse-order", severity: "P1", title: "validation order",
+    basis: { kind: "acceptance", reference: "AC1" }, evidence: "null reaches normalize",
+    expected: "reject null", actual: "throws", locations: ["parser.mjs:1"],
+    classification: "original", relatedFindingIds: [], affectedBy: [], recommendation: "validate first",
+  };
+  const implemented = {
+    key: "implement", ok: true, artifactPaths: [],
+    structuredOutput: {
+      status: "COMPLETE", summary: "implemented", residualRisks: [],
+      confirmedSeams: [{ name: "parse", interface: "parse", behaviors: ["validate"] }],
+      cycles: [{ test: "parse", redEvidence: "red", greenEvidence: "green", files: ["parser.mjs"] }],
+      changedFiles: ["parser.mjs"],
+      commands: [{ command: "test", phase: "GREEN", exitCode: 0, testCount: 1, outcome: "passed" }],
+    },
+  };
+  const standards = {
+    key: "standards", ok: true, artifactPaths: [evidence.path],
+    structuredOutput: { axis: "standards", verdict: "PASS", summary: "standards pass", findings: [], notes: [] },
+  };
+  const spec = {
+    key: "spec", ok: true, artifactPaths: [evidence.path],
+    structuredOutput: { axis: "spec", verdict: "FAIL", summary: "spec fail", findings: [finding], notes: [] },
+  };
+  const targets = [{ ...finding, id: "spec:parse", axis: "spec", reason: "disputed", challengeEvidence: "ticket AC1" }];
+  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT,
+    { implement: "Implementation", standards: "Standards only", spec: "Spec only" }, evidence, undefined, {
+      reconsider: {
+        keys: ["spec"], targets, results: [implemented, standards, spec], history: {},
+        candidateSnapshotId: "snapshot", dispatchId: "reconsider-dispatch",
+      },
+    });
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  assert.deepEqual(plan.lanes.map(lane => lane.key), ["spec"]);
+  assert.equal(plan.hostCommands.length, 0);
+  assert.match(plan.lanes[0].task, /spec:parse/);
+  assert.deepEqual(plan.lanes[0].outputSchema.properties.decisions.items.properties.decision.enum,
+    ["uphold", "withdraw"]);
+
+  const decision = decisions => ({
+    key: "spec", ok: true, artifactPaths: [],
+    structuredOutput: { axis: "spec", decisions },
+  });
+  await withPersistedWorkflow(plan,
+    key => {
+      assert.equal(key, "spec");
+      return decision([{ findingId: "spec:parse", decision: "withdraw",
+        justification: "accepted behavior says optional", evidence: "ticket AC1" }]);
+    },
+    ({ persisted, results, calls, failure }) => {
+      assert.equal(failure, undefined);
+      assert.equal(persisted.state, "complete");
+      assert.deepEqual(calls, ["spec"], "no writer, host collector or other axis runs");
+      assert.deepEqual(results.map(result => result.key), ["implement", "standards", "spec"]);
+      assert.equal(results[1].structuredOutput.verdict, "PASS");
+      assert.deepEqual(results[2].structuredOutput, { ...spec.structuredOutput, verdict: "PASS", findings: [] });
+      assert.equal(results[2].reconsiderationHistory[0].effectiveVerdict, "PASS");
+    });
+
+  let failedResults;
+  await withPersistedWorkflow(plan,
+    key => {
+      assert.equal(key, "spec");
+      return decision([{ findingId: "standards:parse", decision: "withdraw",
+        justification: "wrong axis", evidence: "wrong axis" }]);
+    },
+    ({ persisted, results, failure, calls }) => {
+      assert.match(failure.message, /reconsideration contract invalid/i);
+      assert.equal(persisted.state, "failed");
+      assert.deepEqual(calls, ["spec"]);
+      assert.equal(results[2].ok, false);
+      assert.equal(results[2].contractError.kind, "reconsideration");
+      assert.equal(results[2].reconsiderationHistory.at(-1).decisionError.length > 0, true);
+      assert.equal(results[1].structuredOutput.verdict, "PASS", "the other axis is preserved");
+      failedResults = results;
+    });
+  const correction = buildDispatchRequest(registry, workflow, "shared", ROOT,
+    { implement: "Implementation", standards: "Standards only", spec: "Spec only" }, evidence, undefined, {
+      reconsider: {
+        keys: ["spec"], targets, results: [implemented, standards, spec], priorResults: failedResults,
+        history: { spec: failedResults[2].reconsiderationHistory }, recovery: true, correctionKeys: ["spec"],
+        candidateSnapshotId: "snapshot", dispatchId: "corrected-reconsideration",
+      },
+    });
+  assert.equal(validateWorkflowScript(correction.rpcParams.script).ok, true);
+  await withPersistedWorkflow(correction,
+    () => decision([{ findingId: "spec:parse", decision: "withdraw", justification: "AC1 applies", evidence: "AC1" }]),
+    ({ results, calls, failure }) => {
+      assert.equal(failure, undefined);
+      assert.deepEqual(calls, ["spec"]);
+      assert.deepEqual(results[1], standards);
+      assert.deepEqual(results[2].correctionHistory[0], failedResults[2]);
+      assert.equal(results[2].structuredOutput.verdict, "PASS");
+    });
+  const { formatStructuredOutputRejectionError } =
+    await import(pathToFileURL(join(SOURCE_DIR, "runs/shared/structured-output.js")));
+  // The SDK supplies TypeBox at runtime; this peer-omitted suite tests its rejection projection, not the compiler.
+  const runtimeError = formatStructuredOutputRejectionError([{
+    role: "toolResult", toolName: "structured_output", isError: true,
+    content: [{ type: "text", text: "Structured output validation failed: /decisions/0/decision must be uphold or withdraw" }],
+  }]);
+  await withPersistedWorkflow(plan,
+    key => ({ key, ok: false, error: runtimeError,
+      results: [{ structuredOutputFailed: true, exitCode: 1, error: runtimeError }] }),
+    ({ results, calls, failure }) => {
+      assert.ok(failure);
+      assert.deepEqual(calls, ["spec"]);
+      assert.equal(results[2].ok, false);
+      assert.equal(results[2].contractError.kind, "structured-output");
+      assert.equal(results[2].structuredOutput, undefined);
+      assert.deepEqual(results[1], standards);
+    });
+});
+
 test("the bundled public resource API resolves a one-shot TDD plan in the installed runtime", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });

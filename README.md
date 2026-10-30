@@ -252,7 +252,9 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 `matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。reviewer 完成限定范围检查后一次报告全部阻断 findings，不因首个问题提前返回。findings 按同一轮合并根因但保留两轴结论；已有连续修复授权覆盖时不重复询问，新增范围/决定才确认。
 
-修复与送审分开：结构化 `repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选证据，不自动启动双轴；不可恢复则停止，不暗中换 fresh writer。父会话核对实际改动、逐项 findings 与验证结果后，可继续同范围 repair，或显式 `review: {dispatchId: "<最新 repair>"}`。review 只启动 fresh 双轴，复用最新 implement 与 Evidence Pack，覆盖最近正式评审以来的**累计修复增量**，不重跑 writer、不重复取证。`reviewPending=true` 或 repair 的 `state=complete` 不表示双轴通过，不得提交或沿用旧 PASS。同根因两次修复后仍需继续或相关回归先受限诊断，不因推迟送审而重置计数。仅执行失败的 reviewer 可有界 `recovery`，不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
+修复与送审分开：结构化 `repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选证据，不自动启动双轴；不可恢复则停止，不暗中换 fresh writer。父会话核对实际改动、逐项 findings 与验证结果后，可继续同范围 repair，或显式 `review: {dispatchId: "<最新 repair>"}`。review 只启动 fresh 双轴，复用最新 implement 与 Evidence Pack，覆盖最近正式评审以来的**累计修复增量**，不重跑 writer、不重复取证。`reviewPending=true` 或 repair 的 `state=complete` 不表示双轴通过，不得提交或沿用旧 PASS。同根因两次修复后仍需继续或相关回归先受限诊断，不因推迟送审而重置计数。失败 reviewer 的一次 execution `recovery` 不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
+
+有效 FAIL 有异议时，父会话使用 `reconsider: {dispatchId, findings: [{findingId, reason, evidence}]}`，不能直接删除 finding。宿主只启动受影响轴的 fresh 只读 reviewer，沿用原 Evidence Pack；reviewer 对每条争议明确 `uphold`/`withdraw`，未争议 findings 与另一轴原样保留，最终仍须 effective 双轴 PASS。每个候选快照每轴最多一次异议复核，可一次提交多条争议；原报告、决定和根因计数保留。报告契约错误通过同一 `recovery` 接口有界纠正，每轴每候选最多两次，与 execution recovery 分开计数；不自动剔除非法引用，不把错误报告变成 PASS。无效异议决定的纠错保持原目标集合，reload 或重新授权不重置额度。后续 repair 使用 effective remaining findings。
 
 把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。RPC 使用 inline `script`，TDD 使用 named `workflow`，两者不能同时发送。每条 lane 必须 `ok === true`，失败后保留的结构化结果不能通过 gate 或启动后续 stage。
 

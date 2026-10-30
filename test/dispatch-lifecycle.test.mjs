@@ -3,8 +3,8 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { AUTH_ENTRY, AUTH_TTL_MS, AUTH_WAIT_MS, authorizeWorkflowDispatch, createDispatchAuthorization, normalizeImplementationScope } from "../lib/dispatch-authorization.mjs";
 import { createDispatchTrace, requestRpc, withDeadline } from "../lib/dispatch-runtime.mjs";
-import { diagnoseRepair, prepareRepair, reviewRecovery } from "../lib/repair-contract.mjs";
-import { validateReviewResult } from "../lib/review-contract.mjs";
+import { diagnoseRepair, prepareReconsideration, prepareRepair, reviewRecovery, reviewReportCorrections } from "../lib/repair-contract.mjs";
+import { adjudicateReviewDecisions, validateReviewResult } from "../lib/review-contract.mjs";
 import { normalizeDiagnosticTestFiles } from "../lib/diagnostic-workspace.mjs";
 
 const identity = { sessionId: "session", projectRoot: "/project", branch: "main", head: "fixed" };
@@ -279,4 +279,140 @@ test("incremental review rejects unimpacted old opinions but preserves regressio
     "severity cannot replace evidence");
   assert.equal(validateReviewResult(result({ ...old, basis: { kind: "standard", reference: "personal preference" } }),
     boundary).ok, false, "spec cannot cite out-of-axis standards");
+});
+
+const reviewFinding = (axis, id, overrides = {}) => ({
+  id, rootCauseId: `root-${id}`, severity: "P1", title: `${axis} ${id}`,
+  basis: axis === "spec"
+    ? { kind: "acceptance", reference: "AC1" }
+    : { kind: "standard", reference: "repository standard" },
+  evidence: `${axis}:${id} evidence`, expected: "expected", actual: "actual",
+  locations: ["parser.mjs:1"], classification: "original", relatedFindingIds: [], affectedBy: [],
+  recommendation: "fix it", ...overrides,
+});
+const reviewAxis = (axis, verdict, findings = []) => ({
+  key: axis, ok: true,
+  structuredOutput: { axis, verdict, summary: `${axis} ${verdict}`, findings, notes: [] },
+});
+
+test("review contract errors are explicit and report corrections have a separate bounded budget", () => {
+  const invalid = validateReviewResult({
+    key: "spec", ok: true,
+    structuredOutput: {
+      axis: "spec", verdict: "FAIL", summary: "invalid reference", notes: [],
+      findings: [reviewFinding("spec", "parse", { relatedFindingIds: ["standards:old"] })],
+    },
+  }, { incremental: false, changedPaths: [], approvedFindingIds: [] });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.contractError.kind, "review-evidence");
+  assert.match(invalid.error, /unknown or different-axis predecessor/);
+  assert.deepEqual(invalid.structuredOutput.findings.map(finding => finding.id), ["parse"],
+    "the original report is preserved for correction, not normalized or stripped");
+  const duplicated = validateReviewResult({
+    ...invalid, ok: true,
+    structuredOutput: { ...invalid.structuredOutput,
+      findings: [reviewFinding("spec", "parse"), reviewFinding("spec", "parse")] },
+  }, { incremental: false, changedPaths: [], approvedFindingIds: [] });
+  assert.equal(duplicated.ok, false, "duplicate identities must be correctable, not a valid unrepairable FAIL");
+  assert.match(duplicated.contractError.message, /duplicate/i);
+
+  const correction = reviewReportCorrections([invalid, reviewAxis("standards", "PASS")], ["spec"], {});
+  assert.deepEqual(correction.counts, { spec: 1 });
+  const second = reviewReportCorrections([invalid], ["spec"], correction.counts);
+  assert.deepEqual(second.counts, { spec: 2 });
+  assert.throws(() => reviewReportCorrections([invalid], ["spec"], second.counts), /correction.*exhausted/i);
+  assert.throws(() => reviewReportCorrections([reviewAxis("spec", "FAIL", [reviewFinding("spec", "parse")])],
+    ["spec"], {}), /valid verdict.*reconsider/i);
+  assert.throws(() => reviewReportCorrections([{ key: "spec", ok: false, error: "fetch failed" }],
+    ["spec"], {}), /execution recovery/i);
+  assert.throws(() => reviewRecovery([{ key: "implement", ok: true, structuredOutput: { status: "COMPLETE" } }, invalid],
+    ["spec"]), /report contract error.*correction/i);
+});
+
+test("reconsideration accepts only current valid blockers and keeps one decision budget per axis per candidate", () => {
+  const results = [
+    reviewAxis("standards", "PASS"),
+    reviewAxis("spec", "FAIL", [reviewFinding("spec", "parse"), reviewFinding("spec", "order")]),
+  ];
+  const request = { dispatchId: "review", findings: [
+    { findingId: "spec:parse", reason: "conflicts with accepted behavior", evidence: "ticket AC1" },
+  ] };
+  const prepared = prepareReconsideration(request, results, {});
+  assert.deepEqual(prepared.axes, ["spec"]);
+  assert.deepEqual(prepared.targets.map(target => target.id), ["spec:parse"]);
+  assert.deepEqual(prepared.counts, { spec: 1 });
+  assert.throws(() => prepareReconsideration(request, results, prepared.counts), /reconsideration.*exhausted/i);
+  assert.throws(() => prepareReconsideration({ ...request, findings: [
+    { findingId: "spec:unknown", reason: "reason", evidence: "evidence" },
+  ] }, results, {}), /unknown.*target/i);
+  assert.throws(() => prepareReconsideration({ ...request, findings: [
+    { findingId: "spec:parse", reason: "first", evidence: "evidence" },
+    { findingId: "spec:parse", reason: "second", evidence: "evidence" },
+  ] }, results, {}), /duplicate/i);
+  assert.throws(() => prepareReconsideration({ ...request, findings: [
+    { findingId: "standards:parse", reason: "reason", evidence: "evidence" },
+  ] }, results, {}), /unknown.*target/i, "a PASS axis has no challengeable blocker");
+  assert.throws(() => prepareReconsideration({ ...request, findings: [
+    { findingId: "spec:parse", reason: "", evidence: "evidence" },
+  ] }, results, {}), /reason/);
+});
+
+test("reconsideration decisions preserve unchallenged blockers and other axes while withdrawing precisely", () => {
+  const standards = reviewAxis("standards", "FAIL", [reviewFinding("standards", "safety")]);
+  const spec = reviewAxis("spec", "FAIL", [reviewFinding("spec", "parse"), reviewFinding("spec", "order")]);
+  const targets = [{ ...reviewFinding("spec", "parse"), id: "spec:parse", axis: "spec", reason: "disputed", evidence: "AC1" }];
+  const context = { dispatchId: "reconsider", candidateSnapshotId: "snapshot" };
+  const decision = (findingId, verdict) => ({
+    key: "spec", ok: true, artifactPaths: ["/tmp/pack"],
+    structuredOutput: { axis: "spec", decisions: [{
+      findingId, decision: verdict, justification: "independent decision", evidence: "review evidence",
+    }] },
+  });
+  const withdrawn = adjudicateReviewDecisions(decision("spec:parse", "withdraw"), spec, targets, [], context);
+  assert.equal(withdrawn.ok, true);
+  assert.equal(withdrawn.structuredOutput.verdict, "FAIL");
+  assert.deepEqual(withdrawn.structuredOutput.findings.map(finding => finding.id), ["order"]);
+  assert.deepEqual(withdrawn.artifactPaths, ["/tmp/pack"]);
+  assert.deepEqual(withdrawn.reconsiderationHistory[0].original.findings.map(finding => finding.id),
+    ["parse", "order"]);
+  assert.equal(standards.structuredOutput.findings[0].id, "safety", "unaffected axis is not mutated");
+
+  const upheld = adjudicateReviewDecisions(decision("spec:parse", "uphold"), spec, targets, [], context);
+  assert.equal(upheld.structuredOutput.verdict, "FAIL");
+  assert.deepEqual(upheld.structuredOutput.findings.map(finding => finding.id), ["parse", "order"]);
+
+  const malformed = (decisions) => adjudicateReviewDecisions({
+    key: "spec", ok: true, structuredOutput: { axis: "spec", decisions },
+  }, spec, targets, withdrawn.reconsiderationHistory, context);
+  const missing = malformed([]);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.contractError.kind, "reconsideration");
+  assert.equal(missing.reconsiderationHistory.at(-1).decisionError.length > 0, true);
+  assert.equal(missing.reconsiderationHistory.at(-1).original.findings.length, 2);
+  assert.equal(malformed([{ findingId: "spec:parse", decision: "withdraw",
+    justification: "why", evidence: "evidence" }, { findingId: "spec:order", decision: "uphold",
+    justification: "why", evidence: "evidence" }]).ok, false, "extra decisions are rejected");
+  assert.equal(malformed([{ findingId: "standards:safety", decision: "withdraw",
+    justification: "why", evidence: "evidence" }]).ok, false, "cross-axis decisions are rejected");
+  assert.equal(malformed([{ findingId: "spec:parse", decision: "withdraw",
+    justification: "", evidence: "evidence" }]).ok, false, "empty justification is rejected");
+});
+
+test("runtime-rejected structured review output is a report error, not an execution recovery", () => {
+  const rejected = { key: "spec", ok: false, error: "Structured output validation failed: invalid decision",
+    results: [{ structuredOutputFailed: true, exitCode: 1 }] };
+  const boundary = { incremental: false, changedPaths: [], approvedFindingIds: [] };
+  const classified = validateReviewResult(rejected, boundary);
+  assert.equal(classified.contractError.kind, "structured-output");
+  assert.equal(classified.ok, false);
+  assert.deepEqual(classified.results, rejected.results);
+  assert.equal(classified.structuredOutput, undefined, "no rejected payload is reconstructed from prose");
+  const original = reviewAxis("spec", "FAIL", [reviewFinding("spec", "parse")]);
+  const targets = [{ id: "spec:parse", axis: "spec" }];
+  const invalidDecision = adjudicateReviewDecisions(rejected, original, targets, [], {});
+  assert.equal(invalidDecision.contractError.kind, "structured-output");
+  assert.deepEqual(reviewReportCorrections([invalidDecision], ["spec"]).counts, { spec: 1 });
+  const network = { key: "spec", ok: false, error: "fetch failed" };
+  assert.deepEqual(adjudicateReviewDecisions(network, original, targets, [], {}), network);
+  assert.deepEqual(validateReviewResult(network, boundary), network);
 });

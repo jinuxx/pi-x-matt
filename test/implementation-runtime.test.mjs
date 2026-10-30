@@ -67,7 +67,8 @@ async function fixture(run) {
     laneTasks: { implement: "implement parser", standards: "standards only", spec: "AC1 only" },
     implementation: { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] },
   };
-  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride, workerOverride } = {}) => {
+  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
+    workerOverride, reviews } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
     const runs = {
       all: async items => {
@@ -84,6 +85,8 @@ async function fixture(run) {
             results.push({ key: "implement", ok: true, agent: "matt-worker",
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" }, structuredOutput: worker,
               ...workerOverride });
+          } else if (reviews?.[item.key]) {
+            results.push({ key: item.key, ok: true, artifactPaths: [], ...reviews[item.key] });
           } else if (item.key === "spec" && executionFailure) {
             results.push({ key: "spec", ok: false, error: "fetch failed" });
           } else results.push(review(item.key, item.key === "spec" && fail, findingOverride));
@@ -210,6 +213,8 @@ test("host reload restores the exact grant and repair lineage without repeating 
     const standardsTask = reviewDispatch.details.lanes.find(lane => lane.key === "standards").task;
     const specTask = reviewDispatch.details.lanes.find(lane => lane.key === "spec").task;
     assert.match(specTask, /"reference":"AC1"/);
+    assert.match(specTask, /permitted predecessor IDs = \["spec:parse"\]/);
+    assert.doesNotMatch(standardsTask, /spec:parse/);
     assert.doesNotMatch(standardsTask, /"reference":"AC1"/);
     assert.doesNotMatch(standardsTask + specTask, /Root-cause repair contract/);
     await f.runtime.flush();
@@ -781,5 +786,463 @@ test("regrant and reload preserve reviewer recovery budget and the passing axis"
     assert.equal(f.runtime.plans.size, 0);
     await f.runtime.flush();
     assert.equal(f.launches.length, 2);
+  });
+});
+
+const axisFinding = (axis, id, overrides = {}) => ({
+  ...finding, id, rootCauseId: `root-${id}`, title: `${axis} ${id}`,
+  basis: axis === "spec" ? { kind: "acceptance", reference: "AC1" } : { kind: "standard", reference: "repository standard" },
+  ...overrides,
+});
+const axisReview = (axis, verdict, findings = []) => ({
+  structuredOutput: { axis, verdict, summary: `${axis} ${verdict}`, findings, notes: [] },
+});
+const decisions = (axis, items) => ({
+  structuredOutput: { axis, decisions: items.map(([findingId, decision]) => ({
+    findingId, decision, justification: `${decision} justified`, evidence: `${decision} evidence`,
+  })) },
+});
+
+test("initial reviewer tasks include conditional recurrence guidance without inventing predecessor IDs", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    for (const axis of ["standards", "spec"]) {
+      const task = initial.details.lanes.find(lane => lane.key === axis).task;
+      assert.match(task, /permitted predecessor IDs = \[\]/);
+      assert.match(task, /Conditional recurring example/);
+      assert.match(task, /Correct independent example/);
+      assert.match(task, /do not claim.*recurrence/);
+    }
+  });
+});
+
+test("reconsideration withdraws only challenged findings without launching writer, evidence or the other axis", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse"), axisFinding("spec", "order")]),
+    } });
+    assert.equal(failed.status.state, "failed");
+    f.reload();
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [{ findingId: "spec:parse", reason: "conflicts with accepted behavior", evidence: "ticket AC1" }],
+    } }, undefined, f.ctx);
+    assert.equal(reconsider.details.authorization, "reused-implement-grant");
+    assert.equal(reconsider.details.reviewPending, false);
+    assert.deepEqual(reconsider.details.lanes.map(lane => lane.key), ["spec"]);
+    const task = reconsider.details.lanes.find(lane => lane.key === "spec").task;
+    assert.match(task, /spec:parse/);
+    assert.match(task, /uphold/i);
+    assert.match(task, /null reaches normalize/, "the original finding evidence is supplied, not replaced by the challenge");
+    assert.match(task, /ticket AC1/, "the parent's challenge evidence remains separate");
+    assert.doesNotMatch(task, /standards:/);
+    await f.runtime.flush();
+    const adjudicated = await f.settle({ reviews: {
+      spec: decisions("spec", [["spec:parse", "withdraw"]]),
+    } });
+    assert.deepEqual(adjudicated.calls, ["spec"]);
+    assert.equal(adjudicated.status.state, "failed", "the unchallenged blocker remains a valid FAIL");
+    const results = adjudicated.status.workflow.emits
+      .findLast(emit => emit.type === "pi-x-matt.stage-results").results;
+    assert.deepEqual(results.map(result => result.key), ["implement", "standards", "spec"]);
+    assert.equal(results[1].structuredOutput.verdict, "PASS");
+    assert.deepEqual(results[1].structuredOutput.findings, []);
+    assert.equal(results[2].ok, true);
+    assert.equal(results[2].structuredOutput.verdict, "FAIL");
+    assert.deepEqual(results[2].structuredOutput.findings.map(item => item.id), ["order"]);
+    assert.deepEqual(results[2].reconsiderationHistory[0].original.findings.map(item => item.id), ["parse", "order"]);
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(record.state, "failed");
+    assert.equal(record.recoveryAttempt, 0);
+    assert.deepEqual(record.reviewMeta.reconsiderCounts, { spec: 1 });
+    f.reload();
+    const regranted = { ...f.params, implementation: { ...f.params.implementation,
+      diagnosticCommands: ["node --test parser.test.mjs"] } };
+    await assert.rejects(() => f.runtime.dispatch({ ...regranted, reconsider: {
+      dispatchId: record.id,
+      findings: [{ findingId: "spec:order", reason: "also disputed", evidence: "ticket AC1" }],
+    } }, undefined, f.ctx), /reconsideration.*exhausted/i);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+  });
+});
+
+test("upheld reconsideration keeps a valid FAIL and the next repair uses only effective findings", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse"), axisFinding("spec", "order")]),
+    } });
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [
+        { findingId: "spec:parse", reason: "disputed behavior", evidence: "ticket AC1" },
+        { findingId: "spec:order", reason: "disputed order", evidence: "ticket AC1" },
+      ],
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const adjudicated = await f.settle({ reviews: {
+      spec: decisions("spec", [["spec:parse", "withdraw"], ["spec:order", "uphold"]]),
+    } });
+    assert.deepEqual(adjudicated.calls, ["spec"]);
+    assert.equal(adjudicated.status.state, "failed");
+    const effective = adjudicated.status.workflow.emits
+      .findLast(emit => emit.type === "pi-x-matt.stage-results").results[2];
+    assert.equal(effective.ok, true);
+    assert.equal(effective.structuredOutput.verdict, "FAIL");
+    assert.deepEqual(effective.structuredOutput.findings.map(item => item.id), ["order"]);
+    const reviewRecord = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(reviewRecord.id, reconsider.details.dispatchId);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: reviewRecord.id,
+      groups: [{ ...repairGroups[0], findingIds: ["spec:parse"] }],
+    } }, undefined, f.ctx), /Unknown or non-blocking|Unknown or repeated|omitted/i);
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: reviewRecord.id,
+      groups: [{ ...repairGroups[0], findingIds: ["spec:order"] }],
+    } }, undefined, f.ctx);
+    assert.equal(repair.details.reviewPending, true);
+    assert.deepEqual(repair.details.lanes.map(lane => lane.key), ["implement"]);
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: "fixed\n" });
+    assert.equal(repaired.status.state, "complete");
+    assert.equal(repaired.itemsSeen[0].resume, "run-0-writer");
+    const repairRecord = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.deepEqual(repairRecord.repair.approvedFindingIds, ["spec:order"]);
+    assert.equal(repairRecord.reviewSourceId, reviewRecord.id);
+    assert.equal(repairRecord.repair.counts.parser, 1);
+    f.reload();
+    const review = await f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repairRecord.id } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse", {
+        classification: "independent", affectedBy: ["parser.mjs"],
+      })]),
+    } });
+    const nextReview = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(nextReview.id, review.details.dispatchId);
+    assert.deepEqual(nextReview.reviewMeta.reconsiderCounts, {}, "a new writer candidate establishes a new budget");
+    const nextReconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: nextReview.id,
+      findings: [{ findingId: "spec:parse", reason: "new candidate dispute", evidence: "ticket AC1" }],
+    } }, undefined, f.ctx);
+    assert.deepEqual(nextReconsider.details.lanes.map(lane => lane.key), ["spec"]);
+  });
+});
+
+test("reconsideration rejects pending candidates, stale snapshots and unknown targets", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "fixed\n" });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: repair.details.dispatchId,
+      findings: [{ findingId: "spec:parse", reason: "disputed", evidence: "ticket" }],
+    } }, undefined, f.ctx), /pending|formal review|completed review/i);
+    const review = await f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse", { relatedFindingIds: ["spec:parse"] })]),
+    } });
+    const reviewed = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(reviewed.id, review.details.dispatchId);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: reviewed.id,
+      findings: [{ findingId: "spec:absent", reason: "disputed", evidence: "ticket" }],
+    } }, undefined, f.ctx), /unknown.*target/i);
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "external change\n");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: reviewed.id,
+      findings: [{ findingId: "spec:parse", reason: "disputed", evidence: "ticket" }],
+    } }, undefined, f.ctx), /snapshot.*stale|snapshot.*match/i);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 3);
+  });
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ workerOverride: { structuredOutput: { ...worker, status: "BLOCKED" } } });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: repair.details.dispatchId,
+      findings: [{ findingId: "spec:parse", reason: "disputed", evidence: "ticket" }],
+    } }, undefined, f.ctx), /pending|formal review|completed review/i);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+  });
+});
+
+test("review report correction keeps two attempts separate from execution recovery and preserves failure chains", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: { ok: false, error: "fetch failed" },
+    } });
+    const recovery = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: initial.details.dispatchId, lanes: ["spec"] } }, undefined, f.ctx);
+    assert.match(recovery.details.lanes.find(lane => lane.key === "spec").task,
+      /permitted predecessor IDs = \[\]/);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse", { relatedFindingIds: ["standards:old"] })]),
+    } });
+    const firstCorrection = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(firstCorrection.id, recovery.details.dispatchId);
+    assert.equal(firstCorrection.recoveryAttempt, 1);
+    assert.deepEqual(firstCorrection.reviewMeta.correctionCounts, {});
+    const invalidResult = firstCorrection.state === "failed";
+    assert.equal(invalidResult, true);
+    const correctionOne = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: firstCorrection.id, lanes: ["spec"] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse", { relatedFindingIds: ["standards:old"] })]),
+    } });
+    const one = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(one.id, correctionOne.details.dispatchId);
+    assert.equal(one.recoveryAttempt, 1);
+    assert.deepEqual(one.reviewMeta.correctionCounts, { spec: 1 });
+    f.reload();
+    const correctionTwo = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: one.id, lanes: ["spec"] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const corrected = await f.settle({ reviews: {
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    assert.equal(corrected.status.state, "failed");
+    const correctedResult = corrected.status.workflow.emits
+      .findLast(emit => emit.type === "pi-x-matt.stage-results").results[2];
+    assert.equal(correctedResult.correctionHistory.length, 2);
+    assert.equal(correctedResult.correctionHistory.at(-1).contractError.kind, "review-evidence");
+    const two = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(two.id, correctionTwo.details.dispatchId);
+    assert.equal(two.recoveryAttempt, 1);
+    assert.deepEqual(two.reviewMeta.correctionCounts, { spec: 2 });
+    assert.equal(two.state, "failed");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: two.id, lanes: ["spec"] } }, undefined, f.ctx),
+      /execution recovery.*exhausted|valid verdict.*reconsider|correction.*exhausted/i);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 4);
+  });
+});
+
+test("an invalid reconsideration decision report remains correctable within the same target contract", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [{ findingId: "spec:parse", reason: "disputed", evidence: "ticket AC1" }],
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const malformed = await f.settle({ reviews: {
+      spec: decisions("spec", [["spec:absent", "withdraw"]]),
+    } });
+    assert.deepEqual(malformed.calls, ["spec"]);
+    assert.equal(malformed.status.state, "failed");
+    const failedResult = malformed.status.workflow.emits
+      .findLast(emit => emit.type === "pi-x-matt.stage-results").results[2];
+    assert.equal(failedResult.ok, false);
+    assert.equal(failedResult.contractError.kind, "reconsideration");
+    const invalidRecord = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(invalidRecord.id, reconsider.details.dispatchId);
+    assert.deepEqual(invalidRecord.reviewMeta.reconsiderCounts, { spec: 1 });
+    assert.deepEqual(invalidRecord.reviewMeta.correctionCounts, {});
+    assert.equal(invalidRecord.recoveryAttempt, 0);
+    const correction = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: invalidRecord.id, lanes: ["spec"] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const fixed = await f.settle({ reviews: {
+      spec: decisions("spec", [["spec:parse", "withdraw"]]),
+    } });
+    assert.deepEqual(fixed.calls, ["spec"]);
+    assert.equal(fixed.status.state, "complete");
+    const results = fixed.status.workflow.emits
+      .findLast(emit => emit.type === "pi-x-matt.stage-results").results;
+    assert.equal(results[2].ok, true);
+    assert.equal(results[2].structuredOutput.verdict, "PASS");
+    assert.deepEqual(results[2].structuredOutput.findings, []);
+    assert.equal(results[2].reconsiderationHistory.length, 2);
+    assert.equal(results[2].reconsiderationHistory[0].decisionError.length > 0, true);
+    assert.equal(results[2].reconsiderationHistory[1].effectiveVerdict, "PASS");
+    const correctedRecord = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(correctedRecord.id, correction.details.dispatchId);
+    assert.equal(correctedRecord.recoveryAttempt, 0);
+    assert.deepEqual(correctedRecord.reviewMeta.reconsiderCounts, { spec: 1 });
+    assert.deepEqual(correctedRecord.reviewMeta.correctionCounts, { spec: 1 });
+    assert.deepEqual(correctedRecord.reconsider.targets.map(target => target.id), ["spec:parse"]);
+    assert.equal(correctedRecord.state, "complete");
+  });
+});
+
+test("schema-rejected reconsideration reports consume correction quota, not execution recovery", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [{ findingId: "spec:parse", reason: "accepted behavior", evidence: "AC1" }],
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const invalid = { ok: false, error: "Structured output validation failed: invalid decision",
+      results: [{ structuredOutputFailed: true, exitCode: 1 }] };
+    const rejected = await f.settle({ reviews: { spec: invalid } });
+    const rejectedSpec = rejected.status.workflow.emits.findLast(e => e.type === "pi-x-matt.stage-results").results[2];
+    assert.equal(rejectedSpec.contractError.kind, "structured-output");
+    let dispatchId = reconsider.details.dispatchId;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const correction = await f.runtime.dispatch({ ...f.params,
+        recovery: { dispatchId, lanes: ["spec"] } }, undefined, f.ctx);
+      await f.runtime.flush();
+      const failed = await f.settle({ reviews: { spec: invalid } });
+      assert.deepEqual(failed.calls, ["spec"]);
+      const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+      assert.equal(record.recoveryAttempt, 0);
+      assert.equal(record.reviewMeta.correctionCounts.spec, attempt);
+      dispatchId = correction.details.dispatchId;
+      f.reload();
+    }
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId, lanes: ["spec"] } }, undefined, f.ctx), /correction.*exhausted/i);
+  });
+});
+
+test("reconsideration correction preserves the other axis's effective verdict and full failure report", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "FAIL", [axisFinding("standards", "rule")]),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [
+        { findingId: "standards:rule", reason: "rule does not apply", evidence: "standard scope" },
+        { findingId: "spec:parse", reason: "accepted behavior", evidence: "AC1" },
+      ],
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const partial = await f.settle({ reviews: {
+      standards: decisions("standards", [["standards:rule", "withdraw"]]),
+      spec: decisions("spec", [["spec:unknown", "withdraw"]]),
+    } });
+    const prior = partial.status.workflow.emits.findLast(e => e.type === "pi-x-matt.stage-results").results;
+    assert.equal(prior[1].structuredOutput.verdict, "PASS");
+    const correction = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: reconsider.details.dispatchId, lanes: ["spec"] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const fixed = await f.settle({ reviews: { spec: decisions("spec", [["spec:parse", "withdraw"]]) } });
+    assert.deepEqual(fixed.calls, ["spec"]);
+    assert.equal(fixed.status.state, "complete");
+    const results = fixed.status.workflow.value;
+    assert.deepEqual(results[1], prior[1], "the corrected axis cannot reopen the other's adjudicated PASS");
+    assert.deepEqual(results[2].correctionHistory[0], prior[2], "keep the complete failed decision report");
+    assert.equal(correction.details.reviewPending, false);
+  });
+});
+
+test("separate corrections retain both reconsideration target contracts until each axis is settled", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "FAIL", [axisFinding("standards", "rule")]),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [
+        { findingId: "standards:rule", reason: "rule scope", evidence: "standard" },
+        { findingId: "spec:parse", reason: "accepted behavior", evidence: "AC1" },
+      ],
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: decisions("standards", [["standards:unknown", "withdraw"]]),
+      spec: decisions("spec", [["spec:unknown", "withdraw"]]),
+    } });
+    let dispatchId = reconsider.details.dispatchId;
+    for (const [axis, id] of [["spec", "parse"], ["standards", "rule"]]) {
+      f.reload();
+      const correction = await f.runtime.dispatch({ ...f.params,
+        recovery: { dispatchId, lanes: [axis] } }, undefined, f.ctx);
+      await f.runtime.flush();
+      const corrected = await f.settle({ reviews: { [axis]: decisions(axis, [[`${axis}:${id}`, "withdraw"]]) } });
+      assert.deepEqual(corrected.calls, [axis]);
+      if (axis === "standards") assert.equal(corrected.status.state, "complete");
+      dispatchId = correction.details.dispatchId;
+    }
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.deepEqual(record.reviewMeta.correctionCounts, { spec: 1, standards: 1 });
+    assert.deepEqual(record.reviewMeta.reconsiderCounts, { standards: 1, spec: 1 });
+  });
+});
+
+test("explicit reconsideration execution recovery preserves its failure without another settlement", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: {
+      standards: axisReview("standards", "PASS"),
+      spec: axisReview("spec", "FAIL", [axisFinding("spec", "parse")]),
+    } });
+    const reconsider = await f.runtime.dispatch({ ...f.params, reconsider: {
+      dispatchId: initial.details.dispatchId,
+      findings: [{ findingId: "spec:parse", reason: "accepted behavior", evidence: "AC1" }],
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: { spec: { ok: false, error: "fetch failed" } } });
+    const recovery = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: reconsider.details.dispatchId, lanes: ["spec"] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ reviews: {
+      spec: { ok: false, error: "Subagent timed out", timedOut: true, runId: "failed-reviewer",
+        resumability: { state: "resumable" } },
+    } });
+    assert.deepEqual(failed.calls, ["spec"], "an explicit recovery cannot stack an automatic settlement");
+    const results = failed.status.workflow.emits.findLast(e => e.type === "pi-x-matt.stage-results").results;
+    assert.equal(results[2].recoveryHistory[0].error, "fetch failed");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: recovery.details.dispatchId, lanes: ["spec"] } }, undefined, f.ctx), /exhausted|Settlement/);
   });
 });

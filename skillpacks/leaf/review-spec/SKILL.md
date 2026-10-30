@@ -33,4 +33,10 @@ metadata:
 
 修复复核以 Pack 的上次已审 snapshotId、本次 snapshotId、获批 finding IDs 与宿主增量为边界。未变化且无依赖影响的内容不重新裁决；原验收问题未解决或修复回归仍可阻断。每项必须提供 `id`、稳定 `rootCauseId`、`basis: {kind: "acceptance", reference: 精确验收原文/条款}`、`expected`、`actual`、代码路径/复现 evidence；`classification=original|regression|independent`，前两者用 `relatedFindingIds` 引用获批的 `spec:<id>`。`affectedBy` 列出造成一层依赖影响的本轮变化路径并解释影响链，否则为空。不把个人意见、规格外内容或 severity 本身作为阻断依据；新安全/完整性风险交 Standards 轴核验，不扩写 Spec。
 
-最终使用运行时结构化输出工具返回 schema 对象。
+## 有界复核与报告纠错
+
+宿主明确声明 `Reconsideration decision mode` 时，该模式替代普通 verdict/findings 输出：只复核列出的 `spec:<id>`，独立核对原 finding、验收条款及父会话的 reason/evidence，不把异议当作撤销命令。对每个目标恰好返回一个 `uphold` 或 `withdraw`，附非空 justification 与 evidence；不得添加目标、修改未争议 finding 或替另一轴裁决。缺乏撤销依据时不能编造 `withdraw`。宿主负责保留其他 findings、原报告与 effective verdict。
+
+普通增量报告只引用宿主给出的本轴 permitted predecessor IDs；无合法前驱时不能声称原问题或回归。未知/跨轴引用与不完整决定是报告契约错误，不是自动 PASS；纠错仍使用原 Pack 与同一目标集合，每个候选快照每轴最多两次。有效 FAIL 不能用执行恢复重评；异议复核每轴每候选最多一次。
+
+最终使用运行时结构化输出工具返回当前模式的 schema 对象。

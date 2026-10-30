@@ -54,12 +54,12 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "pi_matt_dispatch",
     label: "Pi Matt Dispatch",
-    description: "Validate and asynchronously dispatch registered least-privilege workflows. matt-tdd repair resumes only the writer; review separately dispatches both reviewers. Follow-ups reference host-owned dispatch IDs.",
+    description: "Validate and asynchronously dispatch registered least-privilege workflows. matt-tdd repair resumes only the writer; review dispatches both reviewers; reconsider runs only challenged axes. Follow-ups reference host-owned dispatch IDs.",
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
       "matt-tdd and matt-code-review require complete laneTasks; never cross writer/reviewer or Standards/Spec instructions.",
-      "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. Pending review is not delivery approval. Use recovery only for failed reviewers. DIAGNOSIS_REQUIRED stops patch dispatch.",
+      "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
     ],
     parameters: Type.Object({
       workflow: text(),
@@ -92,10 +92,18 @@ export default function (pi: ExtensionAPI) {
       review: Type.Optional(Type.Object({
         dispatchId: Type.String({ minLength: 1, description: "Latest completed repair dispatch. Review its pinned cumulative increment with both axes, without running the writer." }),
       })),
+      reconsider: Type.Optional(Type.Object({
+        dispatchId: text(),
+        findings: Type.Array(Type.Object({
+          findingId: Type.String({ minLength: 1, description: "Current valid blocking finding with its axis prefix, e.g. spec:F1." }),
+          reason: Type.String({ minLength: 1, description: "Why this specific finding is disputed; never erase a finding by prose." }),
+          evidence: Type.String({ minLength: 1, description: "Concrete acceptance, standard or tracked evidence supporting the challenge." }),
+        }), { minItems: 1 }),
+      }, { description: "At most one reconsideration per axis per candidate snapshot. Fresh reviewers decide uphold/withdraw for exactly these findings; no writer, collector or unrelated axis runs." })),
       recovery: Type.Optional(Type.Object({
         dispatchId: text(),
         lanes: Type.Array(Type.Union([Type.Literal("standards"), Type.Literal("spec")]), { minItems: 1, maxItems: 2 }),
-      })),
+      }, { description: "Rerun failed reviewer lanes. Execution recovery is separate from at most two report corrections per axis per candidate; a valid FAIL cannot use recovery." })),
     }),
     execute: (_id, params, signal, _update, ctx) => runtime.dispatch(params, signal, ctx),
   });
