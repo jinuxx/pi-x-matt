@@ -33,7 +33,7 @@ metadata:
 - `task`: 只放三条 lane 都可安全读取的共享事实：需求/缺陷、已确认 seams 与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、module/package 搜索边界和停止条件。不得把仅适用于 implement 的 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等指令放入共享 task。
 - `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换，不自动继承 `task`。`implement` 包含 Implementation Context Pack、RED/GREEN 与相关回归命令，明确完整测试套件/全量 build/最终验证由父会话执行、worker 不得运行。`standards` 只需共同证据边界、适用工程规范与安全/正确性边界；`spec` 只需共同边界、ticket acceptance matrix 与 parent spec 相关条款。两者先消费 workflow 生成的 Review Evidence Pack，额外读取仅限已说明的缺口、一层直接依赖；不得要求 `status COMPLETE` 或用旧 transcript 代替 diff。report-only、resume 或失败恢复也必须提供三项，不退回共享 task。
 
-Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。相同范围的连续修复复用授权，不重复询问入口或已经批准的 seams/范围；新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消、未响应或过期时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
+Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。相同范围的连续修复复用授权，不重复询问入口或已经批准的 seams/范围；同 ticket 仅增加 `allowedFiles` 或替换诊断清单时需重新确认一次，并以最新 `implementation` 信封和显式旧 `dispatchId` 延续同一修复谱系，ticket/行为/ticket hash/branch/HEAD 与旧 `allowedFiles` 不可变。已有未取消派发后不得再发 initial，重新授权或重新 invocation 也不能重置基线、计数或 findings。新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消、未响应或过期时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
 
 初次实现按代码强制的阶段执行：
 

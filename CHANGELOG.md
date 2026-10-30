@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.29
+
+- 修复同票重新授权后 repair/review/recovery 断链：宿主按 session、canonical project 与 ticket 查找最近未取消派发，不再按当前授权 invocationId 隔断历史。保留 ticket 内容、行为、branch/HEAD 与候选快照校验；新增文件或替换诊断清单仍须重新确认，旧 allowedFiles 不得移除。
+- 跨授权延续原 writer、累计评审基线、findings、根因计数和 reviewer recovery 额度；新授权不能重开 initial 绕过已有谱系或诊断门禁。补充拒绝授权、reload、快照漂移、累计修复与局部恢复回归。
+- 143 项测试及 registry/drift 检查通过，Standards/Spec 双轴均为 PASS。重启 Pi 并恢复原会话后，实际宿主负向探针确认能跨授权找到原 dispatch，并仍拒绝对非待审状态重复送审；不将该探针表述为新的真实 repair 实跑。
+- 修正升级说明：extension 或 `.mjs` 模块变化后需完整重启 Pi，单独 `/reload` 不能保证清除已缓存模块。
+
 ## 0.2.28
 
 - `matt-tdd` 解耦修复与正式送审：`repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选快照，父会话核对证据后选择继续修复或显式 `review`；后者只运行 fresh Standards/Spec，不重跑 writer 或重复取证。多次修复累计到最近正式评审基线，保留授权、精确范围、原 findings、根因计数与诊断门禁；待审成功不授权提交，不可恢复时停止而非暗中换 fresh writer。

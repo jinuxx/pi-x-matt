@@ -67,7 +67,7 @@ async function fixture(run) {
     laneTasks: { implement: "implement parser", standards: "standards only", spec: "AC1 only" },
     implementation: { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] },
   };
-  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", findingOverride, workerOverride } = {}) => {
+  const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride, workerOverride } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
     const runs = {
       all: async items => {
@@ -77,6 +77,10 @@ async function fixture(run) {
         for (const item of items) {
           if (item.key === "implement") {
             await writeFile(join(cwd, "parser.mjs"), value);
+            for (const [path, content] of Object.entries(files)) {
+              await mkdir(dirname(join(cwd, path)), { recursive: true });
+              await writeFile(join(cwd, path), content);
+            }
             results.push({ key: "implement", ok: true, agent: "matt-worker",
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" }, structuredOutput: worker,
               ...workerOverride });
@@ -555,5 +559,227 @@ test("an isolated diagnosis reproduces the regression, hands off only path/hash 
     const finalRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
     const finalPack = JSON.parse(await readFile(finalRecord.evidence.snapshotPath, "utf8"));
     assert.deepEqual(finalPack.incremental.changes.map(change => change.path), ["parser.mjs"]);
+  });
+});
+
+test("explicit reapproval amends the same-ticket file envelope without severing repair lineage", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const widened = { ...f.params, implementation: { ...f.params.implementation,
+      allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticFiles: ["parser.test.mjs"],
+      diagnosticCommands: ["node parser.test.mjs"] } };
+    const first = await f.runtime.dispatch({ ...widened, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    assert.equal(first.details.authorization, "user-confirmed");
+    assert.equal(first.details.reviewPending, true);
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    const firstRun = await f.settle({ value: "repair one\n",
+      files: { "parser.test.mjs": 'import assert from "node:assert/strict";\n' } });
+    assert.equal(firstRun.status.state, "complete");
+    assert.equal(firstRun.itemsSeen[0].resume, "run-0-writer");
+    const firstRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(firstRecord.repair.counts.parser, 1);
+    assert.deepEqual(firstRecord.repair.approvedFindingIds, ["spec:parse"]);
+    f.runtime.revoke("session-tree-changed");
+    f.reload();
+    const replaced = { ...widened, implementation: { ...widened.implementation,
+      diagnosticCommands: ["node --test parser.test.mjs"] } };
+    const second = await f.runtime.dispatch({ ...replaced, repair: {
+      previousDispatchId: firstRecord.id, groups: repairGroups,
+    } }, undefined, f.ctx);
+    assert.equal(second.details.authorization, "user-confirmed");
+    assert.equal(f.prompts, 3);
+    await f.runtime.flush();
+    const secondRun = await f.settle({ value: "repair two\n" });
+    assert.equal(secondRun.status.state, "complete");
+    assert.equal(secondRun.itemsSeen[0].resume, "run-1-writer");
+    const secondRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(secondRecord.repair.counts.parser, 2);
+    assert.equal(secondRecord.reviewSourceId, initial.details.dispatchId);
+    const pack = JSON.parse(await readFile(secondRecord.evidence.snapshotPath, "utf8"));
+    assert.deepEqual(pack.incremental.approvedFindingIds, ["spec:parse"]);
+    assert.deepEqual(pack.incremental.changes.map(change => change.path), ["parser.mjs", "parser.test.mjs"]);
+    assert.equal(pack.incremental.changes[0].before.content, "patched\n");
+    assert.equal(pack.incremental.changes[0].after.content, "repair two\n");
+    assert.match(pack.incremental.changes[1].after.content, /node:assert/);
+    f.reload();
+    const third = { ...replaced, implementation: { ...replaced.implementation,
+      diagnosticCommands: ["node --test --test-only parser.test.mjs"] } };
+    await assert.rejects(() => f.runtime.dispatch({ ...third, repair: {
+      previousDispatchId: secondRecord.id, groups: repairGroups,
+    } }, undefined, f.ctx), /DIAGNOSIS_REQUIRED/);
+    assert.equal(f.prompts, 4);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 3);
+    f.runtime.input({ text: "/skill:matt-implement", source: "interactive" });
+    await assert.rejects(() => f.runtime.dispatch({ ...replaced }, undefined, f.ctx), /already has a dispatch/);
+    assert.equal(f.prompts, 4);
+    await assert.rejects(() => f.runtime.dispatch({ ...replaced, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx), /latest host dispatch/);
+    const reviewDispatch = await f.runtime.dispatch({ ...replaced,
+      review: { dispatchId: secondRecord.id } }, undefined, f.ctx);
+    assert.equal(reviewDispatch.details.reviewPending, false);
+    assert.deepEqual(reviewDispatch.details.lanes.map(lane => lane.key), ["standards", "spec"]);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "complete");
+    assert.deepEqual(reviewed.status.workflow.value.map(row => row.key), ["implement", "standards", "spec"]);
+    assert.equal(f.prompts, 4);
+  });
+});
+
+test("denied reapproval queues nothing and a later approved repair keeps the old lineage", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const widened = { ...f.params, implementation: { ...f.params.implementation,
+      allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticFiles: ["parser.test.mjs"],
+      diagnosticCommands: ["node parser.test.mjs"] },
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups } };
+    const records = () => f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).length;
+    const before = records();
+    await assert.rejects(() => f.runtime.dispatch(widened, undefined, { ...f.ctx, hasUI: false }),
+      /requires explicit user authorization/);
+    await assert.rejects(() => f.runtime.dispatch(widened, undefined,
+      { ...f.ctx, ui: { confirm: async () => false } }), /not authorized by the user/);
+    assert.equal(records(), before);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    const approved = await f.runtime.dispatch(widened, undefined, f.ctx);
+    assert.equal(approved.details.authorization, "user-confirmed");
+    await f.runtime.flush();
+    const run = await f.settle({ value: "repair\n", files: { "parser.test.mjs": "export const checked = true;\n" } });
+    assert.equal(run.status.state, "complete");
+    assert.equal(run.itemsSeen[0].resume, "run-0-writer");
+    assert.equal(f.launches.length, 2);
+    assert.equal(f.prompts, 2);
+  });
+});
+
+test("reapproval cannot change ticket content, approved behavior or remove approved files", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const changed = { ...f.params, implementation: { ...f.params.implementation, scope: "different behavior" },
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups } };
+    await assert.rejects(() => f.runtime.dispatch(changed, undefined, f.ctx), /approved envelope changed/);
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+  await fixture(async f => {
+    const ticket = ".x-matt/work/feature/ticket.md";
+    await mkdir(join(f.ctx.cwd, ".x-matt/work/feature"), { recursive: true });
+    await writeFile(join(f.ctx.cwd, ".git/info/exclude"), ".x-matt/\n");
+    await writeFile(join(f.ctx.cwd, ticket), "# Ticket\nAC1: reject null\n");
+    const implementation = { ...f.params.implementation, ticket };
+    const initial = await f.runtime.dispatch({ ...f.params, implementation }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    await writeFile(join(f.ctx.cwd, ticket), "# Ticket\nAC1: accept null\n");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, implementation,
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx),
+      /approved envelope changed/);
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+  await fixture(async f => {
+    const wide = { ...f.params.implementation, allowedFiles: ["parser.mjs", "parser.test.mjs"] };
+    const initial = await f.runtime.dispatch({ ...f.params, implementation: wide }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      implementation: { ...wide, allowedFiles: ["parser.mjs"] },
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx),
+      /approved envelope changed/);
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+});
+
+test("reapproval cannot bypass branch, HEAD or candidate drift", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    await exec("git", ["checkout", "-q", "-b", "other"], { cwd: f.ctx.cwd });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx),
+      /approved envelope changed/);
+    assert.equal(f.prompts, 2);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    await exec("git", ["commit", "-q", "--allow-empty", "-m", "head drift"], { cwd: f.ctx.cwd });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx),
+      /approved envelope changed/);
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const widened = { ...f.params, implementation: { ...f.params.implementation,
+      allowedFiles: ["parser.mjs", "parser.test.mjs"], diagnosticFiles: ["parser.test.mjs"],
+      diagnosticCommands: ["node parser.test.mjs"] } };
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "external change\n");
+    await assert.rejects(() => f.runtime.dispatch({ ...widened, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx),
+      /stale|no longer matches/i);
+    assert.equal(f.prompts, 2);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+  });
+});
+
+test("regrant and reload preserve reviewer recovery budget and the passing axis", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ executionFailure: true });
+    f.reload();
+    const changed = { ...f.params, implementation: { ...f.params.implementation,
+      diagnosticCommands: ["node --test parser.test.mjs"] },
+      recovery: { dispatchId: initial.details.dispatchId, lanes: ["spec"] } };
+    await f.runtime.dispatch(changed, undefined, f.ctx);
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    const recovered = await f.settle();
+    assert.deepEqual(recovered.calls, ["spec"]);
+    assert.equal(recovered.status.state, "complete");
+    assert.deepEqual(recovered.status.workflow.value.map(row => row.key), ["implement", "standards", "spec"]);
+    assert.equal(recovered.status.workflow.value[2].recoveryHistory[0].error, "fetch failed");
+    const recoveryRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(recoveryRecord.recoveryAttempt, 1);
+    f.reload();
+    const amended = { ...f.params, implementation: { ...f.params.implementation,
+      diagnosticCommands: ["node --test --test-only parser.test.mjs"] },
+      recovery: { dispatchId: recoveryRecord.id, lanes: ["standards"] } };
+    await assert.rejects(() => f.runtime.dispatch(amended, undefined, f.ctx), /exhausted/);
+    assert.equal(f.prompts, 3);
+    assert.equal(f.runtime.plans.size, 0);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
   });
 });

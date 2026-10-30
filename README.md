@@ -11,12 +11,12 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.83.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.28
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.29
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
 
-安装或升级 pi-subagents 后退出并重新启动 Pi；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。未改变 runtime 版本、只修改本 package 的 skills/dispatcher 时，可使用：
+安装或升级 pi-subagents、本 package 的 extension 或 `lib/*.mjs` 后，退出并重新启动 Pi，再恢复原会话；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。仅修改 skills 等文本资源时，可使用：
 
 ```text
 /reload
@@ -44,7 +44,7 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.28
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.29
 ```
 
 ## 架构

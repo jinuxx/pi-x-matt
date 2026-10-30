@@ -34,17 +34,17 @@ metadata:
 调用 `pi_matt_dispatch`：
 
 - `workflow`: `matt-tdd`
-- `implementation`：按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 提供当前 ticket/direct-slice、稳定 scope、精确 allowedFiles 与获批的本地 diagnosticCommands。修复与送审期间复用同一范围；保存每次返回的宿主 `dispatchId`。
+- `implementation`：按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 提供当前 ticket/direct-slice、稳定 scope、精确 allowedFiles 与获批的本地 diagnosticCommands。修复与送审期间复用同一范围；同 ticket 只增 `allowedFiles` 或替换诊断清单时按契约重新确认一次，保留全部旧文件并以显式最新 `dispatchId` 延续同一谱系；保存每次返回的宿主 `dispatchId`。
 - `task`: 只包含三条 lane 都可安全读取的共享事实：单 ticket/当前会话 slice 的目标、验收行为、已确认 seams、fixed point、既有工作区改动、允许范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、reviewer 初始证据边界、module/package 搜索边界和停止条件。不得放入 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等 implement 专属指令。
 - `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换。`implement` 接收 Implementation Context Pack、RED/GREEN 与相关回归命令，明确不执行父会话最终验证；`standards` 接收适用工程规范摘录和安全/正确性边界；`spec` 接收 ticket acceptance matrix 与 parent spec 相关条款。两条 reviewer lane 先消费 workflow 独立采集的 Review Evidence Pack（完整 combined diff、新文件全文/hash、deleted/rename old/new），不再逐文件重复取证，不返回 implement schema，也不以旧 worker transcript 代替 diff。默认只读 manifest；仅在具体证据不足时定向补读一层直接依赖。
 
-`pi_matt_dispatch` 只在无法确认本次实现由你显式发起时才要求运行时确认：本 session 用 `/skill:matt-implement` 显式启动时直接放行一次，并绑定具体范围；运行时确认也保存为同一限定授权。后续同范围修复及 reload 从宿主当前 session branch 的可信记录恢复，不重复入口确认，不相信模型提供的“已授权”文字。新 ticket、范围扩张、架构选择或破坏性操作仍需新决定。取消、授权过期、无可靠记录且无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能改用其他调度入口绕过。
+`pi_matt_dispatch` 只在无法确认本次实现由你显式发起时才要求运行时确认：本 session 用 `/skill:matt-implement` 显式启动时直接放行一次，并绑定具体范围；运行时确认也保存为同一限定授权。后续同范围修复及 reload 从宿主当前 session branch 的可信记录恢复，不重复入口确认，不相信模型提供的“已授权”文字。同 ticket 增加 `allowedFiles` 或替换诊断清单时，用最新 `implementation` 信封重新确认一次，并以显式旧 `dispatchId` 延续谱系；已有派发后不得再发 initial，重新授权或重新 invocation 也不能重置基线、计数或 findings。新 ticket、范围扩张、架构选择或破坏性操作仍需新决定。取消、授权过期、无可靠记录且无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能改用其他调度入口绕过。
 
 只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD 内置的 fresh Standards/Spec lanes 是本次实现默认且唯一的一轮独立 code review；lane task 应明确：只有存在有证据的验收遗漏、标准/正确性/安全/数据完整性问题或缺少必需测试时返回 `FAIL`，非阻断的可维护性建议写入 notes 并保持 `PASS`。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。若阻塞原因是缺少 Git baseline、spec、ticket、acceptance criteria 或其他规划 artifact，禁止父会话直接创建或改写 `.x-matt/work/` 来解阻；应停止并提示用户显式进入 `matt-to-spec`、`matt-to-tickets` 或修正已有 artifact。
 
 两个 reviewer 都完成后，先合并报告同一轮全部 findings，按共享根因归组但保留 Standards/Spec 各自结论。reviewer 须完成限定范围检查，一次报告全部有证据的阻断项，不因首个 finding 提前结束。在已批准的连续修复范围内，不再次询问同一范围；只有新增范围或实质决定时才请求一次用户决定，不逐条或逐 lane 询问。
 
-聚焦 `matt-tdd` 必须提供结构化 `repair`：引用最近宿主 dispatchId、全部获批 finding IDs，并说明不变量、校验/归一化顺序、共享调用路径、必要正反例与回归。**repair 只运行 writer 与证据采集，不自动启动双轴。** 宿主 resume 最近的可恢复 writer，保留原模型、工具与上下文；不可恢复则停止，不暗中换 fresh writer。writer 只处理获批 findings，并运行 RED/GREEN 与相关回归，不把父会话最终验证移交给 worker。
+聚焦 `matt-tdd` 必须提供结构化 `repair`：引用最近宿主 dispatchId、全部获批 finding IDs，并说明不变量、校验/归一化顺序、共享调用路径、必要正反例与回归；重新确认后的修复仍引用同一 ticket 的最新 `dispatchId`，不以 initial 重开。**repair 只运行 writer 与证据采集，不自动启动双轴。** 宿主 resume 最近的可恢复 writer，保留原模型、工具与上下文；不可恢复则停止，不暗中换 fresh writer。writer 只处理获批 findings，并运行 RED/GREEN 与相关回归，不把父会话最终验证移交给 worker。
 
 修复返回后，父会话核对实际 diff、逐项 findings 和验证证据：仍有同范围且证据支持的修复时，引用最新 dispatchId 继续 `repair`；缺少依据或实质决定时停止。原 findings 与根因计数跨修复保留，不通过拆轮绕过诊断。候选代码已准备好时才发送 `review: {dispatchId: "<最新已完成 repair>"}`，仍提供完整三项 laneTasks；它只启动 fresh Standards/Spec，不重跑 writer 或重复采集证据。修复的 `state=complete`、`implement.status=COMPLETE` 或 `reviewPending=true` 都不代表交付通过。
 

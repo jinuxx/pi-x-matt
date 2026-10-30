@@ -18,13 +18,13 @@
 
 `ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticFiles` 可选，必须是 `allowedFiles` 的精确子集，且只能列测试/fixture 路径，不得把生产源码列入；测试/fixture 路径按最小命名规则识别：任一路径目录段恰为 `test`、`tests`、`__tests__`、`fixture` 或 `fixtures`，或文件名匹配 `*.test.*` / `*.spec.*`；未命中一律 fail closed，不读取文件内容、不探测测试框架、不提供配置项。它只为宿主隔离诊断区授予添加/替换文件的权限，不授予原工作区写权限，缺省时范围规范化对象保持 v0.2.27 形状。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。授权确认会展示隔离诊断文件清单。
 
-用户显式 `/skill:matt-implement` 产生一次 invocation intent，只能绑定第一个限定范围；缺少该记录时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 invocation/ticket/内容 hash/项目/branch/HEAD/范围不重复入口确认。宿主以非模型上下文 custom entry 保存真实输入/确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
+用户显式 `/skill:matt-implement` 产生一次 invocation intent，只能绑定第一个限定范围；缺少该记录时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。宿主以非模型上下文 custom entry 保存真实输入/确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
 
 授权最长 24 小时；授权对话最多等待 5 分钟，可取消。取消、失效、缺少可靠记录或无 UI 时 fail closed。新 ticket、实质范围扩张、架构选择或破坏性操作仍须新决定；不得以改写 `scope` 绕过根因门禁。新 session/fork 不继承授权；tree navigation 撤销。已经运行的 child 用 `/subagents-stop` 停止。
 
 ## 修复而非重新实现
 
-保存工具返回的 `dispatchId`。同一 invocation 已有派发时，不能再次发送无 `repair/review/recovery` 的初始实现。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。
+保存工具返回的 `dispatchId`。只要同一 session/project/ticket 已有未取消派发（不按当前授权 invocationId 过滤），就不能再次发送无 `repair/review/recovery` 的初始实现；重新确认授权、显式重新 invocation 或替换诊断清单都不能把谱系重置为 initial。只有排队后未启动即被取消的派发不构成该阻断。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。
 
 两个 reviewer 完成限定检查后一次返回全部有证据的阻断项，不因首个 finding 提前结束。父会话一次收集两轴全部 findings，按真实共享根因分组，保留两个轴各自 verdict。只要仍在已批准的连续修复范围内，报告后直接聚焦修复，不再次询问相同范围。只有新增决定/权限/范围时才询问一次。
 
@@ -47,6 +47,8 @@
 
 finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重复、遗漏或通过改名清除已有根因计数。相同文件并不自动代表相同根因。父会话只合并根因，不合并 Standards/Spec verdict；无证据或越轴的报告属于 review contract failure，需要修复评审，而不是派发 writer。
 
+`previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：可在保留全部旧 `allowedFiles` 的前提下增加文件，也可替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
+
 `repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer。仍提供完整三项 laneTasks，但此次只执行 implement。
 
 宿主将最新候选 `snapshotId` 与本次调度基线绑定；每次修复都必须从精确候选开始，且不能越过 `allowedFiles`。同时保存最近一次正式评审的来源，计算从该已审快照到本次候选的**累计修复增量**，保留两端内容/hash、原获批 finding IDs 与根因契约，不只计算最后一次补丁。正式复审仍不重新裁决未变化且无依赖影响的已审内容。
@@ -59,7 +61,7 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 {"review": {"dispatchId": "<最新已完成 repair 的 dispatchId>"}}
 ```
 
-仍使用 `workflow=matt-tdd`、相同 implementation 和完整三项 laneTasks。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，只有二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
+仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和完整三项 laneTasks；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，只有二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
 
 ## 根因未收敛
 
