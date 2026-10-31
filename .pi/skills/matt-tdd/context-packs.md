@@ -67,4 +67,6 @@ Reviewer 先获得 Pack 内容并独立判断，不重新 status/diff/逐文件�
 
 Standalone review 允许父会话提供同等 Pack；没有 Pack 时按精确 allowlist 一次取证。tracked diff 可用一个完整、未截断的 combined diff；仅截断或需要深入检查时按文件补读。untracked 必须获得全文，deleted 只读 diff，rename 核验 old/new；`worktree` 不能以 `ref...HEAD` 替代当前工作区证据。
 
+`reviewKind=committed` 由 `matt-code-review` 的顶层 `reviewScope: { kind, fixedPoint }` 提供：宿主解析 F、核验 F 是 admission 时 HEAD 的祖先并固定 H，然后执行一次独立 fixed collector，只读取 Git 对象 `F..H`。committed Pack 的 manifest、完整 combined diff、变化文本/hash/type/mode 与 new/delete/rename old/new 全部来自对象库，不 lstat 或读取当前工作树，也不跟随 Git symlink 目标；staged/unstaged/untracked 与项目范围外内容被排除，`fixedPoint` 等于 HEAD 的空范围允许。raw 路径、diff、symlink 与旧侧对象必须可无损表示为 UTF-8，否则在 reviewer 前 fail closed；binary、不可读内容或子模块沿用 `complete=false` 的 fail closed 策略，不新增二进制解码、不用 merge-base 替换范围，也不回退到工作区字节。采集强制忽略本地 `diff.ignoreSubmodules`/submodule ignore 与工作区属性对对象 diff 的影响，并对旧、新两侧的 gitlink/字节支持性分别校验。当前安装的 Git 2.39.5 无法在每次调用可靠禁用 lazy fetch，因此 partial/promisor clone 会在任何对象查询前显式拒绝；需要完整本地对象。采集失败、无效范围或 HEAD 漂移必须在两个 reviewer 启动前停止；省略 `reviewScope` 时仍是上述手动 `worktree`/`files` Pack，现有 TDD worktree manifest/hash 形状不变。
+
 父会话完成最终判断前核对 Pack 与当前 HEAD、status、文件 hash；review 后发生变化则旧 PASS 不适用。优先顺序是 Pack、精确 manifest、条件式扩展，最后才考虑 lane tool budget，不通过提高预算掩盖重复扫描。

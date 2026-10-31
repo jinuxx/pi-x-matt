@@ -54,11 +54,12 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "pi_matt_dispatch",
     label: "Pi Matt Dispatch",
-    description: "Validate and asynchronously dispatch registered least-privilege workflows. matt-tdd repair resumes only the writer; review dispatches both reviewers; reconsider runs only challenged axes. Follow-ups reference host-owned dispatch IDs.",
+    description: "Validate and asynchronously dispatch registered least-privilege workflows. matt-tdd repair resumes only the writer; review dispatches both reviewers; reconsider runs only challenged axes. For matt-code-review an optional committed reviewScope makes the host resolve and pin the range and capture one object-only Pack before both reviewers. Follow-ups reference host-owned dispatch IDs.",
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
       "matt-tdd and matt-code-review require complete laneTasks; never cross writer/reviewer or Standards/Spec instructions.",
+      "For matt-code-review, pass reviewScope {kind:'committed', fixedPoint} only when the review target is already-committed history. The host resolves F, verifies ancestry of the current HEAD and pins H; it captures one read-only Git-object Pack before both reviewers. Never pass your own hash, HEAD, path or command. Omit reviewScope for the existing manual worktree/files evidence path.",
       "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
       "Only matt-tdd accepts batch. One honest TUI/RPC confirmation seals the declared spec/tickets and exact envelopes (24h maximum); declared serial tickets then dispatch without extra prompts, but undeclared tickets, files or commands fail closed and need a new explicit batch confirmation. A batch ticket's commit must match the host-captured dual-PASS candidate tree and parent, and the local tracker writeback must match it, before the next ticket. Passing batch metadata never self-authorizes.",
     ],
@@ -66,6 +67,10 @@ export default function (pi: ExtensionAPI) {
       workflow: text(),
       task: Type.String({ minLength: 1, description: "Shared facts safe for every lane; complete laneTasks replace this text." }),
       laneTasks: Type.Optional(Type.Record(Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }), text())),
+      reviewScope: Type.Optional(Type.Object({
+        kind: Type.Literal("committed"),
+        fixedPoint: Type.String({ minLength: 1, description: "Git ref resolved by the host to a full commit SHA; it must be an ancestor of the current HEAD. Equal to HEAD yields an allowed empty range." }),
+      }, { additionalProperties: false, description: "matt-code-review only: host captures only the committed F..H Git objects once before both reviewers. Worktree, staged, untracked and out-of-project content are excluded; omission keeps the existing manual evidence path." })),
       implementation: Type.Optional(Type.Object({
         ticket: Type.String({ minLength: 1, description: "Exact active project-relative ticket path, or slice:<stable-id> for an approved direct slice." }),
         scope: Type.String({ minLength: 1, description: "Stable approved behavior/contract and architecture boundaries; unchanged across repairs." }),

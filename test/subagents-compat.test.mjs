@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { registerWorkflowResource } from "pi-subagents/workflow-resources";
 import { loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
+import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 
@@ -497,5 +499,167 @@ test("a truncated structured completion retains an explicit path to the complete
     assert.deepEqual(full, structuredOutput);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("committed review runs one host capture before both read-only lanes in the pinned sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const committed = {
+    committed: true, kind: "committed", path: "/tmp/host-owned/review.md",
+    fixedPoint: "a".repeat(40), head: "b".repeat(40), command: "trusted-committed-collector",
+  };
+  const workflow = registry.skills["matt-code-review"];
+  const laneTasks = { standards: "Standards evidence only", spec: "Spec inline source: AC1 committed range" };
+  const plan = buildDispatchRequest(registry, workflow, "shared review facts", ROOT, laneTasks, committed);
+  assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: committed.command }]);
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const calls = [], seen = [];
+  const result = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key, params) => {
+      calls.push(key);
+      seen.push({ key, params });
+      return reviewResult(plan, key, "PASS");
+    },
+    host: async (key, params) => {
+      calls.push(key);
+      assert.equal(key, "review-evidence");
+      assert.equal(params.command, committed.command);
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
+        stdout: JSON.stringify({ path: committed.path, fixedPoint: committed.fixedPoint, head: committed.head, complete: true }),
+        outputPath: "/tmp/mock-committed-host", durationMs: 1 };
+    },
+  });
+  assert.deepEqual(calls, ["review-evidence", "standards", "spec"]);
+  assert.ok(seen.every(item => item.params.task.includes(committed.path)));
+  assert.match(seen.find(item => item.key === "spec").params.task, /Spec inline source: AC1 committed range/);
+  assert.doesNotMatch(seen.find(item => item.key === "standards").params.task, /Spec inline source/);
+  assert.ok(result.value.every(row => row.artifactPaths.includes(committed.path)));
+
+  calls.length = 0;
+  await assert.rejects(() => runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async () => { calls.push("reviewer"); return successfulResult(plan, "standards"); },
+    host: async key => {
+      calls.push(key);
+      return { key, kind: "command", ok: false, state: "failed", exitCode: 1,
+        stdout: "", stderr: "incomplete committed evidence", outputPath: "/tmp/mock-committed-host", durationMs: 1 };
+    },
+  }), /incomplete committed evidence/);
+  assert.deepEqual(calls, ["review-evidence"], "a failed committed capture launches no reviewer");
+});
+
+test("actual committed dispatch resolves through the public resource and real host before mock reviewers", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "matt-committed-public-"));
+  const entries = [];
+  const sessionId = "committed-public-session";
+  let captured;
+  const runtime = createImplementationRuntime({
+    appendEntry: (customType, data) => entries.push({ type: "custom", customType, data: structuredClone(data) }),
+    events: { emit() {} },
+    sendUserMessage() {},
+  }, ROOT, {
+    rpc: async (method, params) => {
+      assert.equal(method, "spawn");
+      captured = params;
+      return { details: {} };
+    },
+  });
+  const ctx = {
+    cwd, hasUI: true, isProjectTrusted: () => true,
+    sessionManager: { getSessionId: () => sessionId, getBranch: () => entries },
+    ui: { confirm: async () => true },
+  };
+  runtime.start(ctx, "startup");
+  const resource = registerWorkflowResource({
+    sessionId,
+    definition: { name: "pi-x-matt.tdd", version: 1, resolve: args => runtime.resolve(args) },
+  });
+  const evidence = [];
+  const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  try {
+    await mkdir(join(cwd, ".pi"), { recursive: true });
+    await writeFile(join(cwd, ".pi", "settings.json"), "{}");
+    git("init", "-q");
+    git("config", "user.email", "test@example.invalid");
+    git("config", "user.name", "Test");
+    await writeFile(join(cwd, "tracked.txt"), "before\n");
+    git("add", ".");
+    git("commit", "-qm", "base");
+    const fixedPoint = git("rev-parse", "HEAD");
+    await writeFile(join(cwd, "tracked.txt"), "after\n");
+    git("commit", "-qam", "feature");
+    const head = git("rev-parse", "HEAD");
+    const laneTasks = { standards: "Standards evidence only", spec: "Spec inline source: PUBLIC-CHAIN-MARKER" };
+    const queued = await runtime.dispatch({
+      workflow: "matt-code-review", task: "shared review facts", laneTasks,
+      reviewScope: { kind: "committed", fixedPoint },
+    }, undefined, ctx);
+    evidence.push(dirname(queued.details.reviewEvidencePath));
+    await runtime.flush();
+    assert.equal(captured.workflow, "pi-x-matt.tdd");
+    assert.equal(captured.args.dispatchId, queued.details.dispatchId);
+    assert.equal("script" in captured, false);
+
+    const resolved = resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: queued.details.dispatchId }, sessionId);
+    assert.equal(resolved.ok, true);
+    assert.equal(validateWorkflowScript(resolved.resource.script).ok, true);
+    const calls = [], seen = [];
+    let packPath;
+    const result = await runWorkflowScript({
+      script: resolved.resource.script, timeoutMs: 5000, status: unexpectedStatus,
+      launch: async (key, params) => {
+        calls.push(key);
+        seen.push({ key, params });
+        return { key, ok: true, artifactPaths: [], structuredOutput: {
+          axis: key, verdict: "PASS", summary: `${key} pass`, findings: [], notes: [],
+        } };
+      },
+      host: async (key, params) => {
+        calls.push(key);
+        assert.equal(key, "review-evidence");
+        const stdout = execFileSync("/bin/sh", ["-c", params.command], { cwd, encoding: "utf8" });
+        packPath = JSON.parse(stdout).path;
+        return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stdout, stderr: "",
+          outputPath: "/tmp/mock-public-committed", durationMs: 1 };
+      },
+    });
+    assert.deepEqual(calls, ["review-evidence", "standards", "spec"]);
+    assert.ok(seen.every(item => item.params.task.includes(packPath)));
+    assert.match(seen.find(item => item.key === "spec").params.task, /PUBLIC-CHAIN-MARKER/);
+    assert.doesNotMatch(seen.find(item => item.key === "standards").params.task, /PUBLIC-CHAIN-MARKER/);
+    assert.ok(result.value.every(row => row.artifactPaths.includes(packPath)));
+    const pack = JSON.parse(await readFile(packPath.replace(/\.md$/, ".json"), "utf8"));
+    assert.equal(pack.fixedPoint, fixedPoint);
+    assert.equal(pack.head, head);
+
+    const second = await runtime.dispatch({
+      workflow: "matt-code-review", task: "shared review facts", laneTasks,
+      reviewScope: { kind: "committed", fixedPoint },
+    }, undefined, ctx);
+    evidence.push(dirname(second.details.reviewEvidencePath));
+    await runtime.flush();
+    const secondResource = resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: second.details.dispatchId }, sessionId);
+    assert.equal(secondResource.ok, true);
+    git("commit", "--allow-empty", "-qm", "moved after admission");
+    const failedLaunches = [];
+    const reviewMock = key => ({ key, ok: true, artifactPaths: [], structuredOutput: {
+      axis: key, verdict: "PASS", summary: `${key} pass`, findings: [], notes: [],
+    } });
+    await assert.rejects(() => runWorkflowScript({
+      script: secondResource.resource.script, timeoutMs: 5000, status: unexpectedStatus,
+      launch: async key => { failedLaunches.push(key); return reviewMock(key); },
+      host: async (key, params) => {
+        const stdout = execFileSync("/bin/sh", ["-c", params.command], { cwd, encoding: "utf8" });
+        return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stdout, stderr: "",
+          outputPath: "/tmp/mock-public-committed", durationMs: 1 };
+      },
+    }), /HEAD changed/i);
+    assert.deepEqual(failedLaunches, [], "drifted committed host capture launches no reviewer");
+  } finally {
+    resource.dispose();
+    runtime.shutdown();
+    for (const directory of evidence) await rm(directory, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
   }
 });

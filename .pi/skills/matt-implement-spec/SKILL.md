@@ -53,8 +53,8 @@ frontier 仅包含 `ready-for-agent` 且全部 blockers 已 `resolved`、实现�
 全部 tickets 均已达到核验过的终态，才进入整份 spec 评审；中途只做当前票的 TDD 双轴复核。parent spec 始终保持 `spec-ready`，已批准排除项须带原始依据，不能静默减少 spec 需求。
 
 1. 确认当前 branch 未变、工作区干净，重新核验所有实现提交、ticket 终态、spec 内容和原始 fixed point。
-2. 按 `matt-code-review` 生成从原始 fixed point 到当前 HEAD 的完整 committed Evidence Pack（`reviewKind=committed`），覆盖本 spec 的所有实现提交，而不只最后一票。Spec lane 明确接收完整 parent spec、全部声明 tickets 的聚合 acceptance matrix 与排除依据；Standards lane 只接收适用工程规范与安全/正确性边界。两项完整 laneTasks 分开提供。
-3. 调用一次 `pi_matt_dispatch` 的 `workflow: matt-code-review`，读取完整结构化结果并核验双轴。FAIL、NO_EVIDENCE、执行失败或缺失结果都停止整批并保留报告；轻量版不自动创建修复 tickets、不重新打开已 resolved 的票，不反复启动广域 review/fix 循环。需要后续修复时交还用户明确范围。
+2. 调用一次 `pi_matt_dispatch` 的 `workflow: matt-code-review`，顶层传 `reviewScope: { kind: "committed", fixedPoint: <原始 fixed point SHA> }`（`reviewKind=committed`）。宿主解析并固定原始 fixed point 到当前 HEAD 的完整范围，只在两个 reviewer 前从 Git 对象采集一次 committed Pack，覆盖本 spec 的所有实现提交而不只最后一票；父会话不手写额外 committed Pack，也不传 caller hash/HEAD/path/command。Spec lane 明确接收完整 parent spec、全部声明 tickets 的聚合 acceptance matrix 与排除依据（文本声明，不是共享 API，也不复制给 Standards）；Standards lane 只接收适用工程规范与安全/正确性边界。两项完整 laneTasks 分开提供。
+3. 读取完整结构化结果并核验双轴。committed 采集失败、范围无效、HEAD 漂移、FAIL、NO_EVIDENCE、执行失败或缺失结果都停止整批并保留报告；轻量版不自动创建修复 tickets、不重新打开已 resolved 的票，不反复启动广域 review/fix 循环。需要后续修复时交还用户明确范围。
 4. 只有最终两轴 PASS、证据仍对应当前 HEAD 且所有逐票验证通过，才报告整批实现完成。报告分支、原始 fixed point、每票 commit、排除项、最终 review 和剩余风险；暂停也输出基线、已完成提交、阻塞票和续跑入口，不回滚已成功提交。
 
 不自动写 `shipped`，不调用 `matt-archive`，不改 parent spec，不归档、不暂存或提交 tracker。不 push、不开 PR、不改历史。归档必须由用户之后另行显式调用 `matt-archive`。

@@ -1246,3 +1246,85 @@ test("explicit reconsideration execution recovery preserves its failure without 
       recovery: { dispatchId: recovery.details.dispatchId, lanes: ["spec"] } }, undefined, f.ctx), /exhausted|Settlement/);
   });
 });
+
+const reviewParams = laneTasks => ({ workflow: "matt-code-review", task: "shared review facts", laneTasks });
+
+async function commitFeature(cwd, content) {
+  await writeFile(join(cwd, "parser.mjs"), content);
+  await exec("git", ["add", "parser.mjs"], { cwd });
+  await exec("git", ["commit", "-qm", "feature"], { cwd });
+  return (await exec("git", ["rev-parse", "HEAD"], { cwd })).stdout.trim();
+}
+
+test("committed reviewScope is host-resolved at admission and captures one object pack before both reviewers", async () => {
+  await fixture(async f => {
+    const fixedPoint = (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    const head = await commitFeature(f.ctx.cwd, "committed change\n");
+    const queued = await f.runtime.dispatch({ ...reviewParams({
+      standards: "Standards evidence only", spec: "Spec inline source: AC1 committed review",
+    }), reviewScope: { kind: "committed", fixedPoint } }, undefined, f.ctx);
+    assert.equal(queued.details.workflow, "matt-code-review");
+    assert.deepEqual(queued.details.lanes.map(lane => lane.key), ["standards", "spec"]);
+    assert.equal(f.prompts, 0);
+    assert.match(queued.details.reviewEvidencePath, /review\.md$/);
+    await f.runtime.flush();
+    const launch = f.launches.at(-1);
+    assert.equal(launch.script.includes("implement"), false);
+    const { calls, itemsSeen, status } = await f.settle();
+    assert.equal(status.state, "complete");
+    assert.deepEqual(calls, ["evidence", "standards", "spec"], "one host capture must precede both read-only reviewers");
+    assert.ok(itemsSeen.every(item => item.task.includes(queued.details.reviewEvidencePath)));
+    assert.match(itemsSeen.find(item => item.key === "spec").task, /Spec inline source: AC1 committed review/);
+    assert.doesNotMatch(itemsSeen.find(item => item.key === "standards").task, /Spec inline source/);
+    assert.ok(status.workflow.value.every(result => result.artifactPaths.includes(queued.details.reviewEvidencePath)));
+    const pack = JSON.parse(await readFile(queued.details.reviewEvidencePath.replace(/\.md$/, ".json"), "utf8"));
+    assert.equal(pack.reviewKind, "committed");
+    assert.equal(pack.fixedPoint, fixedPoint);
+    assert.equal(pack.head, head);
+    assert.equal(pack.manifest.find(entry => entry.path === "parser.mjs").content, "committed change\n");
+
+    const manual = await f.runtime.dispatch(reviewParams({
+      standards: "Standards evidence only", spec: "Spec evidence only",
+    }), undefined, f.ctx);
+    assert.equal(manual.details.reviewEvidencePath, undefined);
+    await f.runtime.flush();
+    const manualRun = await f.settle();
+    assert.deepEqual(manualRun.calls, ["standards", "spec"], "omitting reviewScope preserves the manual worktree review path");
+  });
+});
+
+test("committed admission rejects invalid scope and later history movement before any reviewer", async () => {
+  await fixture(async f => {
+    const fixedPoint = (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    const branch = (await exec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    await exec("git", ["checkout", "-q", "-b", "side", fixedPoint], { cwd: f.ctx.cwd });
+    await writeFile(join(f.ctx.cwd, "side.txt"), "side\n");
+    await exec("git", ["add", "side.txt"], { cwd: f.ctx.cwd });
+    await exec("git", ["commit", "-qm", "side"], { cwd: f.ctx.cwd });
+    const side = (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    await exec("git", ["checkout", "-q", branch], { cwd: f.ctx.cwd });
+    const laneTasks = { standards: "Standards evidence only", spec: "Spec evidence only" };
+
+    await assert.rejects(() => f.runtime.dispatch({ ...reviewParams(laneTasks),
+      reviewScope: { kind: "worktree", fixedPoint } }, undefined, f.ctx), /reviewScope\.kind/);
+    await assert.rejects(() => f.runtime.dispatch({ ...reviewParams(laneTasks),
+      reviewScope: { kind: "committed", fixedPoint, head: side } }, undefined, f.ctx), /only kind and fixedPoint/);
+    await assert.rejects(() => f.runtime.dispatch({ ...reviewParams(laneTasks),
+      reviewScope: { kind: "committed", fixedPoint: side } }, undefined, f.ctx), /ancestor/);
+    await assert.rejects(() => f.runtime.dispatch({ workflow: "matt-research", task: "research",
+      reviewScope: { kind: "committed", fixedPoint } }, undefined, f.ctx), /only applies to matt-code-review/);
+    assert.equal(f.runtime.plans.size, 0);
+    assert.equal(f.launches.length, 0);
+
+    const queued = await f.runtime.dispatch({ ...reviewParams(laneTasks),
+      reviewScope: { kind: "committed", fixedPoint } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await exec("git", ["commit", "--allow-empty", "-qm", "moved after admission"], { cwd: f.ctx.cwd });
+    const { calls, itemsSeen, status } = await f.settle();
+    assert.equal(status.state, "failed");
+    assert.match(status.error, /HEAD changed since admission/);
+    assert.deepEqual(calls, ["evidence"], "no reviewer launches after a drifted committed capture");
+    assert.equal(itemsSeen.length, 0);
+    assert.ok(queued.details.reviewEvidencePath);
+  });
+});

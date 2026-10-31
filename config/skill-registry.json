@@ -794,7 +794,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "74b203d999d43973403d44b883c65f4047cfe102852a8e28545bec1e8db65806",
+      "sourceDigest": "e7c5ab2d1cbdb5beb64838ad07c554a90002f9318a4c845de406ed631b3223ba",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
       "workflowDigest": "8eed536bf8b134afd1cd39143b0ef2227ec96802a5827a133f2eb33219ebaa9d",
       "workflow": {
@@ -1216,7 +1216,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "f954e62a1d51801130d68858c7770c901eba1bf5661483d72887cc2454fd6026",
+      "sourceDigest": "bc8cf27aa05981c82d9897b2f24edab20129e4b5aba538166add9dc1c9097343",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
