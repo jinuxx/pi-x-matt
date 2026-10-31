@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.30
+
+- 新增有界 finding 复核：对有证据争议的有效阻断项显式 `reconsider`，每个候选每轴最多一次，只运行受影响轴的 fresh reviewer，不重跑 writer、不重采证据；未挑战或被维持的 finding 继续阻断，最终双轴 PASS 门禁不变。
+- 报告契约错误通过 `recovery` 单独纠正，每个候选每轴最多两次，与执行失败恢复分别计数；reload 或重新授权不重置预算，有效 FAIL 不得借报告纠错清除。
+- 完善隔离诊断的虚拟环境说明与失败归因：允许显式批准项目绝对解释器命令，不复制或自动发现 `.venv`；区分命令不存在、不可执行、其他退出与目标症状不匹配，持久化仅保留退出状态和输出摘要。
+- `matt-implement-spec` 新增有界批量授权：一次真实 TUI/RPC 确认冻结 parent spec、串行 tickets、精确文件与诊断信封，最长 24 小时；每票须匹配宿主捕获的双 PASS 候选及提交父节点，并完成一致的本地 tracker 写回，才推进下一票。未声明票、范围变化或候选漂移均停止，不自动扩权。
+- `matt-code-review` 新增 `reviewScope: {kind: "committed", fixedPoint}`：宿主解析并固定 F/H、验证 ancestry，在两个 reviewer 前一次自动采集仅含已提交 Git 对象的共享 Evidence Pack，不混入 staged、worktree、untracked 或项目外内容；省略参数时保留原手动证据入口。
+- committed collector 支持精确文件内容、变更与对象库路径；拒绝 partial/promisor clone 和不支持的二进制证据，采集不完整时不启动 reviewer。README、流程契约、registry 与回归测试同步。
+- 功能实现经 Standards/Spec 双 PASS；重启后的只读采证冒烟通过，确认未混入本地配置改动且未改变 HEAD/工作区。extension 与 `.mjs` 更新后仍须完整重启 Pi，仅 `/reload` 不够。
+
 ## 0.2.29
 
 - 修复同票重新授权后 repair/review/recovery 断链：宿主按 session、canonical project 与 ticket 查找最近未取消派发，不再按当前授权 invocationId 隔断历史。保留 ticket 内容、行为、branch/HEAD 与候选快照校验；新增文件或替换诊断清单仍须重新确认，旧 allowedFiles 不得移除。
