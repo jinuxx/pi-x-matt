@@ -22,6 +22,38 @@
 
 授权最长 24 小时；授权对话最多等待 5 分钟，可取消。取消、失效、缺少可靠记录或无 UI 时 fail closed。新 ticket、实质范围扩张、架构选择或破坏性操作仍须新决定；不得以改写 `scope` 绕过根因门禁。新 session/fork 不继承授权；tree navigation 撤销。已经运行的 child 用 `/subagents-stop` 停止。
 
+## 批量授权（matt-implement-spec）
+
+只有 `matt-tdd` 接受可选的顶层 `batch`：
+
+```json
+{
+  "batch": {
+    "spec": ".x-matt/work/feature/spec.md",
+    "fixedPoint": "<原始完整 commit SHA>",
+    "tickets": [
+      {
+        "ticket": ".x-matt/work/feature/issues/01-parser.md",
+        "scope": "本票批准的行为与架构边界",
+        "allowedFiles": ["src/parser.ts", "test/parser.test.ts"],
+        "diagnosticFiles": ["test/parser.test.ts"],
+        "diagnosticCommands": ["npm test -- parser.test.ts"]
+      }
+    ]
+  }
+}
+```
+
+`spec`/`ticket` 必须是精确 active 仓库相对路径，不得指向 `.x-matt/work/shipped/`；`fixedPoint` 必须是存在且属于当前批准 starting HEAD ancestry 的原始完整 SHA。宿主自己读取 spec/tickets、Parent、`Blocked by` 与内容摘要；模型提供的 hash、tree、commit、授权或额外字段一律拒绝。每张 ticket 的 Parent 必须精确等于该 spec，Type 必须为 `ticket`，status 只能是 `ready-for-agent` 或 `resolved`；blocker 必须是真实 active ticket，自依赖、循环和未完成依赖 fail closed。已经 `resolved` 的启动 blocker 按批准 starting HEAD 的 ancestry 核验其完整 `Implementation commit`，不要求读取 archived 历史，也不创建 tracker artifact。首次工作区必须干净（ignored 本地 tracker 不计入）。
+
+提交 `batch` 必须触发一次真实 TUI/RPC 确认，展示 spec、原始 fixed point、每个声明 ticket 的 `scope`、完整 `allowedFiles` 与诊断清单；确认最长 24 小时、等待最多 5 分钟且可取消。`matt-implement` invocation intent、`matt-implement-spec` invocation 或 `batch` 元数据本身都不构成授权；无 UI 且没有当前 session branch 可恢复的有效 batch capability 时拒绝。可信 batch 记录以独立 custom entry 保存，不与单票 grant 混用；`/skill:matt-implement-spec` 作为 batch 入口不撤销该 capability，其他 skill、tree navigation、new session/fork、取消或过期撤销，queued work 不得启动。
+
+对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。当前 `implementation` 信封必须等于批准条目；undeclared ticket、额外文件/命令、语义变化、Parent/type/status/active path 不合法时拒绝，并提示提交新的显式 batch 确认。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding；只增 `allowedFiles` 或替换诊断清单仍需既有单票重新确认，batch 计划本身不扩张。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
+
+batch-bound 证据采集额外在受信任 collector 中生成 candidate tree 证明：宿主使用 OS temp 的 `GIT_INDEX_FILE`、临时 `GIT_OBJECT_DIRECTORY`，把原 object store 作为只读 alternate，只把本次已审项目路径 stage 到隔离 index 并 `write-tree`；真实 index、HEAD、object store 与工作区不被写入。tree、采集时 HEAD 与 Review Evidence snapshot 通过 collector stdout 和 workflow emit 绑定到宿主记录，至少包含完整双轴 `PASS` 与 `implement.status=COMPLETE` 才算 terminal candidate。
+
+进入下一票前，宿主必须对前一票核验：真实 commit 只有一个 parent 且等于 candidate 采集时的 HEAD；commit tree 等于 candidate tree（因此内容、文件类型、可执行位和新文件都绑定）；commit 位于原始 fixed point ancestry；当前 HEAD 正好是该 commit，没有额外/无关提交、amend、merge 或 history switch；工作区干净；tracker 为 `resolved` 且 `Implementation commit` 精确等于该 commit。伪造 Comments、仅 branch 名称相同、部分 candidate、未 review 的 commit 或无法安全核验的 prerequisite 都停止，不接受“父会话说已提交”。全部 tickets 达到核验终态后才允许整份 spec 的 committed 双轴评审；不自动归档、改 spec 状态、push、开 PR 或合并。
+
 ## 修复而非重新实现
 
 保存工具返回的 `dispatchId`。只要同一 session/project/ticket 已有未取消派发（不按当前授权 invocationId 过滤），就不能再次发送无 `repair/review/recovery` 的初始实现；重新确认授权、显式重新 invocation 或替换诊断清单都不能把谱系重置为 initial。只有排队后未启动即被取消的派发不构成该阻断。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。

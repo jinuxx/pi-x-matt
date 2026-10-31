@@ -33,7 +33,7 @@ metadata:
 3. 只枚举该 feature 的 `issues/`，读取全部 ticket 的 `Type: ticket`、`Parent`、status、`Blocked by` 和验收正文。每张 ticket 的 Parent 必须精确指向此 spec；不把 decision ticket、`Parent: None` 或其他 feature 混入图。没有 tickets 时提示先运行 `matt-to-tickets`，不创建缺失 artifact。
 4. 验证所有 blocker 都是本图中的真实 ticket，拒绝缺失引用、自依赖和循环依赖。未完成项只接受 `ready-for-agent`；已完成项只接受 `resolved` 或有明确用户批准排除理由的 `out-of-scope`。对每个 `resolved` 读取完整 `Implementation commit`，用 `git merge-base --is-ancestor <SHA> HEAD` 核验；失败时停止，不按残留状态跳过或重做实现。`out-of-scope` 不能解锁依赖它的 ticket，也不能冒充已实现的 spec 验收项。
 5. 固定当前 branch、HEAD 和整批评审 fixed point。新批次没有已完成 ticket 时默认以开始的实际 HEAD SHA 为 fixed point；用户提供基线时核验它存在且是 HEAD 的祖先。续跑有已完成 ticket 时必须恢复原始 fixed point，缺失则停止并请求准确基线，不能把当前 HEAD 当作基线隐藏之前的实现。每个已完成实现提交还必须位于 fixed point 之后；基线范围夹带无关提交时停止并澄清，不把无关代码归入本 spec。
-6. `git status` 必须干净（不含 ignored 本地资料）；存在已有 tracked/untracked 改动时停止并列出阻塞，不 stash、reset 或提交用户改动。展示 spec 标题、固定基线、已完成/排除项、依赖图和串行顺序，用 `ask_user_question` 让用户确认本批范围或暂停。确认只批准编排，不授予整份 spec 的 TDD 写入授权。
+6. `git status` 必须干净（不含 ignored 本地资料）；存在已有 tracked/untracked 改动时停止并列出阻塞，不 stash、reset 或提交用户改动。展示 spec 标题、固定基线、已完成/排除项、依赖图和串行顺序，然后把 spec、原始 fixed point 和全部声明 tickets 的精确 `scope` / `allowedFiles` / 诊断清单通过顶层 `batch`（与 `implementation` 并列，不是嵌套属性）交给 `pi_matt_dispatch`；由宿主读取真实 spec/ticket 内容、Parent 与 `Blocked by` 图，并在 TUI/RPC 展示后取得一次真实确认（24 小时上限、可取消、有界等待）。这次确认同时批准整批声明范围内的 seam/行为边界和逐票写入信封；它不授予整份 spec 的写入授权，也不是无限通行证，不能由 `matt-implement-spec` invocation 或模型提供的 hash/授权文字代替。无 UI 且没有可恢复的有效 batch 记录时停止，不逐票伪造 `/skill:matt-implement` 输入。
 
 ## 串行 frontier
 
@@ -43,9 +43,9 @@ frontier 仅包含 `ready-for-agent` 且全部 blockers 已 `resolved`、实现�
 
 1. 重新读取 spec、ticket 与 blockers，核验分支、基线 ancestry、图成员、原有验收与 edges 未漂移。ticket 集合或需求发生变化时停止并重新确认范围；既有完成说明与状态回写不算需求扩张。
 2. 完整应用 `matt-implement` 的单 ticket 流程：先陈述标题，确认 seams、每个 seam 的 catches/misses 和测试价值判断，再生成当前 ticket 的 Implementation Context Pack。不要把整个 spec 的未实现部分交给该票 Spec reviewer。
-3. 每张 ticket 重新提供 `implementation.ticket`、`scope`、精确 `allowedFiles` 和完整 `implement` / `standards` / `spec` laneTasks，以 `pi_matt_dispatch` 的 `workflow: matt-tdd` 执行。`/skill:matt-implement-spec` 不是宿主的单票 invocation intent，各票按现有 TUI/RPC 运行时确认取得限定授权；无 UI、取消或授权失败立即停止，不伪造 `/skill:matt-implement` 用户输入，不跨票复用 grant。
+3. 每张 ticket 提供与已确认 batch 条目完全一致的 `implementation.ticket`、`scope`、精确 `allowedFiles`、诊断清单和完整 `implement` / `standards` / `spec` laneTasks，以 `pi_matt_dispatch` 的 `workflow: matt-tdd` 执行；首票带 `batch`，后续声明票可省略 `batch`，宿主按当前 session branch 的可信 batch 记录和声明的串行 frontier 签发新的 HEAD-bound 单票 grant，不重复询问。当前信封必须等于批准条目；undeclared ticket、额外文件/命令、语义扩张、Parent/type/status/active path 不合法或 `Blocked by` 图漂移时拒绝并要求新的显式 batch 确认。同票修复/送审即使省略 `batch` 也保留宿主 batch binding；只增文件或替换诊断清单属于新的单票信封，须显式重新确认一次，batch 计划本身不扩张。
 4. 同票连续修复与 reviewer recovery 沿用原 dispatch lineage；不跨 ticket 复用 `dispatchId`、scope 或旧 Evidence Pack。`DIAGNOSIS_REQUIRED` 按既有受限诊断契约处理，未解除不得追加 writer。任何 BLOCKED、未恢复的失败或接受状态不明都停止整批，不切到下一张来绕过。
-5. 等 TDD 和双轴 review 均成功，由父会话执行该票的完整验证并提交。只有提交成功、真实 commit 和本地 tracker `resolved` / `Implementation commit` 写回均核验通过，才进入下一张；“代码已提交、tracker 待修复”必须暂停，不重新提交。
+5. 等 TDD 和双轴 review 均成功，由父会话执行该票的完整验证并提交。batch 运行中宿主只为该票记录 trusted collector 在隔离 index/object store 中算出的 candidate tree；提交必须只有一个 parent 等于采集时的 HEAD，且 tree 与会话相关的文件内容/类型/可执行位完全一致，不能夹带无关文件、额外提交、amend、merge 或 history switch。只有提交成功、真实 commit 属于原始 fixed point ancestry、当前工作区干净，且本地 tracker `Status: resolved` 与 `Implementation commit` 写回均核验通过并匹配该 commit，才进入下一张；“代码已提交、tracker 待修复”必须暂停，不重新提交。宿主无法安全核验 prerequisite 时停止，不接受“父会话说已提交”。
 6. 保存该票标题、commit、dispatchId、验证结果和原始 fixed point；重读并计算下一轮 frontier。已提交实现属于当前 HEAD ancestry 才解锁后续工作，不依赖内存中的“done”标记。每张票执行完成后仅编排 parent 可以继续下一张，`matt-implement` 自身不批量循环。
 
 ## 整份 spec 评审与结束

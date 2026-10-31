@@ -11,6 +11,8 @@ metadata:
   pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
 ---
 
+由 `matt-implement-spec` 串行调度时，本单票步骤不变；宿主已确认的 batch 能力只按声明的 spec/ticket/envelope 为该票签发 HEAD-bound grant，声明票之间不重复 TUI 确认。同票修复/送审即使省略顶层 `batch` 元数据也保留宿主 batch binding；增加文件或替换诊断清单仍须显式单票重新确认，batch 计划本身不扩张。提交前宿主已有 trusted collector 的 candidate tree 证明时，父会话必须让真实 commit 的 parent 和 tree 精确匹配，并在 tracker 写回后由宿主核验下一票前置；batch 不授予 push、PR、merge、committer 或归档权限。
+
 # Implement
 
 本 skill 把已经决定的一个工作切片变成当前分支上的提交。它不重新 grill，不改变计划/ticket 的目标，不批量处理多个 tickets，也不平行写共享工作区。每次 invocation 只处理一个 ticket；没有已发布 ticket 时，只接受用户在先前 transition handoff 中明确选择“直接实现”、可在一个 session 完成且尚未发布为 `Type: spec`/`Status: spec-ready` 的单 slice 计划。缺少 ticket 本身不构成 direct-slice 授权。`spec-ready` parent spec 必须先进入 `matt-to-tickets`，不能直接实现。

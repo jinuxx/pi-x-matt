@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, execSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -139,5 +139,32 @@ test("repair increments bind reviewed snapshots, ignore unchanged work and retai
     assert.equal(delta.currentSnapshotId, current.snapshotId);
     assert.throws(() => repairDelta(reviewed, current, { previousSnapshotId: "stale" }), /stale/);
     assert.throws(() => repairDelta(reviewed, current, { allowedFiles: ["other.txt"] }), /outside/);
+  });
+});
+
+test("evidence snapshots and repair increments bind mode-only changes", async () => {
+  await fixture(async cwd => {
+    await writeFile(join(cwd, "tracked.txt"), "reviewed content\n");
+    const reviewed = await collectReviewEvidence(cwd);
+    assert.equal(reviewed.manifest.find(entry => entry.path === "tracked.txt").mode, "100644");
+    await chmod(join(cwd, "tracked.txt"), 0o755);
+    const current = await collectReviewEvidence(cwd, { baseline: reviewed });
+    assert.equal(current.manifest.find(entry => entry.path === "tracked.txt").mode, "100755");
+    assert.notEqual(current.snapshotId, reviewed.snapshotId);
+    const delta = repairDelta(reviewed, current, {
+      previousSnapshotId: reviewed.snapshotId, allowedFiles: ["tracked.txt"],
+    });
+    assert.deepEqual(delta.changes.map(change => change.path), ["tracked.txt"]);
+    const output = await mkdtemp(join(tmpdir(), "matt-mode-pack-"));
+    try {
+      const path = join(output, "review.md");
+      await writeReviewEvidence(path, current);
+      assert.match(await readFile(path, "utf8"), /"mode": "100755"/);
+    } finally {
+      await rm(output, { recursive: true, force: true });
+    }
+    assert.throws(() => repairDelta(reviewed, current, {
+      previousSnapshotId: reviewed.snapshotId, allowedFiles: [],
+    }), /outside the approved envelope/);
   });
 });

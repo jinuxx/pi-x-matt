@@ -60,6 +60,7 @@ export default function (pi: ExtensionAPI) {
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
       "matt-tdd and matt-code-review require complete laneTasks; never cross writer/reviewer or Standards/Spec instructions.",
       "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
+      "Only matt-tdd accepts batch. One honest TUI/RPC confirmation seals the declared spec/tickets and exact envelopes (24h maximum); declared serial tickets then dispatch without extra prompts, but undeclared tickets, files or commands fail closed and need a new explicit batch confirmation. A batch ticket's commit must match the host-captured dual-PASS candidate tree and parent, and the local tracker writeback must match it, before the next ticket. Passing batch metadata never self-authorizes.",
     ],
     parameters: Type.Object({
       workflow: text(),
@@ -89,6 +90,17 @@ export default function (pi: ExtensionAPI) {
           }), { minItems: 1, description: "Host writes these only to implementation.diagnosticFiles inside the reviewed-state isolation." })),
         })),
       })),
+      batch: Type.Optional(Type.Object({
+        spec: Type.String({ minLength: 1, description: "Exact active Local Markdown parent spec path (Type: spec, Status: spec-ready)." }),
+        fixedPoint: Type.String({ minLength: 1, description: "Original full commit SHA; the host verifies it exists and is an ancestor of the approved starting HEAD." }),
+        tickets: Type.Array(Type.Object({
+          ticket: Type.String({ minLength: 1, description: "Exact active declared ticket path; Parent must equal the approved spec." }),
+          scope: Type.String({ minLength: 1, description: "Approved behavior/contract and architecture boundary for this ticket." }),
+          allowedFiles: strings(),
+          diagnosticFiles: Type.Optional(Type.Array(text(), { description: "Exact subset of allowedFiles for host-isolated diagnostics only." })),
+          diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands." })),
+        }), { minItems: 1, description: "Declared serial ticket list; the host freezes each ticket's requirement content, Parent and Blocked by graph." }),
+      }, { description: "One-confirmation batch capability for declared serial matt-tdd tickets. The host reads actual spec/ticket digests; model-provided hashes or authorization are never accepted. No implicit batch from matt-implement-spec or a plain intent." })),
       review: Type.Optional(Type.Object({
         dispatchId: Type.String({ minLength: 1, description: "Latest completed repair dispatch. Review its pinned cumulative increment with both axes, without running the writer." }),
       })),

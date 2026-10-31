@@ -35,6 +35,8 @@ metadata:
 
 Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。相同范围的连续修复复用授权，不重复询问入口或已经批准的 seams/范围；同 ticket 仅增加 `allowedFiles` 或替换诊断清单时需重新确认一次，并以最新 `implementation` 信封和显式旧 `dispatchId` 延续同一修复谱系，ticket/行为/ticket hash/branch/HEAD 与旧 `allowedFiles` 不可变。已有未取消派发后不得再发 initial，重新授权或重新 invocation 也不能重置基线、计数或 findings。新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消、未响应或过期时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
 
+`matt-implement-spec` 的 batch 入口也必须先取得一次显式 TUI/RPC 确认，才形成可信 batch 能力；随后宿主按声明的 spec/ticket/`Blocked by` 图与精确信封为每张串行 ticket 签发新的 HEAD-bound 单票 grant，声明票之间不重复询问，也不接受模型提供的 digests、tree、commit 或授权文字。同票修复/送审省略 `batch` 元数据时仍保留宿主 binding；undeclared ticket、额外文件/命令/语义、内容或边漂移、未通过双轴 PASS 的候选、parent/tree/模式不符的提交、伪造 tracker 写回、额外提交、非原始 fixed-point ancestry、取消/过期/new session/fork 全部 fail closed。batch 不改变本 workflow 的唯一 writer、三项 laneTasks、双轴 PASS gate 或父会话最终验证；提交、push、PR、归档仍不属于 TDD。
+
 初次实现按代码强制的阶段执行：
 
 1. `implement`：唯一 `matt-worker` 加载 `codebase-design` 与 `tdd-executor`，一次只做一个 vertical slice；每轮先取得真实 RED，再写最小实现取得 GREEN。

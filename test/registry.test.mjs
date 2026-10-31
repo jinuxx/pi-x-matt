@@ -223,7 +223,11 @@ test("implement-spec keeps serial ticket gates and a distinct whole-spec review"
   assert.match(skill, /Implementation commit.*git merge-base --is-ancestor/);
   assert.match(skill, /frontier.*编号.*路径/);
   assert.match(skill, /没有 frontier.*仍有未完成.*停止/);
-  assert.match(skill, /每张 ticket.*重新.*scope.*allowedFiles/);
+  assert.match(skill, /顶层 `batch`（与 `implementation` 并列/);
+  assert.match(skill, /一次真实确认/);
+  assert.match(skill, /每张 ticket.*scope.*allowedFiles/s);
+  assert.match(skill, /不重复询问/);
+  assert.match(skill, /undeclared ticket.*额外文件\/命令/s);
   assert.match(skill, /不授予.*整份 spec.*授权/);
   assert.match(skill, /无 UI.*停止/);
   assert.match(skill, /不跨 ticket 复用.*dispatchId/);
@@ -234,6 +238,14 @@ test("implement-spec keeps serial ticket gates and a distinct whole-spec review"
   assert.match(skill, /完整 parent spec.*acceptance matrix/);
   assert.match(skill, /FAIL.*NO_EVIDENCE.*停止/);
   assert.match(skill, /不自动.*shipped.*matt-archive/);
+
+  const batchContract = await readFile(join(ROOT, ".pi/skills/matt-tdd/dispatch-contract.md"), "utf8");
+  assert.match(batchContract, /顶层 `batch`/);
+  assert.match(batchContract, /一次真实 TUI\/RPC 确认/);
+  assert.match(batchContract, /GIT_INDEX_FILE/);
+  assert.match(batchContract, /GIT_OBJECT_DIRECTORY/);
+  assert.match(batchContract, /parent.*tree|tree.*parent/s);
+  assert.match(batchContract, /resolved.*Implementation commit/s);
 
   const implement = await readFile(join(ROOT, ".pi/skills/matt-implement/SKILL.md"), "utf8");
   assert.match(implement, /matt-implement-spec.*同一父会话.*下一张/);

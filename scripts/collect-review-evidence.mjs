@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from "node:fs/promises";
+import { collectCandidateTreeProof } from "../lib/batch-authorization.mjs";
 import { collectReviewEvidence, repairDelta, writeReviewEvidence } from "../lib/review-evidence.mjs";
 
 // Fixed host command: arguments are extension-owned artifact paths, never task text.
@@ -8,10 +9,13 @@ if (!baselinePath || !outputPath) throw new Error("Usage: collect-review-evidenc
 const { baseline, control } = JSON.parse(await readFile(baselinePath, "utf8"));
 const pack = await collectReviewEvidence(process.cwd(), { baseline });
 pack.incremental = repairDelta(baseline, pack, control);
+const candidate = control.batch ? await collectCandidateTreeProof(process.cwd(), pack, control) : null;
+if (candidate) pack.batchCandidate = candidate;
 await writeReviewEvidence(outputPath, pack);
 await writeFile(outputPath.replace(/\.md$/, ".json"), JSON.stringify(pack), { mode: 0o400, flag: "wx" });
 console.log(JSON.stringify({
   path: outputPath, head: pack.head, diffSha256: pack.diffSha256, complete: pack.complete,
+  ...(candidate ? { candidate } : {}),
   boundary: {
     incremental: Boolean(control.previousSnapshotId),
     changedPaths: pack.incremental.changes.map(change => change.path),
