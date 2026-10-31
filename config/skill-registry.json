@@ -794,7 +794,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "e7c5ab2d1cbdb5beb64838ad07c554a90002f9318a4c845de406ed631b3223ba",
+      "sourceDigest": "ff55491729ac7be33eff0d045c7ccf9f90c2c5c2ce3b30fd5cfb69e3e8b989b9",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
       "workflowDigest": "8eed536bf8b134afd1cd39143b0ef2227ec96802a5827a133f2eb33219ebaa9d",
       "workflow": {
@@ -1200,7 +1200,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "4cbe7e4a33a513242707392524a61e804d114aa0a6c1ac95734618de89bc487f",
+      "sourceDigest": "6d9a9a5cde9b98f99abf3c73c419048b250376371e789cb66ff21e33afb02dd4",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d"
@@ -1549,7 +1549,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "72f1e335309da36347dab39565320cb9a58e606b647f2cf944d94b265059065f",
+      "sourceDigest": "26cc59658c86307b7078d981c51b91a7ebbf28e9cd565fbe8ff931ac06703d17",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "e2c9ff03626a85a1e788822e6161f28c2ca37870c3120c0820167d0e34fa0e8c",
       "workflow": {
@@ -2169,7 +2169,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "4656e5bd8373677b80a50676432d6fc4e5ca928786ccbb7ce45593c15ecc0e02",
+      "sourceDigest": "c566ab997687ebeb0762b02f607d3d465a46d96df1aa405ff7a2a559ad6a941c",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "9c921a8d88138a41401d8897ca1bb852088ab1b7b605cdd04edc13e3e8aab6dd"
@@ -2183,7 +2183,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "c089e7fa0f787ea62475b29291f5fc7601cded426ec9d61a5e5a15960bd40fd2",
+      "sourceDigest": "5f38b16646bb5e56736637a5dbd99bd2a1161cb1d457e7412b5c72755e20dd45",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "9c921a8d88138a41401d8897ca1bb852088ab1b7b605cdd04edc13e3e8aab6dd"

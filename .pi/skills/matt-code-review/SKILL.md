@@ -34,6 +34,8 @@ metadata:
 - `task`: 只放两条 lane 共用的目标、`reviewKind`、Review Evidence Pack 路径或内联原始证据、fixed point、完整 manifest、条件式一层扩展边界和停止条件。
 - `laneTasks`: 为 `standards` 和 `spec` 分别提供完整替换，复制各自需要的共同证据，并只附该轴适用的标准或验收条款。Spec 的 inline source 是 lane task 内的文本声明，附实际规格原文来源；它不是新的共享 API，也不复制给 Standards。已内联且来源可核验的内容无需重复 `read`。
 
+整份 spec 汇总评审须把完整 active parent spec 与聚合 acceptance matrix 放入 `laneTasks.spec`，或明确提供可读取的原始来源；committed Git Pack 不包含 ignored tracker 规格，不能仅用 ticket 摘要替代完整 parent spec。缺证据仍返回 `NO_EVIDENCE`，notes 给出具体缺失来源和补到 `laneTasks.spec` 的动作；不把规格全文复制给 Standards，也不靠关键字检测猜测规格已完整。
+
 两个轴在一次 dispatch 中一同发出并前台等待，聚合各自返回的报告；不要串行跑轴，也不要让一个轴的上下文污染另一个轴。Dispatcher 会并行启动两个 fresh-context reviewer：
 
 - `standards`：仓库标准、正确性、测试与代码异味

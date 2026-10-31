@@ -54,6 +54,8 @@ metadata:
 
 正式复审检查自最近一次正式评审以来的**累计修复增量**、原 findings 及必要的一层直接依赖，不只检查最后一次补丁；不得重新扫描或重新裁决已经 PASS 且未变化、无依赖影响的其他文件，真实新安全/完整性问题除外。该次双轴 `PASS` 取代此前失败结果，不再追加 standalone code review。
 
+合法 reconsider 的 workflow complete 仅表示决定已应用，不表示实现通过；必须继续检查 effective 双轴及 `reviewPassed`，按 `remainingFindingIds` 修复。旧宿主误判且已耗尽纠错预算的完整 `review-evidence` 报告，升级后可用原 recovery 入口原地重校验，不重跑模型、不重置预算或根因计数；真实 FAIL 仍须修复，schema/执行失败不能豁免。宿主提供的另一轴 causal IDs 仅可用于有变化影响证据的 regression，不允许混用验收/标准或替另一轴裁决。
+
 同一根因两次修复仍失败，第三次 writer 前由 dispatcher 强制 `DIAGNOSIS_REQUIRED`；相关修复回归立即触发。按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 在当前 ticket 内做受限诊断，提交真实 repro 与根因契约后再继续；不是取消 review、限制必要测试数或重新设计模块。执行失败/结果缺失不计作根因修复轮次，使用有界 reviewer `recovery`，不得重做已完成实现。
 
 TDD worker 是唯一写者。implement 父会话不直接与 worker 并行写入，也不允许另一个 worker 同时处理同一工作区。

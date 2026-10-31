@@ -10,6 +10,7 @@ import test from "node:test";
 import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { IMPLEMENTATION_ENTRY } from "../lib/repair-contract.mjs";
 import { resolveImplementationScope } from "../lib/dispatch-authorization.mjs";
+import { batchOutcome } from "../lib/batch-authorization.mjs";
 
 const exec = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -151,6 +152,75 @@ test("invalid dispatch input fails before authorization, evidence preparation or
   });
 });
 
+test("scope mismatches name changed fields without exposing or silently accepting rewritten contracts", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    await assert.rejects(() => f.runtime.dispatch({
+      ...f.params, implementation: { ...f.params.implementation, scope: "REWRITTEN_PRIVATE_CONTRACT" },
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups },
+    }, undefined, f.ctx), error => /scope\.scope/.test(error.message) &&
+      /exact approved scope text/.test(error.message) && !error.message.includes("REWRITTEN_PRIVATE_CONTRACT"));
+    assert.equal(f.launches.length, 1);
+  });
+});
+
+test("a retained host-rejected report can be revalidated after upgrade with an exhausted correction budget", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repair = await f.runtime.dispatch({ ...f.params,
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "candidate\n" });
+    const formal = await f.runtime.dispatch({ ...f.params, review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle({ fail: true, findingOverride: {
+      ...finding, id: "range", rootCauseId: "range-response", classification: "independent",
+      locations: ["parser.mjs:1-2"],
+    } });
+    // Retained v0.2.30 host rejection: same trusted candidate/report, not a fresh reviewer response.
+    const retained = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const legacy = reviewed.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[2];
+    legacy.ok = false;
+    legacy.contractError = { kind: "review-evidence", message: "unchanged reviewed content has no evidenced dependency impact" };
+    legacy.error = "Review evidence contract invalid: unchanged reviewed content has no evidenced dependency impact";
+    retained.reviewMeta.correctionCounts = { spec: 2 };
+    await writeFile(join(f.launches.at(-1).asyncDir, "status.json"), JSON.stringify(reviewed.status));
+    f.reload();
+    const recovered = await f.runtime.dispatch({ ...f.params,
+      recovery: { dispatchId: formal.details.dispatchId, lanes: ["spec"] },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    const revalidated = await f.settle();
+    assert.deepEqual(revalidated.calls, [], "no writer, collector or reviewer may run for a host revalidation");
+    const current = revalidated.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[2];
+    assert.equal(current.ok, true);
+    assert.equal(current.structuredOutput.verdict, "FAIL", "revalidation never erases a real blocker");
+    assert.equal(current.contractError, undefined);
+    assert.deepEqual(current.revalidationHistory[0].original, legacy);
+    assert.equal(revalidated.status.state, "failed", "delivery still requires dual PASS");
+    assert.equal(batchOutcome(revalidated.status).resultsValid, false);
+    assert.ok(revalidated.status.workflow.emits.some(row => row.type === "pi-x-matt.report-revalidated"));
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.deepEqual(record.reviewMeta.correctionCounts, { spec: 2 });
+    assert.deepEqual(record.repair.counts, { parser: 1 });
+    f.reload();
+    const next = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: recovered.details.dispatchId,
+      groups: [{ ...repairGroups[0], id: "range", findingIds: ["spec:range"] }],
+    } }, undefined, f.ctx);
+    assert.equal(next.details.reviewPending, true);
+    await f.runtime.flush();
+    const fixed = await f.settle({ value: "final\n" });
+    assert.equal(fixed.itemsSeen[0].resume, "run-1-writer");
+    assert.equal(fixed.status.state, "complete");
+  });
+});
+
 test("TDD cannot queue or launch without user authorization", async () => {
   await fixture(async f => {
     await assert.rejects(() => f.runtime.dispatch(f.params, undefined,
@@ -214,7 +284,7 @@ test("host reload restores the exact grant and repair lineage without repeating 
     const specTask = reviewDispatch.details.lanes.find(lane => lane.key === "spec").task;
     assert.match(specTask, /"reference":"AC1"/);
     assert.match(specTask, /permitted predecessor IDs = \["spec:parse"\]/);
-    assert.doesNotMatch(standardsTask, /spec:parse/);
+    assert.match(standardsTask, /Cross-axis causal predecessors = \[\{"id":"spec:parse","rootCauseId":"parse-order"\}\]/);
     assert.doesNotMatch(standardsTask, /"reference":"AC1"/);
     assert.doesNotMatch(standardsTask + specTask, /Root-cause repair contract/);
     await f.runtime.flush();
@@ -844,7 +914,11 @@ test("reconsideration withdraws only challenged findings without launching write
       spec: decisions("spec", [["spec:parse", "withdraw"]]),
     } });
     assert.deepEqual(adjudicated.calls, ["spec"]);
-    assert.equal(adjudicated.status.state, "failed", "the unchallenged blocker remains a valid FAIL");
+    assert.equal(adjudicated.status.state, "complete", "the decisions completed, not the delivery review");
+    assert.equal(batchOutcome(adjudicated.status).resultsValid, false, "a retained blocker cannot advance a batch");
+    assert.deepEqual(adjudicated.status.workflow.emits.find(row => row.type === "pi-x-matt.reconsideration-complete"), {
+      type: "pi-x-matt.reconsideration-complete", version: 1, reviewPassed: false, remainingFindingIds: ["spec:order"],
+    });
     const results = adjudicated.status.workflow.emits
       .findLast(emit => emit.type === "pi-x-matt.stage-results").results;
     assert.deepEqual(results.map(result => result.key), ["implement", "standards", "spec"]);
@@ -855,7 +929,7 @@ test("reconsideration withdraws only challenged findings without launching write
     assert.deepEqual(results[2].structuredOutput.findings.map(item => item.id), ["order"]);
     assert.deepEqual(results[2].reconsiderationHistory[0].original.findings.map(item => item.id), ["parse", "order"]);
     const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
-    assert.equal(record.state, "failed");
+    assert.equal(record.state, "complete");
     assert.equal(record.recoveryAttempt, 0);
     assert.deepEqual(record.reviewMeta.reconsiderCounts, { spec: 1 });
     f.reload();
@@ -891,7 +965,8 @@ test("upheld reconsideration keeps a valid FAIL and the next repair uses only ef
       spec: decisions("spec", [["spec:parse", "withdraw"], ["spec:order", "uphold"]]),
     } });
     assert.deepEqual(adjudicated.calls, ["spec"]);
-    assert.equal(adjudicated.status.state, "failed");
+    assert.equal(adjudicated.status.state, "complete");
+    assert.equal(batchOutcome(adjudicated.status).resultsValid, false);
     const effective = adjudicated.status.workflow.emits
       .findLast(emit => emit.type === "pi-x-matt.stage-results").results[2];
     assert.equal(effective.ok, true);

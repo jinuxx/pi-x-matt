@@ -48,6 +48,8 @@ Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 has
 
 reviewer 完成限定范围检查后一次报告全部有证据的阻断项，不在发现首个 finding 时提前返回 FAIL。保持证据边界；缺证据仍返回 NO_EVIDENCE，不能靠扩大扫描来追求穷尽。
 
+合法 reconsider 的 `state=complete` 只说明决定已应用；检查 `pi-x-matt.reconsideration-complete` 的 `reviewPassed`、`remainingFindingIds` 及 effective 双轴，任何剩余 FAIL 都禁止提交或推进 batch。升级后旧宿主误判的完整 `review-evidence` 报告可经原 recovery 入口原地重校验，不运行模型、不消耗或重置预算；仍无效的报告或 schema/执行失败不能豁免。跨轴关联仅限宿主提供的 causal predecessor IDs 与有变化影响证据的 regression，各轴 basis/裁决继续独立。
+
 上游方法把 refactor 放在 review 阶段，而不是 red→green 循环内。不要让 worker 在测试刚变绿后顺手扩大重构范围；需要重构时，根据 review finding 由父会话取得授权后再启动下一次受限实现。
 
 ## 汇总

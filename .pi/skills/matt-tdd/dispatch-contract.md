@@ -123,6 +123,8 @@ fresh 只读 reviewer 对每个 challenge 只返回一个决定，不重报 verd
 
 宿主校验决定数量、轴与目标集合完全一致后才合并：未 challenge 的 findings 逐字保留，另一轴逐字保留，只有 reviewer 明确 `withdraw` 的 finding 消失；任一 `uphold` 或未撤回 blocker 使 effective verdict 仍为 `FAIL`，不能当执行失败，也不能绕过最终双轴 `PASS` gate。原报告、全部决定与 effective verdict 保存在宿主结果及 `reconsiderationHistory`，不覆盖原始证据。后续 `repair` 必须使用 effective remaining findings，并继续引用最新可恢复 writer，而不是 reconsider 前的 source。
 
+合法的 reconsider 决定完成后返回 `state=complete` 与 `pi-x-matt.reconsideration-complete`：`reviewPassed` 表示 effective 双轴是否均 PASS，`remainingFindingIds` 列出仍然阻断的有效 IDs。这只说明复核动作已完成，不代表实现交付通过；任一 upheld/未挑战 blocker 仍为 FAIL，禁止提交或推进 batch。非法决定、缺失结果或执行失败仍失败，不能用“决定成功”掩盖它们。
+
 ## 根因未收敛
 
 同一根因完成两次修复后仍需继续，第三次 writer 前触发 `DIAGNOSIS_REQUIRED`，无论两次修复之间是否正式送审；评审确认的修复相关回归立即触发。网络失败、缺失结果与授权等待不算根因修复轮次。阈值只触发诊断，不自动放行，不限制测试数量。诊断绑定最近候选快照；“已审 snapshot”在连续待审修复中指宿主已采集的最新修复候选，不表示 reviewer 已批准。
@@ -156,14 +158,16 @@ fresh 只读 reviewer 对每个 challenge 只返回一个决定，不重报 verd
 
 每个 finding 除 severity/title/evidence/locations/recommendation 外，还必须有：
 
-- `id`、稳定 `rootCauseId`；
+- `id`、稳定 `rootCauseId`；`id` 可为裸 ID 或本轴前缀形式，宿主统一为单一 `<axis>:<id>` 身份，别名重复或错误轴前缀被拒绝；
 - `basis: {kind: acceptance|standard|safety|integrity, reference: 精确条款或安全/完整性要求}`；
 - `expected`、`actual` 和可复现步骤或真实代码路径证据；
 - `classification: original|regression|independent`；
-- `relatedFindingIds`：原问题/修复回归引用此前获批的 axis-prefixed ID，独立问题可为空；
+- `relatedFindingIds`：原问题/同轴复发引用此前获批的本轴 ID；`regression` 可引用宿主提供的另一轴 causal predecessor ID，但必须证明变化位置或 `affectedBy` 的因果影响，不能借此引用另一轴验收或标准；独立问题可为空；
 - `affectedBy`：有一层依赖影响时，列出引发影响的本轮变化路径，并在 evidence 解释真实影响链，否则为空。
 
 Spec 只以 acceptance 为依据；Standards 以 standard/safety/integrity 为依据。非阻断建议留 notes。未变化且无依赖影响、非原 finding 的普通新意见不能阻断增量交付；新证实的安全/完整性问题即使位于未变化文件也可阻断。无证据或越轴报告不能仅凭 P0/P1/P2 成为有效缺陷；宿主标记为评审契约失败，保留原报告，不擅自改成 PASS。
+
+`locations` 支持 `path:line`、`path:line:column` 与 `path:start-end`，只剥离末尾位置后缀，不截断文件名内的冒号。增量位置不匹配时，错误给出该 finding 的 locations 与有界 changedPaths 样本。修复引用未知 ID 时列出当前有效 ID；scope/identity 不匹配时指出差异字段而不回显原始 scope 内容。`scope` 在去除首尾空白后仍按原批准文本比较，不能借“改写说明”扩权。
 
 ## 局部恢复与耗时
 
@@ -175,9 +179,11 @@ Spec 只以 acceptance 为依据；Standards 以 standard/safety/integrity 为�
 
 仍提供完整三项 laneTasks。宿主只启动所选失败 reviewer，复用已完成 implement、原 Evidence Pack 和另一轴有效结论；不重新实现、不重新取证，不替换有效 FAIL。执行恢复最多一次；已发生 settlement 的失败不能再叠加恢复，显式恢复不追加 settlement。
 
-宿主检测到的报告契约错误（未知/不同轴 `relatedFindingIds`、缺少 approved predecessor 等）单独标记为 `contractError` 并保留原报告，不归一化为 PASS/FAIL，也不静默删除非法引用。此类 lane 仍通过同一 `recovery` 接口纠正，但每个候选快照对每个轴最多两次 report correction，与一次 execution recovery 分开计数；reload、重新确认或 correction 不重置。达到上限后停止，不提供自动 PASS 或无限重试。若无效报告来自 reconsideration 决定，correction 保持同一 challenged target 集合；只有全部决定合法后才重新计算 effective result。有效 FAIL 不能走 recovery/correction，只能 reconsider 或按 effective findings 修复。
+宿主检测到的报告契约错误（未知前驱、不符合上述因果例外的跨轴引用、缺少 approved predecessor 等）单独标记为 `contractError` 并保留原报告，不归一化为 PASS/FAIL，也不静默删除非法引用。此类 lane 仍通过同一 `recovery` 接口纠正，但每个候选快照对每个轴最多两次 report correction，与一次 execution recovery 分开计数；reload、重新确认或 correction 不重置。达到上限后停止，不提供自动 PASS 或无限重试；只有下述旧宿主报告重校验可在不消耗额度的情况下恢复本已合法的报告。若无效报告来自 reconsideration 决定，correction 保持同一 challenged target 集合；只有全部决定合法后才重新计算 effective result。有效 FAIL 不能走 recovery/correction，只能 reconsider 或按 effective findings 修复。
 
 阶段记录保存在宿主 session custom entries，并通过 `pi-matt:dispatch-phase` 事件通知：authorization、admission（单次 writer claim）、evidence、diagnosis、queue、rpc、reconcile、execution、settlement、workflow。运行中的 keyed child/settlement 由原生 lifecycle 事件报告；不要求模型轮询。完整运行 trace 与 deadline 以原生 status.json/events.jsonl 为准，模型按 completion 读取最终结果。
+
+升级后，对旧宿主以 `review-evidence` 拒绝的完整报告，可继续调用原 `recovery: {dispatchId, lanes}`。宿主先核验当前授权、最新 dispatch、候选快照与 Pack，再用当前契约原地重校验所选原报告。只有完整通过当前契约的报告才恢复为其真实 verdict，保留 `revalidationHistory` 与原报告，并发出 `pi-x-matt.report-revalidated`；不运行 reviewer/writer、不重新采证，也不消耗或重置原有计数。因此因旧位置解析错误耗尽两次纠错的候选仍可恢复。仍不合法的报告继续受原预算约束；结构/schema/执行失败不适用此路径，不能降级接受或豁免。恢复后的真实 FAIL 仍须修复，双 PASS 前不得提交或推进 batch。
 
 授权等待不计入 lane timeout；RPC acknowledgement 最多 10 秒；证据 host step 最多 2 分钟；worker 20 分钟、并行 reviewer 各 15 分钟；每个符合条件的 settlement 最多 5 分钟，两个 settlement 可能串行。15 分钟是单 lane 的执行范围，不是完整 TDD 或恢复的总耗时；不能由总耗时直接认定模型卡顿或超时失效。
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.2.31
+
+- 修复 review location 行区间解析，并保留文件名内的冒号；误判错误包含有界的位置/变更路径提示。finding ID 统一为单一轴前缀身份，兼容裸 ID、本轴前缀及旧重复前缀，拒绝别名重复；未知修复 ID 列出有效集合。
+- 旧宿主以 `review-evidence` 拒绝的完整报告，可在同候选和原 recovery 入口通过当前契约重校验；保留原报告、根因及纠错计数，不运行模型、不重新采证、不重置预算，仍非法或 schema/执行失败的报告不能豁免。
+- reconsider 的决定结算与交付 gate 分离：合法 uphold/withdraw 返回动作完成及 `reviewPassed`/`remainingFindingIds`，仍有 blocker 时保持 effective FAIL，禁止提交或推进 batch；非法决定继续失败。
+- 支持有真实变化影响证据、引用宿主已批准 ID 的跨轴 regression 因果关联；不混用两轴依据或裁决，回归仍触发诊断。scope 拒绝指出变化字段而不回显原始文案，保留精确授权边界。
+- Spec `NO_EVIDENCE` 增加可执行补证提示：整份 spec 评审需向 `laneTasks.spec` 提供完整 active parent spec 与聚合 acceptance matrix 或可读原始来源，Git 对象 Pack 不代替规格。同步 parent/leaf、结果读取契约与回归覆盖。
+- 214 项测试、registry、upstream drift 与打包检查通过；覆盖旧候选纠错 2/2 后重校验、reload 与原 writer 续链，以及原生 sandbox 的 uphold/withdraw 结算。未复跑反馈中的业务项目，不将回归测试表述为该业务场景的端到端通过；升级后须完整重启 Pi 并恢复原会话。
+
 ## 0.2.30
 
 - 新增有界 finding 复核：对有证据争议的有效阻断项显式 `reconsider`，每个候选每轴最多一次，只运行受影响轴的 fresh reviewer，不重跑 writer、不重采证据；未挑战或被维持的 finding 继续阻断，最终双轴 PASS 门禁不变。

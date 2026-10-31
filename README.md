@@ -11,7 +11,7 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.83.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.30
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.31
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -44,7 +44,7 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.30
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.31
 ```
 
 ## 架构
@@ -182,6 +182,8 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 受限诊断可用可选的 `implementation.diagnosticFiles`（`allowedFiles` 的精确子集）与 `repair.diagnosis.testFiles` 提供内联复现内容；授权确认会展示这份隔离权限，缺省时保持既有范围对象形状。父流程必须在提交 `testFiles` 前完成脱敏，只使用合成或已脱敏 fixture；凭据只经环境变量，不写入测试、fixture 或输出。宿主先严格确认原工作区等于最近已审快照，再在自己的 OS temp 区从该已审状态（HEAD 加已审未提交变更，含删除/重命名）重建项目，只写入获批诊断文件并运行原批准命令；要求退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未被改动，否则 fail closed 且不排 writer。成功、失败与取消都清理宿主临时区；GREEN、其他症状、超时、取消、快照漂移和越权改动都不能解锁。该隔离只用于本机故障隔离，不是安全 sandbox，不联网安装依赖，也不复制个人 ignored 资料（因此不含被忽略的 `.venv`，相对的 `.venv/bin/python` 会以 127 失败）。需要虚拟环境依赖时，由用户显式批准使用项目绝对解释器路径的命令（属于新的 `diagnosticCommands` 授权信封，同一 ticket 修复谱系不变），例如 `/absolute/project/.venv/bin/python -B -m pytest -p no:cacheprovider tests/repro.py`，含空格路径按 shell 规则加引号；`-B` 避免未获批的 `__pycache__` 写入，`-p no:cacheprovider` 避免 pytest 缓存。宿主不自动发现或替换解释器、不安装依赖、不挂载或复制 `.venv`，解释器与依赖本身并非 OS 强制只读。失败按真实退出状态归因：127 命令/解释器不存在、126 不可执行、其他非 1 为命令失败；退出 1 但无目标文本按症状不匹配提示检查解释器与依赖，持久化只保留退出状态与输出 sha256，不保留原始输出。宿主只在该次临时区使用正文，repair 证据与 implement lane handoff 仅保留准确 path 与内容 sha256。该门禁不自动识别任意 secret/PII，也不能从会话记录抹去已经提交的工具输入；没有 `testFiles` 时保留原项目根诊断路径。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
+
+报告契约支持 `path:line` / `path:line:column` / `path:start-end` 与单一 canonical finding ID；裸 ID 和本轴前缀写法不会再双写。跨轴 ID 仅用于有变化影响证据的 regression 因果关联，各轴条款与裁决仍独立。合法 reconsider 动作完成不等于交付通过：必须检查 effective 双轴及 `reviewPassed`，有剩余 blocker 就继续修复。旧宿主误判的完整 `review-evidence` 报告可经原 recovery 入口在原候选上重校验，不跑模型、不消耗或重置原预算；仍不合法或属于 schema/执行失败的报告不放行。具体恢复方式见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
 
 ## 当前使用方式
 

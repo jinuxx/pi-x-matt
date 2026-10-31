@@ -176,7 +176,15 @@ test("each reviewer FAIL or NO_EVIDENCE fails closed with both full results pers
           assert.equal(persisted.state, "failed");
           assert.equal(Object.hasOwn(persisted.workflow, "value"), false);
           assert.equal(checkpoint.stage, 2);
-          assert.deepEqual(results.map(result => result.structuredOutput), expected.map(result => result.structuredOutput));
+          const outputs = results.map((result, index) => {
+            const output = result.structuredOutput;
+            if (result.key !== "spec" || output.verdict !== "NO_EVIDENCE") return output;
+            assert.deepEqual(output.notes.slice(0, expected[index].structuredOutput.notes.length),
+              expected[index].structuredOutput.notes);
+            assert.match(output.notes.join("\n"), /laneTasks\.spec.*parent spec/);
+            return { ...output, notes: expected[index].structuredOutput.notes };
+          });
+          assert.deepEqual(outputs, expected.map(result => result.structuredOutput));
           assert.ok(results.slice(1).every(result => result.artifactPaths.includes(evidence.path)));
           assert.deepEqual(calls, ["implement", "review-evidence", "standards", "spec"], "no automatic rerun");
         });
@@ -396,6 +404,36 @@ test("reconsideration plans validate and merge exact decisions in the pinned nat
       assert.deepEqual(results[2].structuredOutput, { ...spec.structuredOutput, verdict: "PASS", findings: [] });
       assert.equal(results[2].reconsiderationHistory[0].effectiveVerdict, "PASS");
     });
+
+  const standardsFail = { ...standards, structuredOutput: {
+    ...standards.structuredOutput, verdict: "FAIL",
+    findings: [{ ...finding, basis: { kind: "standard", reference: "S1" } }],
+  } };
+  const standardsPlan = buildDispatchRequest(registry, workflow, "shared", ROOT,
+    { implement: "Implementation", standards: "Standards only", spec: "Spec only" }, evidence, undefined, {
+      reconsider: { keys: ["standards"],
+        targets: [{ ...standardsFail.structuredOutput.findings[0], id: "standards:parse", axis: "standards",
+          reason: "disputed", challengeEvidence: "S1" }],
+        results: [implemented, standardsFail, { ...spec, structuredOutput: {
+          ...spec.structuredOutput, verdict: "PASS", findings: [],
+        } }], candidateSnapshotId: "snapshot", dispatchId: "standards-reconsider",
+      },
+    });
+  for (const outcome of ["withdraw", "uphold"]) {
+    await withPersistedWorkflow(standardsPlan,
+      key => ({ key, ok: true, structuredOutput: { axis: "standards", decisions: [{
+        findingId: "standards:parse", decision: outcome, justification: "S1 interpretation", evidence: "S1",
+      }] } }),
+      ({ persisted, results, calls, failure }) => {
+        assert.equal(failure, undefined, "a valid decision is not an execution or schema failure");
+        assert.equal(persisted.state, "complete");
+        assert.deepEqual(calls, ["standards"]);
+        assert.equal(results[1].structuredOutput.verdict, outcome === "withdraw" ? "PASS" : "FAIL");
+        const applied = persisted.workflow.emits.find(row => row.type === "pi-x-matt.reconsideration-complete");
+        assert.equal(applied.reviewPassed, outcome === "withdraw");
+        assert.deepEqual(applied.remainingFindingIds, outcome === "withdraw" ? [] : ["standards:parse"]);
+      });
+  }
 
   let failedResults;
   await withPersistedWorkflow(plan,

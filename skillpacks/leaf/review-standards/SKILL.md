@@ -38,8 +38,10 @@ metadata:
 
 ## 有界复核与报告纠错
 
+`findings[].id` 建议使用不带轴的稳定 ID；宿主也接受 `standards:<id>` 并统一为单一有效身份，不能用两种写法重复报告同一 finding。`locations` 支持 `path:line`、`path:line:column`、`path:start-end`，不得把文件名中的冒号截掉。
+
 宿主明确声明 `Reconsideration decision mode` 时，该模式替代普通 verdict/findings 输出：只复核列出的 `standards:<id>`，独立核对原 finding 与父会话的 reason/evidence，不把异议当作撤销命令。对每个目标恰好返回一个 `uphold` 或 `withdraw`，附非空 justification 与 evidence；不得添加目标、修改未争议 finding 或替另一轴裁决。缺乏撤销依据时不能编造 `withdraw`。宿主负责保留其他 findings、原报告与 effective verdict。
 
-普通增量报告只引用宿主给出的本轴 permitted predecessor IDs；无合法前驱时不能声称原问题或回归。未知/跨轴引用与不完整决定是报告契约错误，不是自动 PASS；纠错仍使用原 Pack 与同一目标集合，每个候选快照每轴最多两次。有效 FAIL 不能用执行恢复重评；异议复核每轴每候选最多一次。
+上述本轴前驱规则用于原问题/同轴复发。`classification=regression` 另可引用宿主明确给出的另一轴 causal predecessor IDs，但必须给出变化位置或 `affectedBy`，并在 evidence 解释修复如何导致当前回归。跨轴 ID 只记录因果，不是另一轴的验收条款或裁决；Standards 的 basis 仍只能是 standard/safety/integrity。未知前驱、借跨轴引用声称 original、没有实际影响或不完整决定仍是报告契约错误。纠错使用原 Pack 与同一目标集合，每个候选快照每轴最多两次；有效 FAIL 不走执行恢复，异议复核每轴每候选最多一次。
 
 最终使用运行时结构化输出工具返回当前模式的 schema 对象。
