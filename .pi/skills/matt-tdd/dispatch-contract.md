@@ -1,6 +1,6 @@
 # Implement dispatch lifecycle
 
-此契约由 dispatcher 的宿主状态强制执行，不以 task 中“用户已授权”等文字为依据。完整三项 `laneTasks` 的角色隔离和最终双轴 `PASS` gate 不变；修复完成与正式评审通过是两个独立边界。
+此契约由 dispatcher 的宿主状态强制执行，不以 task 中“用户已授权”等文字为依据。初次派发提供完整三项 `laneTasks`，follow-up 只需实际执行 lane 的 task，角色隔离不变。默认交付要求双轴 `PASS`；唯一额外出口是下述用户真实确认的 `acceptRisk`，它不改写 PASS/FAIL。修复完成与正式评审通过是两个独立边界。
 
 ## 限定授权
 
@@ -54,6 +54,8 @@ batch-bound 证据采集额外在受信任 collector 中生成 candidate tree �
 
 进入下一票前，宿主必须对前一票核验：真实 commit 只有一个 parent 且等于 candidate 采集时的 HEAD；commit tree 等于 candidate tree（因此内容、文件类型、可执行位和新文件都绑定）；commit 位于原始 fixed point ancestry；当前 HEAD 正好是该 commit，没有额外/无关提交、amend、merge 或 history switch；工作区干净；tracker 为 `resolved` 且 `Implementation commit` 精确等于该 commit。伪造 Comments、仅 branch 名称相同、部分 candidate、未 review 的 commit 或无法安全核验的 prerequisite 都停止，不接受“父会话说已提交”。全部 tickets 达到核验终态后才允许整份 spec 的 committed 双轴评审；不自动归档、改 spec 状态、push、开 PR 或合并。
 
+风险接受的 batch 候选也必须匹配原宿主 candidate tree、parent 与 snapshot；tracker 除 `Status: resolved`、`Implementation commit` 外还必须在 `## Comments` 记录 `Risk acceptance: <acceptRisk 返回的 dispatchId>`。缺失/不匹配的风险收据不能推进下一票；普通 batch 确认本身不接受任何风险。
+
 ## 修复而非重新实现
 
 保存工具返回的 `dispatchId`。只要同一 session/project/ticket 已有未取消派发（不按当前授权 invocationId 过滤），就不能再次发送无 `repair/review/recovery` 的初始实现；重新确认授权、显式重新 invocation 或替换诊断清单都不能把谱系重置为 initial。只有排队后未启动即被取消的派发不构成该阻断。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。
@@ -77,11 +79,11 @@ batch-bound 证据采集额外在受信任 collector 中生成 candidate tree �
 }
 ```
 
-finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重复、遗漏或通过改名清除已有根因计数。相同文件并不自动代表相同根因。父会话只合并根因，不合并 Standards/Spec verdict；无证据或越轴的报告属于 review contract failure，需要修复评审，而不是派发 writer。
+finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重复、遗漏或通过改名清除已有根因计数。只有相同 `rootCauseId` 延续根因身份，`relatedFindingIds` 是因果关联，不把不同根因强制合组；同根因改名错误列出期望 group IDs。相同文件并不自动代表相同根因。父会话只合并根因，不合并 Standards/Spec verdict；无证据或越轴的报告属于 review contract failure，需要修复评审，而不是派发 writer。
 
 `previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：可在保留全部旧 `allowedFiles` 的前提下增加文件，也可替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
 
-`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer。仍提供完整三项 laneTasks，但此次只执行 implement。
+`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
 
 宿主将最新候选 `snapshotId` 与本次调度基线绑定；每次修复都必须从精确候选开始，且不能越过 `allowedFiles`。同时保存最近一次正式评审的来源，计算从该已审快照到本次候选的**累计修复增量**，保留两端内容/hash、原获批 finding IDs 与根因契约，不只计算最后一次补丁。正式复审仍不重新裁决未变化且无依赖影响的已审内容。
 
@@ -93,7 +95,7 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 {"review": {"dispatchId": "<最新已完成 repair 的 dispatchId>"}}
 ```
 
-仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和完整三项 laneTasks；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，只有二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
+仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和 `laneTasks.standards` / `laneTasks.spec`；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，默认二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
 
 父会话不能凭 prose 抹掉有效 FAIL。若认为某条已记录的有效 blocking finding 与已确认验收/标准冲突，使用唯一的结构化复核路径：
 
@@ -169,6 +171,20 @@ Spec 只以 acceptance 为依据；Standards 以 standard/safety/integrity 为�
 
 `locations` 支持 `path:line`、`path:line:column` 与 `path:start-end`，只剥离末尾位置后缀，不截断文件名内的冒号。增量位置不匹配时，错误给出该 finding 的 locations 与有界 changedPaths 样本。修复引用未知 ID 时列出当前有效 ID；scope/identity 不匹配时指出差异字段而不回显原始 scope 内容。`scope` 在去除首尾空白后仍按原批准文本比较，不能借“改写说明”扩权。
 
+## 显式风险接受与收尾
+
+仅在正式评审结果完整有效、Spec PASS，且所有剩余 finding 都是 Standards 的 `severity=P2` / `basis.kind=standard` 时，可请求：
+
+```json
+{"acceptRisk":{"dispatchId":"<最新 dispatchId>","findingIds":["standards:F1"],"reason":"接受理由","evidence":"风险与缓解依据"}}
+```
+
+适用于 `matt-tdd` 或有宿主 committed Pack 的 `matt-code-review`；不得附其他 follow-up，省略 `laneTasks`，TDD 仍提供原 `implementation`。须精确列出全部剩余 IDs；宿主逐项展示 finding、候选与理由，重新取得一次真实 TUI/RPC 用户确认，普通实现/batch 授权、配置、返修次数或 task prose 均不能代替。无 UI、取消、过期或确认期间候选/权限漂移均不记录接受。验收、安全、数据完整性、P0/P1、缺证据或无效报告永不适用。
+
+返回 `state=accepted-risk`、`deliveryEligible=true`、`reviewPassed=false` 与宿主收据；不运行模型或重新采证。原 FAIL、原始结果与确认事实保留，终态不能再次 repair/review/recovery，也不能把同一接受复用到新候选。父会话仍须通过完整验证、精确提交，并在本地 tracker Comments 保留风险说明、`Risk acceptance: <dispatchId>` 与完整 `Implementation commit`。完成报告必须明确“带已知风险交付”，不得称双 PASS。整份 spec 最终 committed 评审不继承单票豁免，若仍有符合条件的 P2，须对该完整范围重新明确确认。
+
+已在门禁之外提交、导致 HEAD/候选漂移的旧票不能借此追认成 PASS 或修改历史。保留失败与真实提交，重新明确已提交评审范围。`failed` 本身不永久禁止 repair：有效 FAIL 且候选/谱系未变时仍可修复。
+
 ## 局部恢复与耗时
 
 实现已 COMPLETE、快照/授权仍有效，但某 reviewer 执行失败、结果缺失或 NO_EVIDENCE 时，可传：
@@ -177,7 +193,11 @@ Spec 只以 acceptance 为依据；Standards 以 standard/safety/integrity 为�
 {"recovery": {"dispatchId": "<最近 dispatchId>", "lanes": ["spec"]}}
 ```
 
-仍提供完整三项 laneTasks。宿主只启动所选失败 reviewer，复用已完成 implement、原 Evidence Pack 和另一轴有效结论；不重新实现、不重新取证，不替换有效 FAIL。执行恢复最多一次；已发生 settlement 的失败不能再叠加恢复，显式恢复不追加 settlement。
+只提供所选 reviewer 的 laneTasks。宿主只启动所选失败 reviewer，复用已完成 implement、原 Evidence Pack 和另一轴有效结论；不重新实现、不重新取证，不替换有效 FAIL。执行恢复最多一次；已发生 settlement 的失败不能再叠加恢复，显式恢复不追加 settlement。`reconsider` 同样只需受挑战轴的 task。
+
+committed `matt-code-review` 也可用同一 `recovery` 入口，引用该评审链最新宿主 dispatch，省略 `reviewScope` 与 implementation。宿主复用原 F/H 和 Pack，核对 HEAD、项目与 JSON/Markdown 摘要，只重跑失败轴一次，不重新采集、不运行另一轴或 writer。手动 worktree/files 路径没有宿主固定 Pack，不提供此恢复保证。额度耗尽与网络失败在 receipt 中分别标记为 `provider-limit` / `infrastructure`，与有效 `review-fail` 分开；不自动盲重试，应先解决额度/环境问题。
+
+诊断可使用新的专用测试文件，只需预先把该精确路径同时列入 `allowedFiles` 与 `diagnosticFiles`，并不要求它已经存在。优先这样做，而不是覆盖既有测试。initial/batch 中预声明可用的精确诊断命令；同票同命令在当前 grant 内复用，不按每次诊断重新确认，不接受可任意展开的命令模板。隔离诊断默认设置 `PYTHONDONTWRITEBYTECODE=1`、追加 `PYTEST_ADDOPTS=-p no:cacheprovider`，避免 Python/pytest 自写缓存；不忽略任意缓存目录、不改写批准命令，未授权修改仍阻断。原项目直跑路径不改变环境。
 
 宿主检测到的报告契约错误（未知前驱、不符合上述因果例外的跨轴引用、缺少 approved predecessor 等）单独标记为 `contractError` 并保留原报告，不归一化为 PASS/FAIL，也不静默删除非法引用。此类 lane 仍通过同一 `recovery` 接口纠正，但每个候选快照对每个轴最多两次 report correction，与一次 execution recovery 分开计数；reload、重新确认或 correction 不重置。达到上限后停止，不提供自动 PASS 或无限重试；只有下述旧宿主报告重校验可在不消耗额度的情况下恢复本已合法的报告。若无效报告来自 reconsideration 决定，correction 保持同一 challenged target 集合；只有全部决定合法后才重新计算 effective result。有效 FAIL 不能走 recovery/correction，只能 reconsider 或按 effective findings 修复。
 

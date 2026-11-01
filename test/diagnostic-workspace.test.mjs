@@ -109,6 +109,23 @@ const diagnosis = overrides => ({
 });
 const options = f => ({ reviewedSnapshotPath: f.packPath, reviewedDispatchId: "dispatch-1", tmpRoot: f.tmpRoot });
 
+test("a new approved diagnostic file preserves existing tests and disables Python/pytest cache writes by environment", async () => {
+  const f = await reviewedFixture();
+  try {
+    const path = "tests/repro.test.mjs";
+    const command = `node -e "if(process.env.PYTHONDONTWRITEBYTECODE!=='1'||!process.env.PYTEST_ADDOPTS.includes('-p no:cacheprovider'))throw Error('cache policy missing')" && node parser.test.mjs && node ${path}`;
+    const scope = { allowedFiles: ["parser.mjs", path], diagnosticFiles: [path], diagnosticCommands: [command] };
+    const result = await diagnoseRepair(contract(f), diagnosis({
+      command, testFiles: [{ path, content: RED.replace("./parser.mjs", "../parser.mjs") }],
+    }), scope, f.project, undefined, undefined, options(f));
+    assert.equal(result.diagnosis.exitCode, 1);
+    assert.equal(result.diagnosis.isolation.testFiles[0].path, path);
+    assert.equal(await readFile(join(f.project, "parser.test.mjs"), "utf8"), GREEN);
+    await assert.rejects(() => readFile(join(f.project, path)), { code: "ENOENT" });
+    assert.equal((await collectReviewEvidence(f.project)).snapshotId, f.pack.snapshotId);
+  } finally { await f.cleanup(); }
+});
+
 test("host isolation rebuilds HEAD plus the reviewed worktree and writes only approved inline tests", async () => {
   const f = await reviewedFixture();
   try {

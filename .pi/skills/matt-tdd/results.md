@@ -1,6 +1,10 @@
 # Workflow Result Reading
 
+默认交付要求双 PASS。唯一额外出口是宿主真实用户确认的 `acceptRisk`：工具直接返回 `state=accepted-risk` / `deliveryEligible=true` / `reviewPassed=false`，无新 child 或 async status；从该可信工具结果读取风险收据，原 workflow 的 FAIL 仍按下文读取且不得改写。这不是从普通 receipt 重建结构化评审结果。
+
 所有执行型 parent 共用此契约。调度后交还控制权或处理独立工作，等待 runtime 的 completion；不得轮询等待。
+
+宿主通知区分 reviewer 的 `provider-limit` / `infrastructure` / `execution` 与有效 `review-fail`，不自动重试额度耗尽；先解决环境或额度，再走有界局部 recovery。writer 超时的通知明确 `settlement=pending|running|complete|failed|not-scheduled`（只报告实际观察状态，pending 不冒称已启动），保留 partial 变更，不另行 resume 或擅自丢弃；最终仍以完整结构化结果决定能否送审。
 
 1. completion 与 targeted status 的 Preview 是有界预览，可能带截断标记（如 `[preview truncated]`、`…`），不是完整 JSON；不得据此汇总。
 2. 按通知给出的 retention-managed async dir 读取完整 `status.json`，先核对 workflow run ID 与终态：

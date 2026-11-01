@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,6 +129,146 @@ async function fixture(run) {
     await rm(artifacts, { recursive: true, force: true });
   }
 }
+
+test("a user-confirmed ordinary P2 candidate has a separate terminal receipt without rewriting FAIL", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    const minor = { ...finding, severity: "P2", basis: { kind: "standard", reference: "resource convention" } };
+    await f.settle({ reviews: { standards: review("standards", true, minor), spec: review("spec") } });
+    const accepted = await f.runtime.dispatch({ ...f.params, laneTasks: undefined,
+      acceptRisk: { dispatchId: initial.details.dispatchId, findingIds: ["standards:parse"],
+        reason: "bounded trade-off", evidence: "mitigation reviewed" },
+    }, undefined, f.ctx);
+    assert.equal(accepted.details.state, "accepted-risk");
+    assert.equal(accepted.details.reviewPassed, false);
+    assert.equal(f.prompts, 2, "implementation permission cannot approve risks");
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(record.originalResults.find(row => row.key === "standards").structuredOutput.verdict, "FAIL");
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1, "acceptance does not run models or collect another Pack");
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      repair: { previousDispatchId: accepted.details.dispatchId, groups: repairGroups },
+    }, undefined, f.ctx), /terminal with accepted risks/);
+  });
+});
+
+test("changing a candidate during risk confirmation cannot authorize it", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: { standards: review("standards", true, {
+      ...finding, severity: "P2", basis: { kind: "standard", reference: "resource convention" },
+    }), spec: review("spec") } });
+    f.ctx.ui.confirm = async () => { await writeFile(join(f.ctx.cwd, "parser.mjs"), "drift\n"); return true; };
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: undefined,
+      acceptRisk: { dispatchId: initial.details.dispatchId, findingIds: ["standards:parse"],
+        reason: "bounded trade-off", evidence: "reviewed" },
+    }, undefined, f.ctx), /changed while confirming/);
+    assert.equal(f.entries.filter(entry => entry.data?.state === "accepted-risk").length, 0);
+  });
+});
+
+test("committed code review recovers only the failed axis after reload with no collector or writer rerun", async () => {
+  await fixture(async f => {
+    const fixedPoint = (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    const params = { workflow: "matt-code-review", task: "committed review",
+      laneTasks: { standards: "standards only", spec: "acceptance only" },
+      reviewScope: { kind: "committed", fixedPoint } };
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ reviews: { spec: { ok: false, error: "usage limit reached" } } });
+    assert.deepEqual(failed.calls, ["evidence", "standards", "spec"]);
+    assert.match(f.notices.at(-1), /spec=provider-limit/);
+    assert.equal(f.prompts, 0);
+    f.reload();
+    const recovered = await f.runtime.dispatch({
+      workflow: "matt-code-review", task: "recover acceptance reviewer",
+      laneTasks: { spec: "complete original acceptance source" },
+      recovery: { dispatchId: initial.details.dispatchId, lanes: ["spec"] },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    const settled = await f.settle();
+    assert.deepEqual(settled.calls, ["spec"]);
+    assert.equal(settled.status.state, "complete");
+    assert.deepEqual(settled.status.workflow.value.find(row => row.key === "standards"),
+      failed.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results.find(row => row.key === "standards"));
+    await assert.rejects(() => f.runtime.dispatch({
+      workflow: "matt-code-review", task: "do not replace valid verdicts", laneTasks: { spec: "spec" },
+      recovery: { dispatchId: recovered.details.dispatchId, lanes: ["spec"] },
+    }, undefined, f.ctx), /exhausted/);
+  });
+});
+
+test("committed recovery rejects a changed original Pack or moved HEAD instead of recollecting", async () => {
+  await fixture(async f => {
+    const fixedPoint = (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    const initial = await f.runtime.dispatch({ workflow: "matt-code-review", task: "review",
+      laneTasks: { standards: "standards", spec: "acceptance" }, reviewScope: { kind: "committed", fixedPoint },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: { spec: { ok: false, error: "fetch failed" } } });
+    const retry = { workflow: "matt-code-review", task: "recover", laneTasks: { spec: "acceptance" },
+      recovery: { dispatchId: initial.details.dispatchId, lanes: ["spec"] } };
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const markdown = await readFile(record.evidence.path);
+    await chmod(record.evidence.path, 0o600);
+    await writeFile(record.evidence.path, "tampered");
+    await assert.rejects(() => f.runtime.dispatch(retry, undefined, f.ctx), /Pack is missing or changed/);
+    await writeFile(record.evidence.path, markdown);
+    await exec("git", ["commit", "--allow-empty", "-qm", "moved"], { cwd: f.ctx.cwd });
+    await assert.rejects(() => f.runtime.dispatch(retry, undefined, f.ctx), /HEAD changed/);
+    assert.equal(f.launches.length, 1);
+  });
+});
+
+test("a committed whole-spec review can be explicitly accepted with known ordinary P2 risks without claiming PASS", async () => {
+  await fixture(async f => {
+    const fixedPoint = (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim();
+    const initial = await f.runtime.dispatch({ workflow: "matt-code-review", task: "whole-spec review",
+      laneTasks: { standards: "standards", spec: "complete spec" }, reviewScope: { kind: "committed", fixedPoint },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: { standards: review("standards", true, {
+      ...finding, severity: "P2", basis: { kind: "standard", reference: "resource convention" },
+    }), spec: review("spec") } });
+    const accepted = await f.runtime.dispatch({ workflow: "matt-code-review", task: "accept known residual",
+      acceptRisk: { dispatchId: initial.details.dispatchId, findingIds: ["standards:parse"],
+        reason: "bounded trade-off", evidence: "mitigation reviewed" },
+    }, undefined, f.ctx);
+    assert.equal(accepted.details.state, "accepted-risk");
+    assert.equal(accepted.details.reviewPassed, false);
+    assert.equal(f.prompts, 1);
+    assert.equal(f.launches.length, 1);
+    assert.equal(f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data.originalResults[0].structuredOutput.verdict, "FAIL");
+  });
+});
+
+test("TDD follow-ups require only tasks for the selected lanes and preserve causal repair summaries", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: { standards: review("standards", true, {
+      ...finding, basis: { kind: "standard", reference: "STANDARD_BODY_NOT_FOR_SPEC" },
+    }), spec: review("spec") } });
+    const repaired = await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "repair only" },
+      repair: { previousDispatchId: initial.details.dispatchId,
+        groups: [{ ...repairGroups[0], findingIds: ["standards:parse"] }] },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle();
+    await f.runtime.dispatch({ ...f.params, laneTasks: { standards: "standards only", spec: "acceptance only" },
+      review: { dispatchId: repaired.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    const task = reviewed.itemsSeen.find(row => row.key === "spec").task;
+    assert.match(task, /Cross-axis causal predecessors/);
+    assert.match(task, /"contract":"validate first"/);
+    assert.ok(!task.includes("STANDARD_BODY_NOT_FOR_SPEC"));
+    assert.ok(!task.includes("Link recurring/regression findings only to this axis"));
+  });
+});
 
 test("invalid dispatch input fails before authorization, evidence preparation or queueing", async () => {
   await fixture(async f => {
@@ -284,7 +424,7 @@ test("host reload restores the exact grant and repair lineage without repeating 
     const specTask = reviewDispatch.details.lanes.find(lane => lane.key === "spec").task;
     assert.match(specTask, /"reference":"AC1"/);
     assert.match(specTask, /permitted predecessor IDs = \["spec:parse"\]/);
-    assert.match(standardsTask, /Cross-axis causal predecessors = \[\{"id":"spec:parse","rootCauseId":"parse-order"\}\]/);
+    assert.match(standardsTask, /Cross-axis causal predecessors = \[\{"id":"spec:parse","rootCauseId":"parse-order","title":/);
     assert.doesNotMatch(standardsTask, /"reference":"AC1"/);
     assert.doesNotMatch(standardsTask + specTask, /Root-cause repair contract/);
     await f.runtime.flush();

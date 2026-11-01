@@ -11,7 +11,7 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.83.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.31
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.32
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -44,7 +44,7 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.31
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.32
 ```
 
 ## 架构
@@ -186,6 +186,10 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 报告契约支持 `path:line` / `path:line:column` / `path:start-end` 与单一 canonical finding ID；裸 ID 和本轴前缀写法不会再双写。跨轴 ID 仅用于有变化影响证据的 regression 因果关联，各轴条款与裁决仍独立。合法 reconsider 动作完成不等于交付通过：必须检查 effective 双轴及 `reviewPassed`，有剩余 blocker 就继续修复。旧宿主误判的完整 `review-evidence` 报告可经原 recovery 入口在原候选上重校验，不跑模型、不消耗或重置原预算；仍不合法或属于 schema/执行失败的报告不放行。具体恢复方式见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
 
 ## 当前使用方式
+
+初次 TDD/双轴 review 仍需完整 `laneTasks`；follow-up 只提供实际执行 lane 的 task。committed `matt-code-review` 可用 `recovery: {dispatchId, lanes}` 一次恢复失败轴，省略 `reviewScope`，复用原 F/H、Pack 与另一轴结论；先解决额度/网络问题，不盲重试或替换有效 FAIL。
+
+默认交付要求双 PASS。仅全部剩余 finding 为普通 Standards P2 且 Spec PASS 时，可用 `acceptRisk: {dispatchId, findingIds, reason, evidence}` 请求用户对精确候选重新真实确认；返回 `accepted-risk`，保留原 FAIL，不称 PASS，不豁免验收、安全、数据完整性或 P0/P1。batch 仍核验精确 commit/tree/parent，并要求本地 tracker 写回风险收据；单票收据不能豁免最终整份 spec 评审。详见 [显式风险接受与收尾](.pi/skills/matt-tdd/dispatch-contract.md#显式风险接受与收尾)。
 
 在目标代码库启动或 reload Pi，使项目级 package、`matt-*` agents、skills 和 extension 生效：
 

@@ -13,6 +13,8 @@ metadata:
 
 # Implement Spec（串行轻量版）
 
+**交付策略例外**：双 PASS 仍为默认要求。若仅剩普通 Standards P2 且 Spec PASS，可按 [显式风险接受](../matt-tdd/dispatch-contract.md#显式风险接受与收尾) 对该精确候选取得用户新的真实确认。原 FAIL 不变，报告与本地 tracker 明确“带已知风险交付”和 `Risk acceptance: <宿主返回的 dispatchId>`；宿主仍核验 candidate tree、parent、commit 与 tracker 收据，batch 授权不接受风险。最终整份 spec committed 评审不继承单票风险接受，需要对该范围独立确认。验收、安全、完整性及 P0/P1 不豁免，不能自动降级或自行提交。
+
 这是用户显式调用的批量编排入口，留在同一父会话中逐张应用 [matt-implement](../matt-implement/SKILL.md)，不把整个 spec 作为一次 TDD implementation。它只支持已配置的 Local Markdown tracker 和已经发布的 spec/tickets；其他 tracker 停止并报告首版不支持，不自动切换或迁移。
 
 沿用户确认的当前分支工作，不创建 worktree、integration branch 或 merger，不 push、不创建 PR。任意时刻最多一个 `matt-worker`，每张 ticket 都使用独立的 fresh TDD workflow。轻量版不提供跨 ticket 的 fresh 父会话；只向 worker 下发当前 ticket 的 Context Pack，不灌入整批历史。
@@ -54,7 +56,7 @@ frontier 仅包含 `ready-for-agent` 且全部 blockers 已 `resolved`、实现�
 
 1. 确认当前 branch 未变、工作区干净，重新核验所有实现提交、ticket 终态、spec 内容和原始 fixed point。
 2. 调用一次 `pi_matt_dispatch` 的 `workflow: matt-code-review`，顶层传 `reviewScope: { kind: "committed", fixedPoint: <原始 fixed point SHA> }`（`reviewKind=committed`）。宿主解析并固定原始 fixed point 到当前 HEAD 的完整范围，只在两个 reviewer 前从 Git 对象采集一次 committed Pack，覆盖本 spec 的所有实现提交而不只最后一票；父会话不手写额外 committed Pack，也不传 caller hash/HEAD/path/command。Spec lane 明确接收完整 parent spec、全部声明 tickets 的聚合 acceptance matrix 与排除依据（文本声明，不是共享 API，也不复制给 Standards）；Standards lane 只接收适用工程规范与安全/正确性边界。两项完整 laneTasks 分开提供。
-3. 读取完整结构化结果并核验双轴。committed 采集失败、范围无效、HEAD 漂移、FAIL、NO_EVIDENCE、执行失败或缺失结果都停止整批并保留报告；轻量版不自动创建修复 tickets、不重新打开已 resolved 的票，不反复启动广域 review/fix 循环。需要后续修复时交还用户明确范围。
+3. 读取完整结构化结果并核验双轴。committed 采集失败、范围无效、HEAD 漂移、FAIL、NO_EVIDENCE、执行失败或缺失结果都先停止整批并保留报告；供应商/网络失败解决后可用 `recovery: {dispatchId, lanes}` 做一次失败轴恢复，只提供该轴 task，省略 reviewScope，复用原 Pack 与另一轴结果。轻量版不自动创建修复 tickets、不重新打开已 resolved 的票，不反复启动广域 review/fix 循环。需要后续修复时交还用户明确范围；仅符合上述风险接受边界时可请求独立确认。
 4. 只有最终两轴 PASS、证据仍对应当前 HEAD 且所有逐票验证通过，才报告整批实现完成。报告分支、原始 fixed point、每票 commit、排除项、最终 review 和剩余风险；暂停也输出基线、已完成提交、阻塞票和续跑入口，不回滚已成功提交。
 
 不自动写 `shipped`，不调用 `matt-archive`，不改 parent spec，不归档、不暂存或提交 tracker。不 push、不开 PR、不改历史。归档必须由用户之后另行显式调用 `matt-archive`。

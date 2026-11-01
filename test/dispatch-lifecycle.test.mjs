@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 import { AUTH_ENTRY, AUTH_TTL_MS, AUTH_WAIT_MS, authorizeWorkflowDispatch, createDispatchAuthorization, normalizeImplementationScope } from "../lib/dispatch-authorization.mjs";
-import { createDispatchTrace, failureDetails, requestRpc, withDeadline } from "../lib/dispatch-runtime.mjs";
+import { createDispatchTrace, failureDetails, requestRpc, withDeadline, workflowReceipt } from "../lib/dispatch-runtime.mjs";
 import { diagnoseRepair, prepareReconsideration, prepareRepair, reviewRecovery, reviewReportCorrections } from "../lib/repair-contract.mjs";
 import { adjudicateReviewDecisions, validateReviewResult } from "../lib/review-contract.mjs";
 import { normalizeDiagnosticTestFiles } from "../lib/diagnostic-workspace.mjs";
@@ -206,6 +206,24 @@ test("phase accounting separates authorization, evidence and RPC without wall-cl
     [event.phase, event.durationMs]), [["authorization", 200000], ["evidence", 20], ["rpc", 10]]);
 });
 
+test("receipts distinguish provider failures, valid code FAIL and observed settlement states", () => {
+  const receipt = rows => workflowReceipt({ workflow: { emits: [{ type: "pi-x-matt.stage-results", results: rows }] } });
+  assert.deepEqual(receipt([
+    { key: "standards", ok: false, error: "usage limit reached" },
+    { key: "spec", ok: true, structuredOutput: { verdict: "FAIL" } },
+  ]).failures, [{ lane: "standards", kind: "provider-limit" }, { lane: "spec", kind: "review-fail" }]);
+  const status = { workflow: { emits: [{ type: "pi-x-matt.recovery", lane: "implement", state: "started" }] } };
+  assert.equal(workflowReceipt(status).settlement, "running");
+  status.workflow.emits.push({ type: "pi-x-matt.recovery", lane: "implement", state: "settled", result: { ok: false } });
+  assert.equal(workflowReceipt(status).settlement, "failed");
+  status.workflow.emits.at(-1).result.ok = true;
+  assert.equal(workflowReceipt(status).settlement, "complete");
+  assert.equal(receipt([{ key: "implement", ok: false, timedOut: true }]).settlement, "not-scheduled");
+  assert.equal(workflowReceipt({ state: "running", workflow: { emits: [{
+    type: "pi-x-matt.stage-results", results: [{ key: "implement", timedOut: true, runId: "retained", resumability: { state: "resumable" } }],
+  }] } }).settlement, "pending");
+});
+
 const finding = (classification = "original", relatedFindingIds = []) => ({
   id: "parse", rootCauseId: "parse-order", evidence: "parse(null) throws before validation",
   basis: { kind: "acceptance", reference: "AC1" }, expected: "reject null", actual: "throws",
@@ -298,12 +316,30 @@ test("failure projection preserves defined zero and termination status without r
 });
 
 test("a related regression diagnoses immediately; renaming a recurring group or omitting evidence is rejected", () => {
-  const previous = { id: "repair", snapshotId: "s", repair: { groups: [group], counts: { parser: 1 } } };
+  const previous = { id: "repair", snapshotId: "s", repair: { groups: [group], counts: { parser: 1 },
+    approvedFindings: [{ ...finding(), id: "spec:parse" }] } };
   const request = { previousDispatchId: previous.id, groups: [group] };
   assert.deepEqual(prepareRepair(previous, request, reviews(finding("regression", ["spec:parse"]))).needsDiagnosis, ["parser"]);
   assert.throws(() => prepareRepair(previous, { ...request, groups: [{ ...group, id: "renamed" }] },
     reviews(finding("original", ["spec:parse"]))), /cannot be renamed/);
   assert.throws(() => prepareRepair(previous, request, reviews({ ...finding(), basis: null })), /verifiable/);
+});
+
+test("causal predecessors do not merge different root causes or inflate their repair counts", () => {
+  const previous = { id: "repair", snapshotId: "s", repair: { groups: [group], counts: { parser: 2 },
+    approvedFindings: [{ ...finding(), id: "spec:parse" }] } };
+  const different = { ...finding("regression", ["spec:parse"]), rootCauseId: "different-cause" };
+  const next = prepareRepair(previous, { previousDispatchId: previous.id, groups: [{ ...group, id: "new-cause" }] }, reviews(different));
+  assert.equal(next.counts["new-cause"], 1);
+  assert.equal(next.counts.parser, 2);
+  assert.deepEqual(next.needsDiagnosis, ["new-cause"], "a real regression still needs diagnosis");
+  const coincidentalName = prepareRepair(previous, {
+    previousDispatchId: previous.id, groups: [{ ...group, id: "new-cause" }],
+  }, reviews({ ...different, classification: "independent", relatedFindingIds: [], rootCauseId: "parser" }));
+  assert.deepEqual(coincidentalName.needsDiagnosis, [], "a group label is not a review rootCauseId");
+  assert.throws(() => prepareRepair(previous, {
+    previousDispatchId: previous.id, groups: [{ ...group, id: "renamed" }],
+  }, reviews(finding("original", []))), /rootCauseId=parse-order; expected group id\(s\): parser/);
 });
 
 test("recovery selects only failed reviewers, preserves valid verdicts and cannot rerun a writer", () => {

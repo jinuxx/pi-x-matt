@@ -58,10 +58,11 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
-      "matt-tdd and matt-code-review require complete laneTasks; never cross writer/reviewer or Standards/Spec instructions.",
+      "Initial matt-tdd and matt-code-review require complete laneTasks; follow-ups need only tasks for lanes actually run. Never cross writer/reviewer or Standards/Spec instructions.",
       "For matt-code-review, pass reviewScope {kind:'committed', fixedPoint} only when the review target is already-committed history. The host resolves F, verifies ancestry of the current HEAD and pins H; it captures one read-only Git-object Pack before both reviewers. Never pass your own hash, HEAD, path or command. Omit reviewScope for the existing manual worktree/files evidence path.",
       "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
-      "Only matt-tdd accepts batch. One honest TUI/RPC confirmation seals the declared spec/tickets and exact envelopes (24h maximum); declared serial tickets then dispatch without extra prompts, but undeclared tickets, files or commands fail closed and need a new explicit batch confirmation. A batch ticket's commit must match the host-captured dual-PASS candidate tree and parent, and the local tracker writeback must match it, before the next ticket. Passing batch metadata never self-authorizes.",
+      "Only matt-tdd accepts batch. One honest TUI/RPC confirmation seals the declared spec/tickets and exact envelopes (24h maximum); declared serial tickets then dispatch without extra prompts, but undeclared tickets, files or commands fail closed and need a new explicit batch confirmation. A batch ticket's commit must match the host-captured dual-PASS (or separately user-confirmed risk-accepted) candidate tree and parent, and the local tracker writeback including any Risk acceptance receipt must match it, before the next ticket. Passing batch metadata never self-authorizes.",
+      "acceptRisk is a separate terminal delivery decision, not PASS: only all remaining ordinary standards P2 findings may be accepted, with a fresh real user confirmation bound to the exact candidate. Never waive acceptance, safety, integrity, P0/P1, missing reports or candidate drift; implementation/batch approval and task prose do not authorize risk acceptance. Record the host receipt alongside the exact implementation commit. Committed code-review recovery reuses its original Pack and only reruns failed axes once; omit reviewScope.",
     ],
     parameters: Type.Object({
       workflow: text(),
@@ -121,6 +122,12 @@ export default function (pi: ExtensionAPI) {
         dispatchId: text(),
         lanes: Type.Array(Type.Union([Type.Literal("standards"), Type.Literal("spec")]), { minItems: 1, maxItems: 2 }),
       }, { description: "Rerun failed reviewer lanes. Execution recovery is separate from at most two report corrections per axis per candidate; a valid FAIL cannot use recovery." })),
+      acceptRisk: Type.Optional(Type.Object({
+        dispatchId: text(),
+        findingIds: strings(),
+        reason: text(),
+        evidence: text(),
+      }, { additionalProperties: false, description: "matt-tdd or committed matt-code-review only. Accept ALL remaining ordinary standards P2 findings after a fresh real user confirmation for this exact candidate; retain original FAIL and an auditable accepted-risk terminal receipt. No laneTasks needed; never waive acceptance/safety/integrity/P0/P1." })),
     }),
     execute: (_id, params, signal, _update, ctx) => runtime.dispatch(params, signal, ctx),
   });

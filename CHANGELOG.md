@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.32
+
+- 新增显式 `acceptRisk`：仅全部剩余 finding 为普通 Standards P2 且 Spec PASS 时，经真实用户对精确候选重新确认后成为 `accepted-risk` 终态。保留原 FAIL、原始结果与确认收据，不豁免验收、安全、数据完整性或 P0/P1，不按轮数自动降级；batch 仍核验精确 candidate/commit/tree/parent，并要求 tracker 写回风险收据，最终整份 committed 评审不继承单票风险接受。
+- 修复根因分组把因果关联误当同根因：只按稳定 rootCauseId 续组，拒绝改名时列出期望 group IDs；回归仍须诊断。跨轴 task 自动补充 finding 来源与修复契约/保留行为摘要，不传另一轴 basis，移除只准同轴引用的矛盾提示。
+- committed `matt-code-review` 支持一次失败轴 recovery，复用原 F/H 与完整 Pack/另一轴结果，校验 HEAD 和 JSON/Markdown 摘要，不重采、不重跑 writer 或有效 verdict。follow-up 仅需实际执行 lane 的 task，不再填写无关占位。
+- 隔离诊断默认禁用 Python bytecode 与 pytest cache，不忽略任意目录或改写批准命令；专用新复现路径可提前同时列入 allowedFiles/diagnosticFiles，保留精确命令授权，不引入任意命令模板。通知区分供应商/网络故障与真实评审 FAIL，明确 writer settlement 状态与 partial 变更处置，不盲目自动重试。
+- 228 项测试、registry、upstream drift 与打包检查通过；覆盖风险确认/候选漂移、batch 精确提交与风险收据写回、reload 后原 Pack 单轴恢复及原生 sandbox。未复跑反馈中的业务场景；升级后须完整重启 Pi，仅 `/reload` 不够。
+
 ## 0.2.31
 
 - 修复 review location 行区间解析，并保留文件名内的冒号；误判错误包含有界的位置/变更路径提示。finding ID 统一为单一轴前缀身份，兼容裸 ID、本轴前缀及旧重复前缀，拒绝别名重复；未知修复 ID 列出有效集合。

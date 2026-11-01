@@ -162,6 +162,32 @@ test("controlled incremental review and selective recovery run in the pinned nat
   assert.equal(recovered.value[2].recoveryHistory[0].error, "fetch failed");
 });
 
+test("committed single-axis recovery validates in the pinned sandbox without repeating collector or other reviewer", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills["matt-code-review"];
+  const evidence = { committed: true, command: "must-not-run", path: "/tmp/pinned-committed-review.md",
+    fixedPoint: "a".repeat(40), head: "b".repeat(40) };
+  const tasks = { standards: "standards only", spec: "original acceptance source" };
+  const base = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence);
+  const standards = { ...reviewResult(base, "standards", "PASS"), artifactPaths: [evidence.path] };
+  const prior = [standards, { key: "spec", ok: false, error: "usage limit reached" }];
+  const recovery = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, {
+    results: prior, keys: ["spec"], attempt: 1,
+  });
+  assert.equal(validateWorkflowScript(recovery.rpcParams.script).ok, true);
+  assert.deepEqual(recovery.hostCommands, []);
+  const calls = [];
+  const recovered = await runWorkflowScript({
+    script: recovery.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async key => { calls.push(key); return reviewResult(base, key, "PASS"); },
+    host: async () => { throw new Error("Recovery must not recapture committed evidence"); },
+  });
+  assert.deepEqual(calls, ["spec"]);
+  assert.deepEqual(recovered.value[0], standards);
+  assert.equal(recovered.value[1].recoveryHistory[0].error, "usage limit reached");
+  assert.ok(recovered.value[1].artifactPaths.includes(evidence.path));
+});
+
 test("each reviewer FAIL or NO_EVIDENCE fails closed with both full results persisted", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md" };

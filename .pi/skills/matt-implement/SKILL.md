@@ -15,6 +15,8 @@ metadata:
 
 # Implement
 
+**交付策略**：下文双 PASS 为默认要求；唯一额外出口是 [宿主显式风险接受](../matt-tdd/dispatch-contract.md#显式风险接受与收尾)。仅全部剩余 finding 都是普通 Standards P2 且 Spec PASS 时，可调用 `acceptRisk` 让用户对具体候选再次真实确认。保留原 FAIL，完成报告明确“带已知风险交付”；完整验证、提交完整性与隐私要求不变，本地 Comments 还须写 `Risk acceptance: <宿主返回的 dispatchId>`。没有正式收据不能提交，不自动按严重度或轮数放行，验收/安全/完整性/P0/P1 不豁免。
+
 本 skill 把已经决定的一个工作切片变成当前分支上的提交。它不重新 grill，不改变计划/ticket 的目标，不批量处理多个 tickets，也不平行写共享工作区。每次 invocation 只处理一个 ticket；没有已发布 ticket 时，只接受用户在先前 transition handoff 中明确选择“直接实现”、可在一个 session 完成且尚未发布为 `Type: spec`/`Status: spec-ready` 的单 slice 计划。缺少 ticket 本身不构成 direct-slice 授权。`spec-ready` parent spec 必须先进入 `matt-to-tickets`，不能直接实现。
 
 先应用[业务项目隐私契约](../matt-setup/privacy.md)：业务项目整个 `.x-matt/` 与个人 `.pi/` 都是私有资料，不只是 tracker；不向团队 AGENTS/README、代码注释或提交信息写入工具使用标记。真实插件源码仓库按契约保留分发资源例外，不把源码整体忽略。将本次私有路径和已核验例外交给 worker/reviewer。
@@ -48,7 +50,7 @@ metadata:
 
 聚焦 `matt-tdd` 必须提供结构化 `repair`：引用最近宿主 dispatchId、全部获批 finding IDs，并说明不变量、校验/归一化顺序、共享调用路径、必要正反例与回归；重新确认后的修复仍引用同一 ticket 的最新 `dispatchId`，不以 initial 重开。**repair 只运行 writer 与证据采集，不自动启动双轴。** 宿主 resume 最近的可恢复 writer，保留原模型、工具与上下文；不可恢复则停止，不暗中换 fresh writer。writer 只处理获批 findings，并运行 RED/GREEN 与相关回归，不把父会话最终验证移交给 worker。
 
-修复返回后，父会话核对实际 diff、逐项 findings 和验证证据：仍有同范围且证据支持的修复时，引用最新 dispatchId 继续 `repair`；缺少依据或实质决定时停止。原 findings 与根因计数跨修复保留，不通过拆轮绕过诊断。候选代码已准备好时才发送 `review: {dispatchId: "<最新已完成 repair>"}`，仍提供完整三项 laneTasks；它只启动 fresh Standards/Spec，不重跑 writer 或重复采集证据。修复的 `state=complete`、`implement.status=COMPLETE` 或 `reviewPending=true` 都不代表交付通过。
+修复返回后，父会话核对实际 diff、逐项 findings 和验证证据：仍有同范围且证据支持的修复时，引用最新 dispatchId 继续 `repair`；缺少依据或实质决定时停止。原 findings 与根因计数跨修复保留，不通过拆轮绕过诊断。候选代码已准备好时才发送 `review: {dispatchId: "<最新已完成 repair>"}`，只提供两轴 laneTasks；它只启动 fresh Standards/Spec，不重跑 writer 或重复采集证据。repair 只需 implement task，recovery/reconsider 只需所选轴 task。修复的 `state=complete`、`implement.status=COMPLETE` 或 `reviewPending=true` 都不代表交付通过。
 
 父会话不能以文字或重新实现抹掉有效 FAIL。若具体 finding 与已确认验收/标准冲突，逐项带 reason/evidence 使用 `reconsider: {dispatchId, findings}`；只运行受影响轴，由 fresh reviewer 独立决定 `uphold`/`withdraw`，未 challenge finding 与另一轴原样保留，任一保留/upheld blocker 仍是有效 FAIL。每个候选快照每轴最多一次 reconsider；后续 repair 只处理 effective remaining findings。reviewer 报告契约错误（含无效 reconsider 决定）走与执行恢复分开的 report correction，每轴每候选最多两次，不自动变成 PASS；合法 FAIL 仍只能 reconsider 或按 effective findings 修复。
 

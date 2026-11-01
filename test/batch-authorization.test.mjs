@@ -187,6 +187,41 @@ async function repoFixture(run) {
   }
 }
 
+test("a risk-accepted batch candidate needs its exact commit and tracker acceptance receipt before advancing", async () => {
+  await batchFixture(async f => {
+    const params = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" },
+      batch: batchParams(f.fixedPoint) };
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ reviews: { standards: { ...review("standards"), structuredOutput: {
+      axis: "standards", verdict: "FAIL", summary: "minor residual", notes: [], findings: [{
+        id: "minor", rootCauseId: "cleanup", severity: "P2", title: "cleanup convention",
+        basis: { kind: "standard", reference: "convention" }, evidence: "cleanup order",
+        expected: "release first", actual: "mark first", locations: ["parser.mjs:1"],
+        classification: "original", relatedFindingIds: [], affectedBy: [], recommendation: "release first",
+      }],
+    } } } });
+    const accepted = await f.runtime.dispatch({ ...params, batch: undefined, laneTasks: undefined,
+      acceptRisk: { dispatchId: initial.details.dispatchId, findingIds: ["standards:minor"],
+        reason: "bounded known risk", evidence: "mitigation reviewed" },
+    }, undefined, f.ctx);
+    assert.equal(f.prompts, 2, "batch permission must not accept risks");
+    await git(f.ctx.cwd, "add", "parser.mjs");
+    await git(f.ctx.cwd, "commit", "-qm", "candidate");
+    await resolveTicket(f.ctx.cwd, T1, await git(f.ctx.cwd, "rev-parse", "HEAD"));
+    const next = { ...params, batch: undefined, implementation: implementation(T2) };
+    await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /exact host Risk acceptance ID/);
+    const content = await readFile(join(f.ctx.cwd, T1), "utf8");
+    await writeFile(join(f.ctx.cwd, T1), `${content}\nRisk acceptance: ${accepted.details.dispatchId}\n`);
+    f.reload();
+    await f.runtime.dispatch(next, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+    assert.equal(f.prompts, 2);
+  });
+});
+
 test("a batch needs one genuine confirmation of the sealed plan and no single-ticket intent can bypass it", async () => {
   await batchFixture(async f => {
     const params = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
