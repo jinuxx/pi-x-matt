@@ -218,9 +218,10 @@ test("receipts distinguish provider failures, valid code FAIL and observed settl
   assert.equal(workflowReceipt(status).settlement, "failed");
   status.workflow.emits.at(-1).result.ok = true;
   assert.equal(workflowReceipt(status).settlement, "complete");
-  assert.equal(receipt([{ key: "implement", ok: false, timedOut: true }]).settlement, "not-scheduled");
+  assert.equal(receipt([{ key: "implement", ok: false, terminalOutcome: { state: "partial", reason: "timeout" } }]).settlement, "not-scheduled");
   assert.equal(workflowReceipt({ state: "running", workflow: { emits: [{
-    type: "pi-x-matt.stage-results", results: [{ key: "implement", timedOut: true, runId: "retained", resumability: { state: "resumable" } }],
+    type: "pi-x-matt.stage-results", results: [{ key: "implement", terminalOutcome: { state: "partial", reason: "timeout" },
+      runId: "retained", resumability: { state: "resumable" } }],
   }] } }).settlement, "pending");
 });
 

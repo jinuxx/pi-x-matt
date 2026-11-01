@@ -8,7 +8,6 @@ inheritSkills: false
 skillPath: ../../skillpacks/leaf
 defaultContext: fresh
 acceptanceRole: read-only
-completionGuard: false
 toolBudget: {"hard":50,"block":["read","grep","find","ffgrep","fffind","ls","git_read"]}
 maxSubagentDepth: 0
 ---

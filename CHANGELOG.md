@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.33
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.84.0`；Pi/Node 下限仍为 `1.2.0`/`22.19.0`，最小加载入口仍为 `+bundle/index.js`。
+- 该版本修复 workflow 脚本可越过 sandbox 访问 Pi 进程的安全问题（GHSA-6v8j-6w28-2w8r）：脚本现在运行在独立 realm，无法设置 `Error.prepareStackTrace`，`import()` 在运行前即被拒绝。本 package 生成的脚本不使用这些能力，dispatcher、sandbox 与 gate 契约保持不变。
+- 后台 run 的过期清理恢复生效；受限 agent 因 provider 未加载而失败时会指明 provider 与加载方式，不影响现有四个 `matt-*` agent。
+- 228 项测试、registry 与 upstream drift 检查通过，覆盖已安装 `0.84.0` 的脚本 sandbox、bundled resource 注册、stage 结果契约与 committed review 采集。
+- 修正随版本演进漂移的子结果契约：workflow 子结果只带 `terminalOutcome: { state, reason }`，不再有 `timedOut`/`turnBudgetExceeded`/`processSignal`/`exitCode`。超时结算恢复与 settlement 状态改按 `terminalOutcome.reason === "timeout"` 判定，文本匹配放宽到 receipt 包裹后的形态；失败诊断改报 `budget_exhausted`、`interrupted`、`detached`。
+- 移除 `matt-reviewer` 的 `completionGuard: false`：该字段自 `0.70.1` 起已被上游删除，agent 文件不做未知键校验，因此长期只是静默无效配置。
+- 真实子代理冒烟最近一次记录仍基于 `0.83.1`；本次升级后需完整重启 Pi 再重跑，仅 `/reload` 不足。
+
 ## 0.2.32
 
 - 新增显式 `acceptRisk`：仅全部剩余 finding 为普通 Standards P2 且 Spec PASS 时，经真实用户对精确候选重新确认后成为 `accepted-risk` 终态。保留原 FAIL、原始结果与确认收据，不豁免验收、安全、数据完整性或 P0/P1，不按轮数自动降级；batch 仍核验精确 candidate/commit/tree/parent，并要求 tracker 写回风险收据，最终整份 committed 评审不继承单票风险接受。

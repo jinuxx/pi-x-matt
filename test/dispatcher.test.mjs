@@ -545,23 +545,23 @@ test("dispatcher workflow guard rejects missing structured output", async () => 
   const failureCases = [
     {
       name: "timeout error",
-      result: { error: "Subagent timed out after 600000ms.", timedOut: true },
+      result: { error: "Subagent timed out after 600000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
       reason: "Subagent timed out after 600000ms.",
     },
     { name: "provider error", result: { error: "fetch failed" }, reason: "fetch failed" },
-    { name: "timeout flag", result: { timedOut: true }, reason: "Subagent timed out." },
     {
-      name: "turn budget",
-      result: { turnBudgetExceeded: true },
-      reason: "Subagent exceeded its turn budget.",
+      name: "timeout terminal outcome without error text",
+      result: { terminalOutcome: { state: "partial", reason: "timeout" } },
+      reason: "Subagent timed out.",
+    },
+    {
+      name: "budget terminal outcome",
+      result: { terminalOutcome: { state: "partial", reason: "budget_exhausted" } },
+      reason: "Subagent exceeded its budget.",
     },
     { name: "stopped", result: { stopped: true }, reason: "Subagent stopped before completion." },
-    {
-      name: "termination signal",
-      result: { processSignal: "SIGTERM" },
-      reason: "Subagent terminated with process signal SIGTERM.",
-    },
-    { name: "non-zero exit", result: { exitCode: 1 }, reason: "Subagent exited with code 1." },
+    { name: "interrupted", result: { interrupted: true }, reason: "Subagent was interrupted before completion." },
+    { name: "detached", result: { detached: true }, reason: "Subagent detached before completion." },
   ];
   for (const { name, result, reason } of failureCases) {
     await assert.rejects(
@@ -610,8 +610,11 @@ test("dispatcher resumes a timed-out retained child once for structured-output s
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
   const failures = [
-    { error: "Subagent timed out after 300000ms.", timedOut: true },
-    { error: "deadline reached", terminalOutcome: "timeout" },
+    { error: "Subagent timed out after 300000ms." },
+    // The runtime can wrap the timeout message inside the child receipt, so the
+    // structured terminalOutcome is what identifies a real timeout.
+    { error: "Child run failed.\n\nError: Subagent timed out after 300000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
+    { terminalOutcome: { state: "partial", reason: "timeout" } },
   ];
 
   for (const failure of failures) {
@@ -676,7 +679,8 @@ test("review timeout and failed settlement retain both causes and never add anot
       all: async () => {
         if (++calls === 1) return [
           { key: "standards", ok: true, structuredOutput: { verdict: "PASS" } },
-          { key: "spec", ok: false, timedOut: true, error: "Subagent timed out after 900000ms.",
+          { key: "spec", ok: false, error: "Child run failed.\n\nError: Subagent timed out after 900000ms.",
+            terminalOutcome: { state: "partial", reason: "timeout" },
             runId: "retained", resumability: { state: "resumable" } },
         ];
         if (throws) throw new Error("fetch failed");
@@ -685,8 +689,8 @@ test("review timeout and failed settlement retain both causes and never add anot
     }, value => emits.push(structuredClone(value))), /900000ms.*settlement failed.*fetch failed/);
     assert.equal(calls, 2);
     const snapshots = emits.filter(value => value.type === "pi-x-matt.stage-results");
-    assert.equal(snapshots[0].results[1].error, "Subagent timed out after 900000ms.");
-    assert.equal(snapshots.at(-1).results[1].recoveryHistory[0].timedOut, true);
+    assert.match(snapshots[0].results[1].error, /Subagent timed out after 900000ms\./);
+    assert.deepEqual(snapshots.at(-1).results[1].recoveryHistory[0].terminalOutcome, { state: "partial", reason: "timeout" });
     assert.equal(snapshots.at(-1).results[0].structuredOutput.verdict, "PASS");
   }
 });

@@ -6,12 +6,12 @@
 
 ## 安装
 
-要求已安装 Pi 1.2.0 或更高版本、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 `pi-subagents@0.83.1` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。Pi 支持下限仍为 `1.2.0`（`@earendil-works/pi-ai` peer 为 `>=1.2.0`），本 package 的 Pi host peer 为 `>=1.2.0`；Pi `0.86.1`/`1.0.0` 不再受支持。Node `22.19.0` 下限来自 bundled `undici@8.12.3` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi 1.2.0 或更高版本、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 `pi-subagents@0.84.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。Pi 支持下限仍为 `1.2.0`（`@earendil-works/pi-ai` peer 为 `>=1.2.0`），本 package 的 Pi host peer 为 `>=1.2.0`；Pi `0.86.1`/`1.0.0` 不再受支持。Node `22.19.0` 下限来自 bundled `undici@8.12.3` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
 
 ```bash
 pi install -l npm:@ff-labs/pi-fff
-pi install -l npm:pi-subagents@0.83.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.32
+pi install -l npm:pi-subagents@0.84.0
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.33
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -26,7 +26,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.32
 
 ```json
 {
-  "source": "npm:pi-subagents@0.83.1",
+  "source": "npm:pi-subagents@0.84.0",
   "autoload": false,
   "extensions": ["+bundle/index.js"],
   "skills": [],
@@ -37,14 +37,14 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.32
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.83.1`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。0.81.0 起 npm 发布包入口改为 `bundle/index.js`，公共 API subpath 也指向 `bundle/`；最小加载过滤必须与发布包 manifest 一致，不能沿用 `+index.js`。
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.84.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。0.81.0 起 npm 发布包入口改为 `bundle/index.js`，公共 API subpath 也指向 `bundle/`；最小加载过滤必须与发布包 manifest 一致，不能沿用 `+index.js`。
 
 本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
 
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi update git:github.com/jinuxx/pi-x-matt@v0.2.32
+pi update git:github.com/jinuxx/pi-x-matt@v0.2.33
 ```
 
 ## 架构
@@ -79,7 +79,7 @@ pi update git:github.com/jinuxx/pi-x-matt@v0.2.32
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.83.1",
+      "source": "npm:pi-subagents@0.84.0",
       "autoload": false,
       "extensions": ["+bundle/index.js"],
       "skills": [],
@@ -270,7 +270,7 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 ## 已验证行为
 
-以下冒烟分两类：升级到 0.83.1 并重启 Pi 后实跑的真实子代理冒烟，以及旧版开发阶段的手工运行。仓库内可复现的是 registry、dispatcher、权限与 gate，以及针对已安装 `0.83.1` 的脚本 sandbox、bundled resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。Code Review/TDD 的旧版手工记录不代表本次升级后重跑。0.80.0 起直接由 completion notice 唤醒空闲父会话，不再额外插入唤醒消息；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
+以下冒烟分两类：升级到 0.83.1 并重启 Pi 后实跑的真实子代理冒烟（最近一次真实冒烟记录，升级到 0.84.0 后尚未重跑），以及旧版开发阶段的手工运行。仓库内可复现的是 registry、dispatcher、权限与 gate，以及针对已安装 `0.84.0` 的脚本 sandbox、bundled resource 注册和 completion 截断契约测试；后者只注入 mock child 结果，不调用模型。Code Review/TDD 的旧版手工记录不代表本次升级后重跑。0.80.0 起直接由 completion notice 唤醒空闲父会话，不再额外插入唤醒消息；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
 
 - Research 单 lane 异步冒烟（0.83.1 + Pi 1.4.0，重启并重新配置模型后实跑）：workflow `state=complete`、research lane `ok=true`、`resolvedContext=fresh`；runtime 请求模型与 child session 的实际回复模型均匹配 researcher override，未继承父会话模型。已核实 `web_search`、`web_fetch` 与 `structured_output` 各实际调用成功一次，没有额外 settlement/relaunch。异步完成通知已返回，父会话从 `status.json` 的完整 `workflow.value` 核验了两项 findings、官方来源与空 gaps。
 - Code Review 双轴失败分支真实冒烟（0.83.1 + Pi 1.4.0，重启后实跑）：OS temp 负例夹具令两个 reviewer 均返回 `FAIL`，workflow 保持 `state=failed` 且不生成 `workflow.value`；父会话从实际 `status.json → workflow.emits` 的最后一个阶段快照完整读取 Standards 1 项与 Spec 2 项 findings，两个结果均 `ok=true` 且 schema 有效。仅启动两个只读 reviewer，无实现重跑或仓库改动。

@@ -1451,7 +1451,8 @@ test("explicit reconsideration execution recovery preserves its failure without 
       recovery: { dispatchId: reconsider.details.dispatchId, lanes: ["spec"] } }, undefined, f.ctx);
     await f.runtime.flush();
     const failed = await f.settle({ reviews: {
-      spec: { ok: false, error: "Subagent timed out", timedOut: true, runId: "failed-reviewer",
+      spec: { ok: false, error: "Subagent timed out after 900000ms.",
+        terminalOutcome: { state: "partial", reason: "timeout" }, runId: "failed-reviewer",
         resumability: { state: "resumable" } },
     } });
     assert.deepEqual(failed.calls, ["spec"], "an explicit recovery cannot stack an automatic settlement");
