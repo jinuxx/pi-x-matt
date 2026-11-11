@@ -3,6 +3,7 @@ name: matt-researcher
 description: 使用一手外部资料调查明确问题，返回可追溯来源、结论和证据缺口。
 tools: read, web_search, web_fetch
 inheritProjectContext: false
+inheritGlobalContext: false
 inheritSkills: false
 skillPath: ../../skillpacks/leaf
 defaultContext: fresh

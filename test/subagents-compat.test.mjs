@@ -22,6 +22,7 @@ const { runWorkflowScript, validateWorkflowScript } = await import(pathToFileURL
 const { resolveWorkflowResource } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/workflow-resources.js")));
 const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/notify.js")));
 const { createCapacityResilientJsonWriter } = await import(pathToFileURL(join(SOURCE_DIR, "shared/capacity-resilient-json.js")));
+const { TRUNCATED_RESPONSE_ERROR } = await import(pathToFileURL(join(SOURCE_DIR, "shared/utils.js")));
 
 function planFor(registry, name, evidence) {
   const workflow = registry.skills[name];
@@ -335,6 +336,67 @@ test("project filter selects the installed npm extension and matches the bundled
   assert.deepEqual(entry.extensions, manifest.pi.extensions.map(path => `+${path.replace(/^\.\//, "")}`));
   for (const path of manifest.pi.extensions) {
     assert.equal((await stat(join(PACKAGE_ROOT, path))).isFile(), true);
+  }
+});
+
+test("leaf context isolation survives the runtime's global inheritance default", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-matt-agent-context-"));
+  try {
+    const agents = join(directory, ".pi", "agents");
+    await mkdir(agents, { recursive: true });
+    const names = ["matt-reader", "matt-researcher", "matt-reviewer", "matt-worker"];
+    for (const name of names) {
+      await writeFile(join(agents, `${name}.md`), await readFile(join(ROOT, ".pi", "agents", `${name}.md`)));
+    }
+    await writeFile(join(directory, ".pi", "settings.json"), JSON.stringify({
+      subagents: {
+        disableBuiltins: true, defaultInheritGlobalContext: true,
+        agentOverrides: { "matt-researcher": {
+          tools: ["read", "mcp:exa/web_search_exa", "mcp:exa/web_fetch_exa"],
+        } },
+      },
+    }));
+    const script = `
+      import { discoverAgents } from ${JSON.stringify(pathToFileURL(join(SOURCE_DIR, "agents/agents.js")).href)};
+      const { agents } = discoverAgents(process.cwd(), "project", undefined, { globalNpmRoot: null });
+      console.log(JSON.stringify(agents.map(({ name, inheritProjectContext, inheritGlobalContext, tools, mcpDirectTools }) =>
+        ({ name, inheritProjectContext, inheritGlobalContext, tools, mcpDirectTools }))));
+    `;
+    const discovered = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: directory, encoding: "utf8",
+      env: { ...process.env, PI_CODING_AGENT_DIR: join(directory, "user"), PI_SUBAGENT_EXTRA_AGENT_DIRS: "" },
+    }));
+    assert.deepEqual(discovered.map(agent => agent.name).sort(), [...names].sort());
+    for (const agent of discovered) {
+      assert.equal(agent.inheritGlobalContext, false, agent.name);
+      assert.equal(agent.inheritProjectContext, agent.name !== "matt-researcher", agent.name);
+    }
+    const researcher = discovered.find(agent => agent.name === "matt-researcher");
+    assert.deepEqual(researcher.tools, ["read"]);
+    assert.deepEqual(researcher.mcpDirectTools, ["exa/web_search_exa", "exa/web_fetch_exa"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("truncated replies fail closed without parsing partial output or automatically resuming", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
+  for (const failedKey of ["implement", "spec"]) {
+    await withPersistedWorkflow(plan, key => key === failedKey
+      ? { key, ok: false, error: TRUNCATED_RESPONSE_ERROR, runId: "retained",
+        resumability: { state: "resumable" }, output: '{"status":"COMPLETE","verdict":"PASS"' }
+      : key === "implement" ? implementResult(plan) : reviewResult(plan, key, "PASS"),
+    ({ persisted, results, calls, failure }) => {
+      assert.equal(persisted.state, "failed");
+      assert.ok(failure.message.includes(TRUNCATED_RESPONSE_ERROR));
+      const failed = results.find(result => result.key === failedKey);
+      assert.equal(failed.error, TRUNCATED_RESPONSE_ERROR);
+      assert.equal(failed.structuredOutput, undefined);
+      assert.deepEqual(calls, failedKey === "implement"
+        ? ["implement"] : ["implement", "review-evidence", "standards", "spec"]);
+      assert.equal(persisted.workflow.emits.some(row => row.type === "pi-x-matt.recovery"), false);
+    });
   }
 });
 

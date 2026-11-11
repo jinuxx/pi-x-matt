@@ -1,7 +1,7 @@
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.84.0",
+      "source": "npm:pi-subagents@0.88.0",
       "autoload": false,
       "extensions": ["+bundle/index.js"],
       "skills": [],

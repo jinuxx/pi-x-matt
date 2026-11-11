@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.34
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.88.0`，包含 `undici@8.12.4` 安全修复；核验 Pi/Node 下限仍为 `1.2.0`/`22.19.0`，最小加载入口仍为 `+bundle/index.js`。
+- 核对 0.85–0.88 的更新与废弃边界：保留现有 RPC、named resource/host grant、封闭 schema、双轴 gate 和事件订阅，不把新增 `subagent_launch` 审批误称为覆盖 RPC，不引入自动换模型、drain 或绕过受限进程的 fallback。
+- 四个 leaf 显式设置 `inheritGlobalContext: false`，避免 0.87.0 新增的全局继承默认值改变既有上下文边界；仍允许用户逐 agent override。原生 agent discovery 回归覆盖该默认值开启时的行为及精确 MCP 工具选择。
+- retained writer 不可恢复时保留上游原因（例如 `missing recovery descriptor`）；补充 0.85.0 前启动 run 不可恢复的升级说明，禁止借重建 descriptor、`reuseFrom` 或 fresh writer 绕过原修复谱系。
+- 同步 0.88.0 的执行预算语义：supervisor decision/interview 与 intercom ask 等待不计入 child timeout，通知不再把 300 秒结算预算描述为 wall-clock 上限。输出长度截断仍按执行失败处理，回归确认不解析 partial output、不自动结算或启动后续阶段。
+- README 增加逐版本适用性与 MCP 检索工具 override 指引；完整重启并 reload 后，0.88.0 + Pi 1.5.2 的真实 Research 与双轴 Review 正/负例冒烟通过：共 5 个 fresh child，Exa search/fetch、结构化结果、模型映射、并行执行与失败结果保留均核验，无 writer、settlement 或自动重试，仓库在子代理运行前后未变化。TDD writer/repair 链本轮未实跑。
+- 230 项测试、registry freshness、31 个移植来源的 upstream drift 与打包检查通过；sandbox 契约覆盖已安装的 0.88.0 受限进程，child 使用 mock 结果，不冒称真实模型验证。
+
 ## 0.2.33
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.84.0`；Pi/Node 下限仍为 `1.2.0`/`22.19.0`，最小加载入口仍为 `+bundle/index.js`。

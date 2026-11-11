@@ -4,6 +4,7 @@ description: 在独立上下文中只读评审代码、计划或设计，输出�
 tools: read, grep, find, ffgrep, fffind, ls, git_read
 subagentOnlyExtensions: ../../child-tools/review-readonly-git.ts
 inheritProjectContext: true
+inheritGlobalContext: false
 inheritSkills: false
 skillPath: ../../skillpacks/leaf
 defaultContext: fresh

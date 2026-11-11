@@ -6,6 +6,8 @@
 
 宿主通知区分 reviewer 的 `provider-limit` / `infrastructure` / `execution` 与有效 `review-fail`，不自动重试额度耗尽；先解决环境或额度，再走有界局部 recovery。writer 超时的通知明确 `settlement=pending|running|complete|failed|not-scheduled`（只报告实际观察状态，pending 不冒称已启动），保留 partial 变更，不另行 resume 或擅自丢弃；最终仍以完整结构化结果决定能否送审。
 
+pi-subagents 0.88.0 的 `Response was truncated: the model reached its maximum output length.` 属于执行失败，不是有效评审 FAIL，也不是 timeout；不得从 partial `output` 补出结构化结果或自动追加 settlement。上游已经捕获合法 `structured_output` 时不因这一截断条件失败，仍须核对 `ok === true` 与 schema。lane timeout 与 settlement 数值是执行预算，supervisor 等待不计入，不能按 wall-clock 猜测终态。
+
 1. completion 与 targeted status 的 Preview 是有界预览，可能带截断标记（如 `[preview truncated]`、`…`），不是完整 JSON；不得据此汇总。
 2. 按通知给出的 retention-managed async dir 读取完整 `status.json`，先核对 workflow run ID 与终态：
    - `state === "complete"`：保持成功契约，从 `workflow.value` 的结果数组按 lane key 取 `structuredOutput`；缺少 `workflow.value` 仍须停止，不回退到阶段快照。

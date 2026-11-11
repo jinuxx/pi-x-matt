@@ -85,6 +85,8 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 `repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
 
+pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前启动的 run 不再可恢复。缺少/无效 recovery descriptor 时保留上游原因并停止；不得重建 descriptor、改写 `status.json`、用 `reuseFrom` 重放本项目 TDD 或另起 fresh writer 绕过。保留 partial 改动与原 dispatch 证据，请用户决定后续处理。
+
 宿主将最新候选 `snapshotId` 与本次调度基线绑定；每次修复都必须从精确候选开始，且不能越过 `allowedFiles`。同时保存最近一次正式评审的来源，计算从该已审快照到本次候选的**累计修复增量**，保留两端内容/hash、原获批 finding IDs 与根因契约，不只计算最后一次补丁。正式复审仍不重新裁决未变化且无依赖影响的已审内容。
 
 修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
@@ -205,6 +207,6 @@ committed `matt-code-review` 也可用同一 `recovery` 入口，引用该评审
 
 升级后，对旧宿主以 `review-evidence` 拒绝的完整报告，可继续调用原 `recovery: {dispatchId, lanes}`。宿主先核验当前授权、最新 dispatch、候选快照与 Pack，再用当前契约原地重校验所选原报告。只有完整通过当前契约的报告才恢复为其真实 verdict，保留 `revalidationHistory` 与原报告，并发出 `pi-x-matt.report-revalidated`；不运行 reviewer/writer、不重新采证，也不消耗或重置原有计数。因此因旧位置解析错误耗尽两次纠错的候选仍可恢复。仍不合法的报告继续受原预算约束；结构/schema/执行失败不适用此路径，不能降级接受或豁免。恢复后的真实 FAIL 仍须修复，双 PASS 前不得提交或推进 batch。
 
-授权等待不计入 lane timeout；RPC acknowledgement 最多 10 秒；证据 host step 最多 2 分钟；worker 20 分钟、并行 reviewer 各 15 分钟；每个符合条件的 settlement 最多 5 分钟，两个 settlement 可能串行。15 分钟是单 lane 的执行范围，不是完整 TDD 或恢复的总耗时；不能由总耗时直接认定模型卡顿或超时失效。
+授权等待不计入 lane timeout；RPC acknowledgement 最多 10 秒；证据 host step 最多 2 分钟；worker 20 分钟、并行 reviewer 各 15 分钟；每个符合条件的 settlement 为 5 分钟执行预算，两个 settlement 可能串行。pi-subagents 0.88.0 起 child 等待 supervisor decision/interview 或 intercom ask 的时间不计入 lane timeout，`progress_update` 不暂停；workflow 总 deadline（若另有配置）仍按 wall-clock。15 分钟是单 lane 的执行预算，不是 wall-clock 上限或完整 TDD/恢复的总耗时；不能由总耗时直接认定模型卡顿或超时失效。
 
 RPC 回应丢失属于 acceptance unknown：保留 requestId，使用一次 `status id=rpc-spawn-<requestId>` 对账，不自动重新 spawn；未找到/已过期也不能证明未启动。超时与 settlement 的原始结果、恢复错误均保留在 `recoveryHistory` 与 gate 前快照，不只留下最后的 `fetch failed`。

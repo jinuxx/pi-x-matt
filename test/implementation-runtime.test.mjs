@@ -541,10 +541,12 @@ test("missing retained writer fails closed; blocked repairs cannot become formal
   await fixture(async f => {
     const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
     await f.runtime.flush();
-    await f.settle({ fail: true, workerOverride: { resumability: { state: "not-resumable" } } });
+    await f.settle({ fail: true, workerOverride: {
+      resumability: { state: "not-resumable", reason: "missing recovery descriptor" },
+    } });
     await assert.rejects(() => f.runtime.dispatch({ ...f.params, repair: {
       previousDispatchId: initial.details.dispatchId, groups: repairGroups,
-    } }, undefined, f.ctx), /Retained writer is unavailable/);
+    } }, undefined, f.ctx), /Retained writer is unavailable.*missing recovery descriptor/);
     await f.runtime.flush();
     assert.equal(f.launches.length, 1);
   });

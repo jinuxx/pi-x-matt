@@ -4,6 +4,7 @@ description: 在已批准范围内作为唯一写者实现改动并执行聚焦�
 tools: read, grep, find, ffgrep, fffind, ls, edit, write, apply_patch, bash
 mutationTools: apply_patch
 inheritProjectContext: true
+inheritGlobalContext: false
 inheritSkills: false
 skillPath: ../../skillpacks/leaf
 defaultContext: fresh
