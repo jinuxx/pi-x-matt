@@ -83,7 +83,23 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 `previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：可在保留全部旧 `allowedFiles` 的前提下增加文件，也可替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
 
-`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
+`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer；只有下述显式 writer 执行恢复可继续失败 repair。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
+
+### 失败 repair 的 writer 执行恢复
+
+```json
+{"writerRecovery": {"dispatchId": "<最新失败 repair 的宿主 dispatchId>"}}
+```
+
+仍提供 `workflow=matt-tdd`、相同 `implementation` 与仅 `laneTasks.implement`；`writerRecovery` 和 repair/review/recovery/reconsider/acceptRisk 互斥。它不是 reviewer `recovery`，也不是新的修复轮次：仅适用于 `state=failed`、`reviewPending=true`、保留原正式评审来源与 repair 契约的 dispatch，且 implement 为 `ok=false`、无结构化结果、`agent=matt-worker`、有宿主 runId 与 `resumability.state=resumable`。成功实现、合法 `BLOCKED`、无结果/不可恢复 writer、初次实现失败、运行中/paused/stopped 或接受状态不明的 workflow 均不能借此恢复。
+
+宿主首次观察失败终态时绑定 partial worktree 快照；升级前没有该字段的失败记录在首次重新读取终态时绑定，不冒称还原了旧失败时刻。恢复前检查授权、session/project/ticket/branch/HEAD、最新 dispatch、该 partial 快照与完整证据，并核对自原正式评审以来的全部变化都在当前获批 `allowedFiles` 内；入队前及 RPC 启动前再次检查快照。无需失败 writer 已产出候选 Pack，宿主从原 baseline 准备新的只读证据路径，并以新的原子 claim 启动精确 retained writer。原模型、工具、上下文、repair groups/findings/counts/diagnosis 和累计评审基线不变；不接受 caller runId，不重做已完成 slices，不绕过根因诊断。
+
+每个失败 repair 谱系只允许一次显式 writer 执行恢复，reload/重新授权不重置；恢复再次失败即停止，不能再 repair 或重开 initial 绕过。此预算独立于 reviewer recovery/report correction；显式 writer 恢复不自动追加 settlement。原失败结果和已有 settlement history 保留在新 implement 的 `recoveryHistory`，原 dispatch 不被覆盖。
+
+恢复准入在全部异步准备之后，以 latest/ACTIVE 的同步检查和排队记录写入原子提交，避免并发请求各自消耗一次恢复；首次失败的 worktree/index 绑定也按宿主已保存记录保持只写一次。入队及 RPC 启动前重读实时 branch/HEAD 与 ticket digest，不只比较缓存 grant。原有 worktree snapshotId 格式不变，额外绑定 Git index 的 mode/blob/stage 摘要，检测同为 `MM` 但 staged blob 已变化的情况，并在恢复前及恢复后的 collector 拒绝越界暂存。旧 Pack 没有 index 元数据时，只在能从 HEAD 证明范围外暂存基线的情况下继续；若原正式评审已有范围外 staged 变更且缺少原 index 证据，则保留状态并停止，不猜测旧 blob。获批路径中存在未被跟踪且被 Git 忽略的文件时，恢复直接拒绝，不读取其内容、不强制跟踪私人文件来补证。`laneTasks` 必须精确只有 `implement`，额外 reviewer task 不被静默丢弃。
+
+恢复成功后只采集累计候选证据并返回 `reviewPending=true`，不启动 reviewer、不清除原 FAIL、不允许交付；后续 repair 或正式 `review` 必须引用此次恢复返回的最新 dispatchId。writer 已 COMPLETE 但 collector 失败不属于此入口，须保留证据并停止，不能重复执行 writer。
 
 pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前启动的 run 不再可恢复。缺少/无效 recovery descriptor 时保留上游原因并停止；不得重建 descriptor、改写 `status.json`、用 `reuseFrom` 重放本项目 TDD 或另起 fresh writer 绕过。保留 partial 改动与原 dispatch 证据，请用户决定后续处理。
 

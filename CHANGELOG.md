@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.35
+
+- 新增显式 `writerRecovery: {dispatchId}`，解除最新失败 repair 无法延续原 writer 的宿主死锁：只允许可恢复且无结构化结果的失败 repair 恢复一次，绑定 partial 快照并保留原失败、修复契约/计数与累计评审基线；不换 fresh writer、不追加 settlement，成功仍待正式双轴 review。
+- 增加并发准入与首次失败快照的原子保护，启动前重读实时 branch/ticket；额外绑定 index 内容并拒绝越界暂存、无法证明的旧 staged 基线、ignored 获批文件及多余 reviewer task，保留私人文件不强制跟踪。
+- 246 项测试、registry freshness、31 个移植来源的 upstream drift 与打包检查通过，包含原生 sandbox 的 retained writer 恢复契约；child 使用 mock 结果，未验证目标业务项目的真实 writer 恢复。
+- 修正固定 Git tag 的升级指引：需切换项目 package source 到新 tag，并完整重启 Pi、恢复原会话；只对旧 ref 执行 update 或仅 `/reload` 不足。
+
 ## 0.2.34
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.88.0`，包含 `undici@8.12.4` 安全修复；核验 Pi/Node 下限仍为 `1.2.0`/`22.19.0`，最小加载入口仍为 `+bundle/index.js`。

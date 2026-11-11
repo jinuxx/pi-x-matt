@@ -264,6 +264,37 @@ test("writer-only repair and deferred review validate and execute in the native 
   assert.deepEqual(reviewed.value.map(row => row.key), ["implement", "standards", "spec"]);
 });
 
+test("writer execution recovery preserves failure history in the pinned native sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills["matt-tdd"];
+  const original = { key: "implement", agent: "matt-worker", ok: false, runId: "failed-writer",
+    error: "fetch failed", resumability: { state: "resumable" } };
+  const evidence = { command: "trusted-collector", path: "/tmp/recovered.md", controlled: true, claimCommand: "trusted-claim" };
+  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT,
+    { implement: "Complete the retained repair" }, evidence, undefined,
+    { repairOnly: true, resume: original.runId, writerRecovery: { originalResult: original } });
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const calls = [];
+  const recovered = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key, params) => {
+      calls.push(key);
+      assert.equal(params.resume, original.runId);
+      assert.equal("agent" in params, false);
+      return implementResult(plan);
+    },
+    host: async key => {
+      calls.push(key);
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
+        stdout: JSON.stringify({ boundary: { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: ["spec:F1"] } }),
+        stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 };
+    },
+  });
+  assert.deepEqual(calls, ["implement-claim", "implement", "review-evidence"]);
+  assert.deepEqual(recovered.value[0].recoveryHistory, [original]);
+  assert.ok(recovered.emits.some(row => row.type === "pi-x-matt.review-pending"));
+});
+
 test("both failing review axes retain all findings, not just the first gate error", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = planFor(registry, "matt-tdd");

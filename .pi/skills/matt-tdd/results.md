@@ -34,6 +34,8 @@ pi-subagents 0.88.0 的 `Response was truncated: the model reached its maximum o
 
 `matt-tdd` 的 **repair-only** 是明确的阶段边界：工具 receipt 的 `reviewPending=true`，成功结果只含 implement，且 emits 含 `pi-x-matt.review-pending`。这是“修复完成、尚未评审”，不是完整 TDD 成功，也不是 reviewer 丢失；禁止提交或复用修复前 PASS。核对本次 writer 证据与实际改动后，父会话选择继续同范围 repair 或显式 `review`。review 结果复用最近 implement，并包含本次 fresh Standards/Spec；只有当前候选的两轴 PASS 才能进入最终验证。缺少 pending 标记或预期结果时仍 fail closed，不凭单 lane `COMPLETE` 猜测模式。
 
+失败 repair 可以按 [writer 执行恢复契约](dispatch-contract.md#失败-repair-的-writer-执行恢复) 显式使用一次 `writerRecovery`；原失败及 settlement history 保留于新 implement 的 `recoveryHistory`。成功仍按上述 repair-only 读取，必须用恢复返回的最新 dispatchId 正式送审。恢复失败、合法 BLOCKED 或不可恢复 writer 均不能以旧 COMPLETE 或 fresh writer 替代；reviewer `recovery` 仍不运行 implement。
+
 `reconsider` 成功结果仍包含 `implement` 与两轴，但受影响轴的 `structuredOutput` 是宿主按 reviewer decisions 合并后的 **effective review**：未 challenge findings 与另一轴逐字保留，只有明确 `withdraw` 的 finding 消失；任一保留/upheld blocker 使 verdict 仍是 `FAIL`。原始报告、每个 decision 与 effective verdict 保存在 `reconsiderationHistory`，不从它重建旧 PASS/FAIL。只有 effective 双轴 PASS 才进入最终验证；repair 尚未评审或 reconsider 仍有 FAIL 都不是交付通过。
 
 合法 reconsider 即使保留 FAIL 也可为 `state=complete`，从 `workflow.value` 读取 effective 结果；`pi-x-matt.reconsideration-complete` 的 `reviewPassed=false` 和 `remainingFindingIds` 明确表明仍不可交付，应据此修复，而不是把合法决定误当成执行/schema 错误再 recovery。非法/缺失决定仍失败。

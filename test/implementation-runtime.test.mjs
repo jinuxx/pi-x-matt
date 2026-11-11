@@ -11,6 +11,7 @@ import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { IMPLEMENTATION_ENTRY } from "../lib/repair-contract.mjs";
 import { resolveImplementationScope } from "../lib/dispatch-authorization.mjs";
 import { batchOutcome } from "../lib/batch-authorization.mjs";
+import { collectReviewEvidence } from "../lib/review-evidence.mjs";
 
 const exec = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -42,7 +43,7 @@ async function fixture(run) {
     appendEntry: (customType, data) => entries.push({ type: "custom", customType, data: structuredClone(data) }),
     events: { emit() {} }, sendUserMessage: text => notices.push(text),
   };
-  const reload = () => {
+  const reload = (overrides = {}) => {
     runtime = createImplementationRuntime(pi, ROOT, {
       rpc: async (method, params) => {
         assert.equal(method, "spawn");
@@ -59,6 +60,7 @@ async function fixture(run) {
         launches.push({ ...plan, runId, asyncDir });
         return { details: { runId, asyncDir } };
       },
+      ...overrides,
     });
     runtime.start(ctx, entries.length ? "reload" : "startup");
     return runtime;
@@ -69,7 +71,7 @@ async function fixture(run) {
     implementation: { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] },
   };
   const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
-    workerOverride, reviews } = {}) => {
+    workerOverride, reviews, beforeEvidence } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
     const runs = {
       all: async items => {
@@ -96,6 +98,7 @@ async function fixture(run) {
       },
       host: async (key, options) => {
         calls.push(key === "implement-claim" ? "claim" : "evidence");
+        if (key === "review-evidence" && beforeEvidence) await beforeEvidence();
         return exec("/bin/sh", ["-c", options.command], { cwd });
       },
     };
@@ -565,6 +568,356 @@ test("missing retained writer fails closed; blocked repairs cannot become formal
     assert.deepEqual(blocked.calls, ["claim", "implement"]);
     await assert.rejects(() => f.runtime.dispatch({ ...f.params,
       review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /pending repair|implementation/i);
+  });
+});
+
+async function failedRepair(f, options = {}, files = {}) {
+  const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+  await f.runtime.flush();
+  await f.settle({ fail: true });
+  const repair = await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "repair validation order" },
+    repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups },
+  }, undefined, f.ctx);
+  await f.runtime.flush();
+  const failed = await f.settle({ value: "partial repair\n", files, workerOverride: {
+    ok: false, error: "fetch failed", structuredOutput: undefined, ...options,
+  } });
+  assert.equal(failed.status.state, "failed");
+  return { initial, repair, failed };
+}
+
+test("writer execution recovery resumes the failed repair after reload and still requires formal review", async () => {
+  await fixture(async f => {
+    const { initial, repair, failed } = await failedRepair(f);
+    const prior = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const original = JSON.parse(JSON.stringify(failed.status.workflow.emits
+      .findLast(row => row.type === "pi-x-matt.stage-results").results[0]));
+    f.reload();
+    const params = { ...f.params, laneTasks: { implement: "finish only the approved repair" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } };
+    await assert.rejects(() => f.runtime.dispatch({ ...params,
+      writerRecovery: { dispatchId: initial.details.dispatchId } }, undefined, f.ctx), /latest host dispatch/);
+    const recovered = await f.runtime.dispatch(params, undefined, f.ctx);
+    assert.equal(recovered.details.reviewPending, true);
+    assert.deepEqual(recovered.details.lanes.map(lane => lane.key), ["implement"]);
+    await f.runtime.flush();
+    const result = await f.settle({ value: "recovered repair\n" });
+    assert.equal(result.status.state, "complete");
+    assert.deepEqual(result.calls, ["claim", "implement", "evidence"]);
+    assert.equal(result.itemsSeen[0].resume, original.runId);
+    assert.equal("agent" in result.itemsSeen[0], false, "never launch a fresh writer");
+    assert.deepEqual(result.status.workflow.value[0].recoveryHistory, [original]);
+    assert.deepEqual(result.status.workflow.value.map(row => row.key), ["implement"]);
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.deepEqual(record.repair, prior.repair, "execution recovery does not add a root-cause repair attempt");
+    assert.equal(record.reviewSourceId, initial.details.dispatchId);
+    const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+    assert.equal(pack.incremental.previousSnapshotId, prior.repair.previousSnapshotId);
+    assert.match(pack.incremental.changes[0].after.content ?? pack.diff, /recovered repair/);
+    f.reload();
+    await f.runtime.dispatch({ ...f.params, laneTasks: { standards: "standards", spec: "AC1" },
+      review: { dispatchId: recovered.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.deepEqual((await f.settle()).calls, ["standards", "spec"]);
+    assert.equal(f.prompts, 1);
+  });
+});
+
+test("writer recovery is bounded separately and preserves an unsuccessful execution", async () => {
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    const recovered = await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "finish repair" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ workerOverride: { ok: false, error: "fetch failed", structuredOutput: undefined } });
+    assert.deepEqual(failed.calls, ["claim", "implement"], "explicit recovery must not append settlement");
+    assert.equal(failed.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results")
+      .results[0].recoveryHistory[0].error, "fetch failed");
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "retry" },
+      writerRecovery: { dispatchId: recovered.details.dispatchId } }, undefined, f.ctx), /Writer execution recovery exhausted/);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      repair: { previousDispatchId: recovered.details.dispatchId, groups: repairGroups } }, undefined, f.ctx),
+    /Previous repair did not complete/);
+    assert.equal(f.launches.length, 3);
+  });
+});
+
+test("writer recovery rejects unavailable writers, business blockers and partial worktree drift", async () => {
+  for (const [override, expected] of [
+    [{ resumability: { state: "not-resumable", reason: "missing recovery descriptor" } }, /Retained writer is unavailable/],
+    [{ structuredOutput: { ...worker, status: "BLOCKED" } }, /execution failure.*BLOCKED/i],
+  ]) {
+    await fixture(async f => {
+      const { repair } = await failedRepair(f, override);
+      await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+        writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), expected);
+      assert.equal(f.launches.length, 2);
+    });
+  }
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "drift after failure\n");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /failure snapshot.*stale/i);
+    assert.equal(f.launches.length, 2);
+  });
+});
+
+test("writer recovery cannot replace a completed repair or combine with reviewer recovery", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle();
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /requires a failed pending repair/i);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId },
+      recovery: { dispatchId: repair.details.dispatchId, lanes: ["spec"] },
+    }, undefined, f.ctx), /mutually exclusive/);
+  });
+});
+
+test("writer recovery rejects out-of-envelope partial changes and drift while queued", async () => {
+  await fixture(async f => {
+    const { repair } = await failedRepair(f, {}, { "outside.mjs": "unauthorized\n" });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /outside the approved envelope/);
+    assert.equal(f.launches.length, 2);
+  });
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    const recovered = await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "drift while queued\n");
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY &&
+      entry.data.id === recovered.details.dispatchId).data;
+    assert.equal(record.state, "cancelled");
+    assert.match(f.notices.at(-1), /snapshot is stale.*no writer recovery was launched/);
+  });
+});
+
+test("concurrent writer recovery admission queues and launches at most one workflow", async () => {
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    const params = { ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } };
+    const results = await Promise.allSettled([
+      f.runtime.dispatch(params, undefined, f.ctx), f.runtime.dispatch(params, undefined, f.ctx),
+    ]);
+    assert.equal(results.filter(row => row.status === "fulfilled").length, 1);
+    assert.match(results.find(row => row.status === "rejected").reason.message, /latest host dispatch|still active/);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 3);
+  });
+});
+
+test("overlapping terminal refreshes cannot replace the first failure snapshot", async () => {
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    for (const entry of f.entries) {
+      if (entry.customType === IMPLEMENTATION_ENTRY && entry.data.id === repair.details.dispatchId) {
+        delete entry.data.writerFailureSnapshotId;
+        delete entry.data.writerFailureIndexId;
+      }
+    }
+    const second = Promise.withResolvers(), saved = Promise.withResolvers();
+    const append = f.pi.appendEntry;
+    f.pi.appendEntry = (type, data) => {
+      append(type, data);
+      if (type === IMPLEMENTATION_ENTRY && data.id === repair.details.dispatchId && data.writerFailureSnapshotId) saved.resolve();
+    };
+    let calls = 0, first;
+    f.reload({ collectEvidence: async (...args) => {
+      const call = ++calls;
+      if (call === 2) await second.promise;
+      const pack = await collectReviewEvidence(...args);
+      if (call === 1) first = pack;
+      return pack;
+    } });
+    const event = { runId: f.launches.at(-1).runId };
+    const a = f.runtime.completion(event), b = f.runtime.completion(event);
+    await saved.promise;
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "drift between terminal observations\n");
+    second.resolve();
+    await Promise.all([a, b]);
+    const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    assert.equal(record.writerFailureSnapshotId, first.snapshotId);
+    assert.equal(record.writerFailureIndexId, createHash("sha256").update(first.index).digest("hex"));
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /failure snapshot.*stale/i);
+  });
+});
+
+test("writer recovery rejects a same-HEAD branch switch or ignored ticket change while queued", async () => {
+  for (const drift of ["branch", "ticket"]) {
+    await fixture(async f => {
+      await writeFile(join(f.ctx.cwd, ".git", "info", "exclude"), ".x-matt/\n");
+      await mkdir(join(f.ctx.cwd, ".x-matt", "work"), { recursive: true });
+      const ticket = ".x-matt/work/parser.md";
+      await writeFile(join(f.ctx.cwd, ticket), "# Parser\n");
+      f.params.implementation.ticket = ticket;
+      const { repair } = await failedRepair(f);
+      await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+        writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+      if (drift === "branch") await exec("git", ["checkout", "-qb", "different-branch"], { cwd: f.ctx.cwd });
+      else await writeFile(join(f.ctx.cwd, ticket), "# Changed parser contract\n");
+      await f.runtime.flush();
+      assert.equal(f.launches.length, 2);
+      assert.equal(f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data.state, "cancelled");
+    });
+  }
+});
+
+test("writer recovery refuses ignored approved files rather than snapshotting private content", async () => {
+  await fixture(async f => {
+    await writeFile(join(f.ctx.cwd, ".git", "info", "exclude"), "local-scratch.json\n");
+    f.params.implementation.allowedFiles.push("local-scratch.json");
+    const { repair } = await failedRepair(f, {}, { "local-scratch.json": "private partial\n" });
+    await writeFile(join(f.ctx.cwd, "local-scratch.json"), "external change\n");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /ignored.*approved|approved.*ignored/i);
+    assert.equal(f.launches.length, 2);
+  });
+});
+
+test("writer recovery binds index bytes even when worktree content and MM status do not change", async () => {
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    const launch = f.launches.at(-1);
+    const blob = async text => {
+      await writeFile(join(f.ctx.cwd, "parser.mjs"), text);
+      await exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd });
+    };
+    await blob("index B\n");
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "partial repair\n");
+    for (const entry of f.entries) {
+      if (entry.customType === IMPLEMENTATION_ENTRY && entry.data.id === repair.details.dispatchId) {
+        delete entry.data.writerFailureSnapshotId;
+        delete entry.data.writerFailureIndexId;
+      }
+    }
+    f.reload();
+    await f.runtime.completion({ runId: launch.runId });
+    const before = await collectReviewEvidence(f.ctx.cwd);
+    await blob("index D\n");
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "partial repair\n");
+    const after = await collectReviewEvidence(f.ctx.cwd);
+    assert.equal(before.snapshotId, after.snapshotId, "legacy worktree snapshot alone cannot detect index drift");
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /failure snapshot.*stale/i);
+  });
+});
+
+test("writer recovery rejects out-of-envelope staging with unchanged worktree bytes", async () => {
+  await fixture(async f => {
+    await writeFile(join(f.ctx.cwd, ".pi", "settings.json"), '{"preexisting":true}\n');
+    const { repair } = await failedRepair(f);
+    await exec("git", ["add", ".pi/settings.json"], { cwd: f.ctx.cwd });
+    for (const entry of f.entries) {
+      if (entry.customType === IMPLEMENTATION_ENTRY && entry.data.id === repair.details.dispatchId) {
+        delete entry.data.writerFailureSnapshotId;
+        delete entry.data.writerFailureIndexId;
+      }
+    }
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /index.*outside.*approved/i);
+    assert.equal(f.launches.length, 2);
+  });
+});
+
+test("writer recovery rejects extra reviewer lane tasks before admission", async () => {
+  await fixture(async f => {
+    const { repair } = await failedRepair(f);
+    const count = f.entries.length;
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx), /writerRecovery.*only.*implement/i);
+    assert.equal(f.entries.length, count);
+  });
+});
+
+test("index-only MM drift invalidates deferred review and risk confirmation", async () => {
+  for (const mode of ["review", "risk"]) {
+    await fixture(async f => {
+      const stage = async text => {
+        await writeFile(join(f.ctx.cwd, "parser.mjs"), text);
+        await exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd });
+        await writeFile(join(f.ctx.cwd, "parser.mjs"), "patched\n");
+      };
+      const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+      await f.runtime.flush();
+      let target = initial;
+      if (mode === "review") {
+        await f.settle({ fail: true });
+        target = await f.runtime.dispatch({ ...f.params, repair: {
+          previousDispatchId: initial.details.dispatchId, groups: repairGroups,
+        } }, undefined, f.ctx);
+        await f.runtime.flush();
+        await f.settle({ beforeEvidence: () => stage("index B\n") });
+        await stage("index D\n");
+        await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+          laneTasks: { standards: "standards", spec: "AC1" },
+          review: { dispatchId: target.details.dispatchId } }, undefined, f.ctx), /snapshot.*stale/i);
+      } else {
+        await f.settle({ beforeEvidence: () => stage("index B\n"), reviews: {
+          standards: review("standards", true, { ...finding, severity: "P2", basis: { kind: "standard", reference: "convention" } }),
+          spec: review("spec"),
+        } });
+        f.ctx.ui.confirm = async () => { await stage("index D\n"); return true; };
+        await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: undefined,
+          acceptRisk: { dispatchId: target.details.dispatchId, findingIds: ["standards:parse"],
+            reason: "bounded trade-off", evidence: "reviewed" } }, undefined, f.ctx), /changed while confirming/);
+      }
+    });
+  }
+});
+
+test("legacy recovery baselines without index metadata require provable outside-envelope staging", async () => {
+  for (const stagedOutside of [false, true]) {
+    await fixture(async f => {
+      if (stagedOutside) {
+        await writeFile(join(f.ctx.cwd, ".pi", "settings.json"), '{"preexisting":true}\n');
+        await exec("git", ["add", ".pi/settings.json"], { cwd: f.ctx.cwd });
+      }
+      const { repair } = await failedRepair(f);
+      const record = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+      const file = record.evidence.baselinePath;
+      const baseline = JSON.parse(await readFile(file, "utf8"));
+      delete baseline.baseline.index;
+      await chmod(file, 0o600);
+      await writeFile(file, JSON.stringify(baseline));
+      const request = { ...f.params, laneTasks: { implement: "recover" },
+        writerRecovery: { dispatchId: repair.details.dispatchId } };
+      if (stagedOutside) await assert.rejects(() => f.runtime.dispatch(request, undefined, f.ctx), /Legacy review lacks index evidence/);
+      else {
+        await f.runtime.dispatch(request, undefined, f.ctx);
+        await f.runtime.flush();
+        assert.equal((await f.settle()).status.state, "complete");
+      }
+    });
+  }
+});
+
+test("recovered writer cannot stage outside-envelope content without changing worktree bytes", async () => {
+  await fixture(async f => {
+    await writeFile(join(f.ctx.cwd, ".pi", "settings.json"), '{"preexisting":true}\n');
+    const { repair } = await failedRepair(f);
+    await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "recover" },
+      writerRecovery: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ beforeEvidence: () => exec("git", ["add", ".pi/settings.json"], { cwd: f.ctx.cwd }) });
+    assert.equal(failed.status.state, "failed");
+    assert.match(failed.status.error, /index paths outside the approved envelope/);
+    assert.equal(failed.status.workflow.emits.some(row => row.type === "pi-x-matt.review-pending"), false);
   });
 });
 

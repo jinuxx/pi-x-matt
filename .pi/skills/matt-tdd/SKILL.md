@@ -56,6 +56,8 @@ reviewer 完成限定范围检查后一次报告全部有证据的阻断项，�
 
 ## 汇总
 
+失败 repair 的 writer 执行恢复使用独立的 `writerRecovery: {dispatchId: "<最新失败 repair>"}`，只提供 `laneTasks.implement`；完整条件见 [失败 repair 的 writer 执行恢复](dispatch-contract.md#失败-repair-的-writer-执行恢复)。宿主只对失败且无结构化结果、仍可恢复的原 writer 显式 resume 一次，保留 partial 快照、失败、原 findings/计数与正式评审基线；不用于合法 BLOCKED、初次实现失败或不可恢复 writer，不追加 settlement，不换 fresh writer。恢复成功仍只产生待审候选，随后须用最新 dispatchId 正式 review。此入口不改变 reviewer `recovery` 的含义。
+
 1. 收到 completion result 后，先按 [Workflow Result Reading](results.md) 核对终态并读取完整 JSON。初次实现/正式送审消费 `implement`、`standards`、`spec` 三个 lane 的 `structuredOutput`；repair 只返回 implement，reconsider 返回合并后的 effective 双轴并带 `reconsiderationHistory`。repair 成功仍是待审候选，不能宣称 TDD 全流程完成或提交。
 2. 区分复核结论不通过、实现 `BLOCKED` 与执行失败/结果缺失/schema 无效；失败 workflow 按契约读取最新阶段快照，不要求异常分支存在 `workflow.value`。检查所有已返回 lane，保留两个轴的完整结果；不得回退到普通 prose。
 3. 核验 worker 报告包含每个 slice 的 RED 与 GREEN 证据、实际变更文件和验证命令；若 RED 靠临时改代码或 fixture 强制得到，要求提供对 pristine 副本的 `diff` 证明 mutation 确实落地，不采信未证明的 red。

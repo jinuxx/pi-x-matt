@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from "node:fs/promises";
 import { collectCandidateTreeProof } from "../lib/batch-authorization.mjs";
-import { collectReviewEvidence, repairDelta, writeReviewEvidence } from "../lib/review-evidence.mjs";
+import { collectReviewEvidence, indexChanges, repairDelta, writeReviewEvidence } from "../lib/review-evidence.mjs";
 
 // Fixed host command: arguments are extension-owned artifact paths, never task text.
 const [baselinePath, outputPath] = process.argv.slice(2);
 if (!baselinePath || !outputPath) throw new Error("Usage: collect-review-evidence.mjs <baseline.json> <review.md>");
 const { baseline, control } = JSON.parse(await readFile(baselinePath, "utf8"));
 const pack = await collectReviewEvidence(process.cwd(), { baseline });
+if (control.recoveryIndex !== undefined &&
+    indexChanges(control.recoveryIndex, pack.index).some(path => !control.allowedFiles.includes(path))) {
+  throw new Error("Implementation changed index paths outside the approved envelope");
+}
 pack.incremental = repairDelta(baseline, pack, control);
 const candidate = control.batch ? await collectCandidateTreeProof(process.cwd(), pack, control) : null;
 if (candidate) pack.batchCandidate = candidate;
