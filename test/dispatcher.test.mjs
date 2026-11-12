@@ -497,9 +497,21 @@ test("finding accounting checks that every approved finding is answered, not tha
     cycles: [{ test: "rejects empty input" }], findingResolutions } }, approved);
   const row = (findingId, extra = {}) => ({ findingId, cycleTest: "rejects empty input", evidence: "covered by the new cycle", ...extra });
 
-  const complete = account([row("standards:F1"), row("F2"), row("spec:F3", { cycleTest: null })]);
+  const valid = [row("standards:F1"), row("F2"), row("spec:F3", { cycleTest: null })];
+  const complete = account(valid);
   assert.deepEqual([complete.ok, complete.resolvedFindingIds, complete.unresolvedFindingIds, complete.invalid],
     [true, approved, [], []], "a bare id is accepted when it names exactly one approved finding; null marks a non-behavioural fix");
+
+  for (const [extra, reason] of [
+    [row("spec:F2"), "duplicate finding id"],
+    [row("spec:F9"), "unknown finding id"],
+    [row("standards:F1", { evidence: "" }), "missing evidence"],
+  ]) {
+    const rejected = account([extra, ...valid]);
+    assert.deepEqual(rejected.unresolvedFindingIds, []);
+    assert.deepEqual(rejected.invalid.map(item => item.reason), [reason]);
+    assert.equal(rejected.ok, false, `complete coverage must not excuse ${reason}`);
+  }
 
   for (const missing of [undefined, [], "F1"]) {
     assert.deepEqual(account(missing).unresolvedFindingIds, approved);

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.37
+
+- 修正 finding 交代校验：即使获批 findings 已全部覆盖，只要存在重复、未知 ID 或其他无效记录，`accounting.ok` 仍为 `false`，与既有契约保持一致。
+- 送审准入同步识别无效交代记录，原 writer 可恢复时拒绝绕过该失败；保留原 writer 不可恢复时的既有送审出口，不改 batch、命令执行时机或恢复规则。
+- 264 项测试、registry freshness、31 个移植来源的 upstream drift 与打包检查通过；兼容测试使用 mock child，本次未在业务项目复跑。
+- 补充完整覆盖混入无效记录的单元回归与送审准入回归；`.mjs` 更新后须完整重启 Pi 并恢复原会话，仅 `/reload` 不够。
+
 ## 0.2.36
 
 - 新增宿主确定性校验，把可机械检出的问题拦在双轴评审之前：`implementation.preReviewCommands` 可选声明最多 6 条本地命令（共享 10 分钟预算、须在基线通过且不写工作区），随授权信封一并确认，并在每次 writer（初次实现/repair/writerRecovery）返回 `COMPLETE` 后、任何 reviewer 之前由宿主原样执行；implement task 事先列出这些命令。

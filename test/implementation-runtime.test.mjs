@@ -2081,6 +2081,30 @@ test("a repair must account for every approved finding before formal review", as
   });
 });
 
+test("complete finding coverage with invalid accounting still blocks formal review", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const resolution = { findingId: "spec:parse", cycleTest: "parse", evidence: "parse cycle now covers it" };
+    const run = await f.settle({ value: "fixed\n", resolutions: [resolution, resolution],
+      correction: { ok: false, error: "fetch failed", structuredOutput: undefined } });
+    const writer = writerRow(run);
+    assert.deepEqual(run.calls, ["claim", "implement", "implement-correction", "evidence"]);
+    assert.equal(writer.hostVerification.ok, false);
+    assert.deepEqual(writer.hostVerification.accounting.unresolvedFindingIds, []);
+    assert.deepEqual(writer.hostVerification.accounting.invalid,
+      [{ findingId: "spec:parse", reason: "duplicate finding id" }]);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx),
+    /Formal review refused.*invalid finding resolutions: spec:parse \(duplicate finding id\)/);
+    assert.equal(f.launches.length, 2, "invalid accounting launches no reviewer");
+  });
+});
+
 test("an unaccounted repair whose writer is gone is not held hostage: review proceeds with the failure on record", async () => {
   await fixture(async f => {
     const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
