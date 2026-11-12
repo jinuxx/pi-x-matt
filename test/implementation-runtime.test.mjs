@@ -11,7 +11,7 @@ import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { IMPLEMENTATION_ENTRY } from "../lib/repair-contract.mjs";
 import { resolveImplementationScope } from "../lib/dispatch-authorization.mjs";
 import { batchOutcome } from "../lib/batch-authorization.mjs";
-import { collectReviewEvidence } from "../lib/review-evidence.mjs";
+import { collectReviewEvidence, renderReviewEvidence } from "../lib/review-evidence.mjs";
 
 const exec = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -73,8 +73,8 @@ async function fixture(run) {
   // `resolutions` replaces the compliant writer's accounting (null omits it); `correction` shapes the
   // host-requested correction turn: { value } rewrites parser.mjs, the rest overrides its result.
   const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
-    workerOverride, reviews, beforeEvidence, resolutions, correction = {} } = {}) => {
-    const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
+    workerOverride, reviews, beforeEvidence, resolutions, correction = {}, receiptFailure = false } = {}) => {
+    const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [], trace = [];
     // A compliant writer accounts for exactly the finding IDs its handoff names.
     const accounted = (task, rows) => {
       const ids = JSON.parse(task.match(/"approvedFindingIds":(\[[^\]]*\])/)?.[1] ?? "[]");
@@ -115,10 +115,12 @@ async function fixture(run) {
       host: async (key, options) => {
         calls.push(key === "implement-claim" ? "claim" : key.startsWith("pre-review") ? key : "evidence");
         if (key === "review-evidence" && beforeEvidence) await beforeEvidence();
-        return exec("/bin/sh", ["-c", options.command], { cwd });
+        const result = await exec("/bin/sh", ["-c", options.command], { cwd });
+        trace.push({ operation: "host", key, state: "completed" });
+        return key === "review-evidence" && receiptFailure ? { ...result, stdout: '{"candidate":[...' } : result;
       },
     };
-    const status = { runId: launch.runId, state: "running", workflow: { emits } };
+    const status = { runId: launch.runId, state: "running", workflow: { emits, trace } };
     try {
       const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
       status.workflow.value = await new AsyncFunction("runs", "emit", launch.script)(runs, value => emits.push(value));
@@ -148,6 +150,149 @@ async function fixture(run) {
     await rm(artifacts, { recursive: true, force: true });
   }
 }
+
+async function failedEvidenceReceipt(f, options = {}, request = f.params) {
+  const dispatch = await f.runtime.dispatch(request, undefined, f.ctx);
+  await f.runtime.flush();
+  const failed = await f.settle({ ...options, receiptFailure: true });
+  assert.equal(failed.status.state, "failed");
+  assert.deepEqual(failed.calls, ["claim", "implement", "evidence"]);
+  // Model the pre-upgrade host record, not an unfinished writer or a new initial.
+  const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+  delete record.evidence.resultPath;
+  delete record.evidence.resultCommands;
+  f.reload();
+  return { dispatch, failed, record };
+}
+
+test("evidence receipt failure resumes only fresh reviewers after reload without repeating the completed writer", async () => {
+  await fixture(async f => {
+    const { dispatch } = await failedEvidenceReceipt(f);
+    const reviewed = await f.runtime.dispatch({ ...f.params, laneTasks: {
+      standards: "standards only", spec: "AC1 only",
+    }, review: { dispatchId: dispatch.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const run = await f.settle();
+    assert.deepEqual(run.calls, ["standards", "spec"]);
+    assert.equal(run.status.state, "complete");
+    assert.deepEqual(run.status.workflow.value.map(row => row.key), ["implement", "standards", "spec"]);
+    const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(record.evidenceRecovery.dispatchId, dispatch.details.dispatchId);
+    assert.match(record.evidenceRecovery.error, /JSON/);
+    assert.equal(record.id, reviewed.details.dispatchId);
+    assert.equal(f.prompts, 1);
+  });
+});
+
+test("evidence receipt recovery rejects incomplete artifacts and revoked authority", async () => {
+  for (const invalid of ["pack", "markdown", "authorization"]) {
+    await fixture(async f => {
+      const { dispatch, record } = await failedEvidenceReceipt(f);
+      if (invalid === "pack") {
+        const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+        await chmod(record.evidence.snapshotPath, 0o600);
+        await writeFile(record.evidence.snapshotPath, JSON.stringify({ ...pack, complete: false }));
+      } else if (invalid === "markdown") {
+        await chmod(record.evidence.path, 0o600);
+        await writeFile(record.evidence.path, "different evidence");
+      } else {
+        f.runtime.revoke("cancelled");
+        f.ctx.hasUI = false;
+      }
+      await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: {
+        standards: "standards only", spec: "AC1 only",
+      }, review: { dispatchId: dispatch.details.dispatchId } }, undefined, f.ctx),
+      invalid === "authorization" ? /authorization|confirmation|UI/i : /evidence|incomplete|snapshot/i);
+      assert.equal(f.launches.length, 1);
+    });
+  }
+});
+
+test("evidence receipt recovery carries the original batch proof and rejects a substituted tree", async () => {
+  for (const tamper of [false, true]) {
+    await fixture(async f => {
+      const spec = ".x-matt/work/receipt/spec.md", ticket = ".x-matt/work/receipt/issues/01-parser.md";
+      await mkdir(join(f.ctx.cwd, dirname(ticket)), { recursive: true });
+      const exclude = join(f.ctx.cwd, ".git/info/exclude");
+      await writeFile(exclude, `${await readFile(exclude, "utf8")}\n/.x-matt/\n`);
+      await writeFile(join(f.ctx.cwd, spec), "# Receipt\n\nType: spec\nStatus: spec-ready\n");
+      await writeFile(join(f.ctx.cwd, ticket),
+        `# Parser\n\nType: ticket\nParent: ${spec}\nStatus: ready-for-agent\nBlocked by: None\n\n## Acceptance criteria\n\n- [ ] Preserve parser\n`);
+      f.params.implementation.ticket = ticket;
+      f.params.batch = { spec, fixedPoint: (await exec("git", ["rev-parse", "HEAD"], { cwd: f.ctx.cwd })).stdout.trim(),
+        tickets: [{ ...f.params.implementation }] };
+      const { dispatch, record } = await failedEvidenceReceipt(f);
+      const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+      if (tamper) {
+        pack.batchCandidate.tree = "f".repeat(40);
+        await chmod(record.evidence.snapshotPath, 0o600);
+        await chmod(record.evidence.path, 0o600);
+        await writeFile(record.evidence.snapshotPath, JSON.stringify(pack));
+        await writeFile(record.evidence.path, renderReviewEvidence(pack));
+      }
+      const request = { ...f.params, laneTasks: { standards: "standards only", spec: "AC1 only" },
+        review: { dispatchId: dispatch.details.dispatchId } };
+      if (tamper) {
+        await assert.rejects(() => f.runtime.dispatch(request, undefined, f.ctx), /batch candidate.*tree/i);
+        assert.equal(f.launches.length, 1);
+      } else {
+        await f.runtime.dispatch(request, undefined, f.ctx);
+        await f.runtime.flush();
+        const run = await f.settle();
+        assert.deepEqual(run.calls, ["standards", "spec"]);
+        const reviewed = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+        assert.equal(reviewed.batchOutcome.complete, true);
+        assert.deepEqual(reviewed.batchOutcome.candidate, pack.batchCandidate);
+      }
+    });
+  }
+});
+
+test("evidence receipt recovery rechecks same-snapshot index drift before launching reviewers", async () => {
+  await fixture(async f => {
+    const parser = join(f.ctx.cwd, "parser.mjs");
+    const { dispatch } = await failedEvidenceReceipt(f, { beforeEvidence: async () => {
+      await writeFile(parser, "staged\n");
+      await exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd });
+      await writeFile(parser, "patched\n");
+    } });
+    await f.runtime.dispatch({ ...f.params, laneTasks: { standards: "standards only", spec: "AC1 only" },
+      review: { dispatchId: dispatch.details.dispatchId } }, undefined, f.ctx);
+    const before = await collectReviewEvidence(f.ctx.cwd);
+    await writeFile(parser, "different staged bytes\n");
+    await exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd });
+    await writeFile(parser, "patched\n");
+    const after = await collectReviewEvidence(f.ctx.cwd);
+    assert.equal(before.snapshotId, after.snapshotId);
+    assert.notEqual(before.index, after.index);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(record.state, "cancelled");
+  });
+});
+
+test("evidence receipt recovery preserves a repair's formal baseline and finding counts", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const { dispatch, record } = await failedEvidenceReceipt(f, { value: "fixed\n" }, {
+      ...f.params, laneTasks: { implement: "repair the approved finding" },
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups },
+    });
+    const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+    await f.runtime.dispatch({ ...f.params, laneTasks: { standards: "standards only", spec: "AC1 only" },
+      review: { dispatchId: dispatch.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const run = await f.settle();
+    assert.deepEqual(run.calls, ["standards", "spec"]);
+    assert.equal(run.status.state, "complete");
+    const reviewed = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.deepEqual(reviewed.repair, record.repair);
+    assert.deepEqual(JSON.parse(await readFile(reviewed.evidence.snapshotPath, "utf8")).incremental, pack.incremental);
+  });
+});
 
 test("a user-confirmed ordinary P2 candidate has a separate terminal receipt without rewriting FAIL", async () => {
   await fixture(async f => {
@@ -1936,7 +2081,9 @@ test("a failing approved pre-review command gets one same-writer correction befo
     const params = gated(f.params);
     const initial = await f.runtime.dispatch(params, undefined, f.ctx);
     assert.deepEqual(f.runtime.plans.get(initial.details.dispatchId).hostCommands.map(row => row.key),
-      ["implement-claim", "pre-review", "pre-review-recheck", "review-evidence"]);
+      ["implement-claim", "pre-review", "pre-review-recheck", "review-evidence",
+        ...Array.from({ length: 23 }, (_, index) => `review-result-${index + 1}`)]);
+    assert.ok(f.runtime.plans.get(initial.details.dispatchId).hostCommands.length <= 32);
     await f.runtime.flush();
     const run = await f.settle({ correction: { value: "fixed\n" } });
     assert.equal(run.status.state, "complete");

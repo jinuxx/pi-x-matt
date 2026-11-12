@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.38
+
+- 修复大于 4 KiB 的 TDD 证据回执被 stdout 预览截断：完整回执保存在宿主只读文件，超过单帧时用精确授权的只读命令读取有界帧，核对顺序、长度与同一结果摘要后才启动 reviewer；保留全部 candidate 和 changedPaths，不提高上游预览限制。最多 24 帧，超限或损坏直接停止，不裁剪证据。
+- 旧派发若 writer 已合法 COMPLETE、collector 成功且仅回执 JSON 解析失败，可显式 `review`：宿主核验原授权、最新谱系、完整 Pack/Markdown、HEAD/工作区/index 与 batch tree 绑定，只启动两轴 reviewer，不重跑 writer 或 collector；缺证、漂移和其他失败仍停止。
+- 271 项测试、registry freshness、31 个移植来源的 upstream drift 与打包检查通过；原生兼容回归使用真实 sandbox、host command 与精确命令授权，模型 child 使用 mock，未在业务项目复跑。升级后须完整重启 Pi 并恢复原会话，仅 `/reload` 不够。
+
 ## 0.2.37
 
 - 修正 finding 交代校验：即使获批 findings 已全部覆盖，只要存在重复、未知 ID 或其他无效记录，`accounting.ok` 仍为 `false`，与既有契约保持一致。

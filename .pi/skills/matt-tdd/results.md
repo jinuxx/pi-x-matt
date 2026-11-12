@@ -1,5 +1,7 @@
 # Workflow Result Reading
 
+旧版若 collector 已成功、writer 已合法 COMPLETE，却仅在回执 JSON 解析处失败且 reviewer 尚未启动，可按 [限定回执恢复](dispatch-contract.md) 显式 `review`。这不依赖 pending 标记猜测成功：宿主必须验证原授权、完整 Pack 与候选绑定后才接受；原失败保留，不重跑 writer/collector，缺证或漂移仍停止。
+
 默认交付要求双 PASS。唯一额外出口是宿主真实用户确认的 `acceptRisk`：工具直接返回 `state=accepted-risk` / `deliveryEligible=true` / `reviewPassed=false`，无新 child 或 async status；从该可信工具结果读取风险收据，原 workflow 的 FAIL 仍按下文读取且不得改写。这不是从普通 receipt 重建结构化评审结果。
 
 所有执行型 parent 共用此契约。调度后交还控制权或处理独立工作，等待 runtime 的 completion；不得轮询等待。

@@ -113,7 +113,7 @@ export default function (pi: ExtensionAPI) {
         }), { minItems: 1, description: "Declared serial ticket list; the host freezes each ticket's requirement content, Parent and Blocked by graph." }),
       }, { description: "One-confirmation batch capability for declared serial matt-tdd tickets. The host reads actual spec/ticket digests; model-provided hashes or authorization are never accepted. No implicit batch from matt-implement-spec or a plain intent." })),
       review: Type.Optional(Type.Object({
-        dispatchId: Type.String({ minLength: 1, description: "Latest completed repair dispatch. Review its pinned cumulative increment with both axes, without running the writer." }),
+        dispatchId: Type.String({ minLength: 1, description: "Latest completed repair, or a verified legacy COMPLETE dispatch stopped only by evidence-receipt JSON parsing. Review its unchanged host-bound Pack with both axes, without rerunning the writer or collector." }),
       })),
       reconsider: Type.Optional(Type.Object({
         dispatchId: text(),

@@ -54,7 +54,7 @@
 
 对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。当前 `implementation` 信封必须等于批准条目；undeclared ticket、额外文件/命令、语义变化、Parent/type/status/active path 不合法时拒绝，并提示提交新的显式 batch 确认。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding；只增 `allowedFiles` 或替换诊断清单仍需既有单票重新确认，batch 计划本身不扩张。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
 
-batch-bound 证据采集额外在受信任 collector 中生成 candidate tree 证明：宿主使用 OS temp 的 `GIT_INDEX_FILE`、临时 `GIT_OBJECT_DIRECTORY`，把原 object store 作为只读 alternate，只把本次已审项目路径 stage 到隔离 index 并 `write-tree`；真实 index、HEAD、object store 与工作区不被写入。tree、采集时 HEAD 与 Review Evidence snapshot 通过 collector stdout 和 workflow emit 绑定到宿主记录，至少包含完整双轴 `PASS` 与 `implement.status=COMPLETE` 才算 terminal candidate；该票声明了 `preReviewCommands` 且宿主实测未通过（未被用户撤回）时，即使双轴 `PASS` 也不构成 terminal candidate，不能推进下一票。
+batch-bound 证据采集额外在受信任 collector 中生成 candidate tree 证明：宿主使用 OS temp 的 `GIT_INDEX_FILE`、临时 `GIT_OBJECT_DIRECTORY`，把原 object store 作为只读 alternate，只把本次已审项目路径 stage 到隔离 index 并 `write-tree`；真实 index、HEAD、object store 与工作区不被写入。tree、采集时 HEAD 与 Review Evidence snapshot 通过宿主只读完整回执、有界帧与 workflow emit 绑定到宿主记录，至少包含完整双轴 `PASS` 与 `implement.status=COMPLETE` 才算 terminal candidate；该票声明了 `preReviewCommands` 且宿主实测未通过（未被用户撤回）时，即使双轴 `PASS` 也不构成 terminal candidate，不能推进下一票。
 
 进入下一票前，宿主必须对前一票核验：真实 commit 只有一个 parent 且等于 candidate 采集时的 HEAD；commit tree 等于 candidate tree（因此内容、文件类型、可执行位和新文件都绑定）；commit 位于原始 fixed point ancestry；当前 HEAD 正好是该 commit，没有额外/无关提交、amend、merge 或 history switch；工作区干净；tracker 为 `resolved` 且 `Implementation commit` 精确等于该 commit。伪造 Comments、仅 branch 名称相同、部分 candidate、未 review 的 commit 或无法安全核验的 prerequisite 都停止，不接受“父会话说已提交”。全部 tickets 达到核验终态后才允许整份 spec 的 committed 双轴评审；不自动归档、改 spec 状态、push、开 PR 或合并。
 
@@ -111,13 +111,17 @@ pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前�
 
 修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。writer 须在结构化结果的 `findingResolutions` 中对每条获批 finding 逐条交代，宿主在采集证据前校验其完整性并运行获批的 `preReviewCommands`（见 [宿主确定性校验](#宿主确定性校验)）；receipt 的 `verification.ok=false` 表示该候选尚不能正式送审。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
 
+collector 的 stdout 在 `pi-subagents@0.88.0` 中只是 4 KiB 预览，不能承载任意大小的 JSON。完整回执另存为宿主目录中的只读 `review-result.json`；3500 字节以内保持原回执形状，较大结果分为最多 24 帧，每帧在 4 KiB 以下。后续帧只由绑定该文件和固定序号的精确 host command 读取，逐帧核对序号、总数、长度和同一结果的 SHA-256，再无损还原 candidate 与全部 changedPaths。它不是重试或重新取证；加上 claim、校验和采集仍低于上游 32 次 host call 上限。超限或损坏时停止，不裁剪 proof，不从合流且有 1 MiB 上限的 `outputPath` 日志重建 JSON。
+
 候选准备好后，显式送审：
 
 ```json
 {"review": {"dispatchId": "<最新已完成 repair 的 dispatchId>"}}
 ```
 
-仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和 `laneTasks.standards` / `laneTasks.spec`；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，默认二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。待审修复的宿主校验仍未通过且可由 writer 纠正时，review 被拒绝（`Formal review refused`），须先继续 repair，见 [宿主确定性校验](#宿主确定性校验)。
+旧版回执解析失败是一个限定例外：最新旧派发必须处于 `failed`，仅保留合法 COMPLETE implement，原生 trace 最后一步是成功的 `review-evidence`，错误明确属于 JSON 解析，且尚无新版结果通道或任何 reviewer。此时可以用同一 `review` 入口和两个 reviewer task 续评审，不使用 `writerRecovery`。宿主重新核对原授权/谱系、当前 HEAD/工作区/index、密封原基线与累计增量、完整 Pack 与确定性 Markdown 内容；batch 还核验原 candidate 的真实 tree 绑定。仅做新鲜度与完整性验证，不重新执行 collector 或 writer；原失败和 reviewer 预算保留，排队后再次核验候选及 artifact 摘要。缺失或损坏的证据、真实 collector 失败、BLOCKED/失败 writer、已运行的 reviewer、漂移或失效授权都不能借此继续。通过后仍必须取得当前候选两轴 PASS，才能交付。
+
+仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和 `laneTasks.standards` / `laneTasks.spec`；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，默认二者 PASS 才能进入最终验证。repair/review/recovery 互斥；除上述旧回执恢复例外外，尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。待审修复的宿主校验仍未通过且可由 writer 纠正时，review 被拒绝（`Formal review refused`），须先继续 repair，见 [宿主确定性校验](#宿主确定性校验)。
 
 父会话不能凭 prose 抹掉有效 FAIL。若认为某条已记录的有效 blocking finding 与已确认验收/标准冲突，使用唯一的结构化复核路径：
 

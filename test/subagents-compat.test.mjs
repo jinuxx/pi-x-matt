@@ -9,6 +9,8 @@ import test from "node:test";
 import { registerWorkflowResource } from "pi-subagents/workflow-resources";
 import { loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
 import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
+import { MAX_REVIEW_RESULT_PARTS, prepareTddEvidence, reviewResultFrame } from "../lib/review-workflow.mjs";
+import { collectReviewEvidence } from "../lib/review-evidence.mjs";
 import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 
@@ -19,7 +21,9 @@ const SOURCE_DIR = join(PACKAGE_ROOT, "src");
 // Exercise the pinned runtime's real parser/sandbox and notification formatter,
 // without launching child sessions, running host commands, or calling models.
 const { runWorkflowScript, validateWorkflowScript } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/scripted-workflow.js")));
+const { executeWorkflowHostCommand } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/host-command.js")));
 const { resolveWorkflowResource } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/workflow-resources.js")));
+const { consumeWorkflowResourcePermit, authorizeWorkflowResourceHost } = await import(pathToFileURL(join(SOURCE_DIR, "shared/workflow-child-permit.js")));
 const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/notify.js")));
 const { createCapacityResilientJsonWriter } = await import(pathToFileURL(join(SOURCE_DIR, "shared/capacity-resilient-json.js")));
 const { TRUNCATED_RESPONSE_ERROR } = await import(pathToFileURL(join(SOURCE_DIR, "shared/utils.js")));
@@ -68,6 +72,123 @@ function implementResult(plan) {
     },
   };
 }
+
+test("large evidence receipt survives the real host preview before both reviewers", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "matt-large-receipt-"));
+  let evidence;
+  try {
+    await writeFile(join(directory, "baseline.txt"), "baseline\n");
+    for (const args of [["init", "-q"], ["config", "user.email", "test@example.invalid"],
+      ["config", "user.name", "Test"], ["add", "."], ["commit", "-qm", "baseline"]]) {
+      execFileSync("git", args, { cwd: directory });
+    }
+    const baseline = await collectReviewEvidence(directory);
+    const paths = Array.from({ length: 24 }, (_, index) => `file-${index}-${"long-path-".repeat(8)}${index === 0 ? "路径🔎" : ""}.mjs`);
+    evidence = await prepareTddEvidence(directory, ROOT, {
+      allowedFiles: paths, previousSnapshotId: baseline.snapshotId,
+      batch: { fixedPoint: baseline.head },
+    });
+    const registry = await loadCurrentRegistry(ROOT);
+    const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "receipt regression", directory,
+      { implement: "mock implementation", standards: "standards", spec: "AC1" }, evidence);
+    const sessionId = `receipt:${directory}`;
+    const registration = registerWorkflowResource({ sessionId, definition: {
+      name: "receipt-test", version: 1, resolve: () => ({ script: plan.rpcParams.script, hostCommands: plan.hostCommands }),
+    } });
+    const resolved = resolveWorkflowResource("receipt-test", {}, sessionId);
+    registration.dispose();
+    assert.equal(resolved.ok, true);
+    const permit = resolved.resource.permit;
+    assert.notEqual(typeof consumeWorkflowResourcePermit(permit, resolved.resource.script), "string");
+    assert.ok(plan.hostCommands.length <= 32);
+    assert.equal(typeof authorizeWorkflowResourceHost(permit, "review-result-1", "unapproved command"), "string");
+    const calls = [], emits = [];
+    await assert.rejects(() => runWorkflowScript({
+      script: plan.rpcParams.script, timeoutMs: 15000, status: unexpectedStatus,
+      onEmit: values => { emits.splice(0, emits.length, ...values); },
+      launch: async key => {
+        calls.push(key);
+        if (key === "implement") {
+          for (const path of paths) await writeFile(join(directory, path), "export const value = 1;\n");
+          return implementResult(plan);
+        }
+        const result = reviewResult(plan, key, key === "spec" ? "FAIL" : "PASS");
+        if (key === "spec") result.structuredOutput.findings = paths.map((path, index) => ({
+          id: `file-${index}`, rootCauseId: `file-${index}`, severity: "P2", title: "Observable mismatch",
+          basis: { kind: "acceptance", reference: "AC1" }, evidence: "Synthetic evidence",
+          expected: "expected behavior", actual: "different behavior", locations: [`${path}:1`],
+          classification: "independent", relatedFindingIds: [], affectedBy: [], recommendation: "Correct the behavior",
+        }));
+        return result;
+      },
+      host: (key, params, signal) => {
+        assert.equal(authorizeWorkflowResourceHost(permit, key, params.command), undefined);
+        return executeWorkflowHostCommand({
+          key, params, signal, cwd: directory, defaultOutputPath: join(dirname(evidence.path), `${key}.log`),
+        });
+      },
+    }), /spec\.verdict/);
+    assert.deepEqual(calls, ["implement", "standards", "spec"]);
+    const candidate = emits.find(row => row.type === "pi-x-matt.batch-candidate").candidate;
+    const pack = JSON.parse(await readFile(evidence.snapshotPath, "utf8"));
+    assert.ok(Buffer.byteLength(JSON.stringify({ candidate, boundary: pack.incremental })) > 4096);
+    assert.deepEqual(candidate, pack.batchCandidate);
+    assert.deepEqual(candidate.files.map(file => file.path).sort(), [...paths].sort());
+    const spec = emits.findLast(row => row.type === "pi-x-matt.stage-results").results.find(row => row.key === "spec");
+    assert.equal(spec.ok, true, "every changed path remains valid, rather than becoming a report contract error");
+    assert.equal(spec.contractError, undefined);
+    assert.equal(spec.structuredOutput.findings.length, paths.length);
+  } finally {
+    if (evidence) await rm(dirname(evidence.path), { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("broken evidence receipt frames stop reviewers instead of accepting partial or changed data", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  for (const damage of ["truncated", "changed", "over-limit"]) {
+    const directory = await mkdtemp(join(tmpdir(), "matt-broken-receipt-"));
+    try {
+      const resultPath = join(directory, "review-result.json");
+      const result = {
+        path: join(directory, "review.md"), head: "a".repeat(40), snapshotId: "b".repeat(64), complete: true,
+        candidate: { head: "a".repeat(40), snapshotId: "b".repeat(64),
+          files: Array.from({ length: 32 }, (_, index) => ({ path: `file-${index}-${"path-".repeat(16)}`, sha256: "c".repeat(64) })) },
+        boundary: { incremental: false, changedPaths: ["file.mjs"], approvedFindingIds: [] },
+      };
+      const first = reviewResultFrame(result);
+      assert.ok(first.count > 1);
+      const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+      const evidence = { path: result.path, head: result.head, controlled: true, batch: true, resultPath,
+        command: "trusted-collector", resultCommands: Array.from({ length: MAX_REVIEW_RESULT_PARTS - 1 }, (_, index) => ({
+          key: `review-result-${index + 1}`,
+          command: [process.execPath, join(ROOT, "scripts/read-review-result.mjs"), resultPath, String(index + 1)].map(quote).join(" "),
+        })) };
+      if (damage === "changed") result.candidate.files[0].sha256 = "d".repeat(64);
+      if (damage === "over-limit") result.boundary.changedPaths = Array.from({ length: 1000 }, (_, index) => `path-${index}-${"x".repeat(100)}`);
+      await writeFile(resultPath, JSON.stringify(result));
+      const plan = planFor(registry, "matt-tdd", evidence), calls = [];
+      await assert.rejects(() => runWorkflowScript({
+        script: plan.rpcParams.script, timeoutMs: 10000, status: unexpectedStatus,
+        launch: async key => { calls.push(key); return implementResult(plan); },
+        host: async (key, params, signal) => {
+          if (key === "review-evidence") return hostResult(key, first);
+          assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
+          const frame = await executeWorkflowHostCommand({
+            key, params, signal, cwd: directory, defaultOutputPath: join(directory, `${key}.log`),
+          });
+          return damage === "truncated" ? { ...frame, stdout: frame.stdout.trimEnd().slice(0, -1) } : frame;
+        },
+      }), damage === "truncated" ? /JSON|SyntaxError/ : damage === "changed" ? /changed or is incomplete/ : /Host command .* failed/);
+      assert.deepEqual(calls, ["implement"], damage);
+      if (damage === "over-limit") {
+        assert.match(await readFile(join(directory, "review-result-1.log"), "utf8"), /24-frame host transport limit/);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+});
 
 // The real sandbox drives onEmit; the adapter uses the pinned async executor's
 // status projection and atomic writer. Never recover from partial.children here:
