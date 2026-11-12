@@ -82,6 +82,37 @@ test("diagnostic file permission extends the exact scope without changing the de
     /diagnosticFiles/);
 });
 
+test("pre-review commands are an optional, bounded, order-preserving part of the approved scope", () => {
+  const base = { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] };
+  for (const absent of [{}, { preReviewCommands: [] }]) {
+    assert.equal("preReviewCommands" in normalizeImplementationScope({ ...base, ...absent }), false,
+      "grants approved before the gate existed keep their exact shape");
+  }
+  assert.deepEqual(normalizeImplementationScope({ ...base, preReviewCommands: ["npm run lint", "node --test", "npm run lint"] })
+    .preReviewCommands, ["npm run lint", "node --test"], "cheap checks stay first; execution order is the approved order");
+  const limit = /at most 6 exact approved commands of at most 300 bytes each/;
+  for (const preReviewCommands of ["npm test", [""], ["  "], [7], Array.from({ length: 7 }, (_, index) => `check ${index}`),
+    [`node -e "${"x".repeat(300)}"`], ["测".repeat(101)]]) {
+    assert.throws(() => normalizeImplementationScope({ ...base, preReviewCommands }), limit);
+  }
+  assert.equal(normalizeImplementationScope({ ...base, preReviewCommands: ["测".repeat(100)] }).preReviewCommands.length, 1);
+});
+
+test("changing the approved pre-review commands needs the user again, in the dialog they can read", async () => {
+  const { authorization } = host();
+  const messages = [];
+  const ctx = { hasUI: true, ui: { confirm: async (_title, message) => { messages.push(message); return true; } } };
+  const gated = { ...scope, preReviewCommands: ["npm run lint", "node --test parser.test.mjs"] };
+  assert.equal(await authorize(authorization, ctx, gated), "user-confirmed");
+  assert.match(messages[0], /Pre-review commands \(host-run after every writer, shared 10-minute budget\): npm run lint; node --test parser\.test\.mjs\n/);
+  assert.equal(await authorize(authorization, ctx, gated), "reused-implement-grant");
+  await assert.rejects(() => authorize(authorization, { hasUI: false }, scope), /authorization/,
+    "a model cannot silently drop a failing gate command");
+  assert.equal(await authorize(authorization, ctx, scope), "user-confirmed");
+  assert.match(messages[1], /Pre-review commands \([^)]*\): none\n/);
+  assert.equal(messages.length, 2);
+});
+
 test("production source paths never receive isolated diagnostic write permission", () => {
   const approved = { ticket: "slice:parser", scope: "preserve parser contract",
     allowedFiles: ["src/parser.mjs", "parser.test.mjs"], diagnosticCommands: ["node src/parser.mjs"],
@@ -225,6 +256,23 @@ test("receipts distinguish provider failures, valid code FAIL and observed settl
   }] } }).settlement, "pending");
 });
 
+test("receipts carry host-measured verification only when a gate ran", () => {
+  const receipt = hostVerification => workflowReceipt({ workflow: { emits: [{ type: "pi-x-matt.stage-results",
+    results: [{ key: "implement", ok: true, ...(hostVerification ? { hostVerification } : {}) }] }] } });
+  assert.deepEqual(receipt(), { failures: [], settlement: null }, "ungated receipts stay byte-stable");
+  assert.deepEqual(receipt({ version: 1, ok: true, preReview: { ok: true, drift: false, results: [] } }).verification,
+    { ok: true, preReviewOk: true });
+  assert.deepEqual(receipt({
+    version: 1, ok: false, correction: { state: "rejected", status: "BLOCKED" },
+    accounting: { ok: false, unresolvedFindingIds: ["spec:F2"], invalid: [] },
+    preReview: { ok: false, drift: false, results: [{ command: "npm test", ok: false, tail: "secret-looking output" }] },
+  }).verification, { ok: false, unresolvedFindingIds: ["spec:F2"], preReviewOk: false, correction: "rejected" },
+  "the parent receipt names what failed without echoing command output");
+  assert.deepEqual(receipt({ version: 1, ok: false, waived: "pre-review-command-withdrawn",
+    preReview: { ok: false, results: [] } }).verification,
+  { ok: false, preReviewOk: false, waived: "pre-review-command-withdrawn" });
+});
+
 const finding = (classification = "original", relatedFindingIds = []) => ({
   id: "parse", rootCauseId: "parse-order", evidence: "parse(null) throws before validation",
   basis: { kind: "acceptance", reference: "AC1" }, expected: "reject null", actual: "throws",
@@ -237,11 +285,11 @@ const group = { id: "parser", findingIds: ["spec:parse"], contract: "validate be
   preserve: ["valid text"], validationOrder: "validate -> normalize -> parse", callPath: ["public -> parse"],
   examples: ["null rejects; valid text remains valid"] };
 
-test("two failed patches to one parsing root cause require diagnosis before the third writer", async () => {
+test("two unreviewed patches to one parsing root cause require diagnosis before the third writer", async () => {
   let previous = { id: "initial", snapshotId: "snapshot" };
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const repair = prepareRepair(previous, { previousDispatchId: previous.id, groups: [group] },
-      reviews(finding("original", previous.repair ? ["spec:parse"] : [])));
+    // Pending repairs re-read the same formal review, so nothing has confirmed a failed patch yet.
+    const repair = prepareRepair(previous, { previousDispatchId: previous.id, groups: [group] }, reviews(finding()));
     if (attempt <= 2) {
       assert.deepEqual(repair.needsDiagnosis, []);
     } else {
@@ -257,8 +305,40 @@ test("two failed patches to one parsing root cause require diagnosis before the 
       assert.equal(commands, 1);
       assert.equal(diagnosed.diagnosis.exitCode, 1);
     }
-    previous = { id: `repair-${attempt}`, snapshotId: "snapshot", repair };
+    previous = { id: `repair-${attempt}`, snapshotId: "snapshot", repair, reviewPending: true };
   }
+});
+
+test("a formally reviewed recurrence requires diagnosis before the second writer", () => {
+  const first = prepareRepair({ id: "initial", snapshotId: "s" },
+    { previousDispatchId: "initial", groups: [group] }, reviews(finding()));
+  assert.deepEqual(first.needsDiagnosis, []);
+  const reviewed = { id: "review", snapshotId: "s", repair: first, reviewPending: false };
+  const request = { previousDispatchId: "review", groups: [group] };
+  assert.deepEqual(prepareRepair(reviewed, request, reviews(finding("original", ["spec:parse"]))).needsDiagnosis, ["parser"]);
+  assert.deepEqual(prepareRepair(reviewed, request, reviews(finding("independent"))).needsDiagnosis, ["parser"],
+    "the same reviewed rootCauseId recurs whatever the reviewer calls it");
+  const unrelated = { ...finding("independent"), rootCauseId: "new-cause" };
+  assert.deepEqual(prepareRepair(reviewed, { ...request, groups: [{ ...group, id: "new-cause" }] },
+    reviews(unrelated)).needsDiagnosis, [], "a new root cause found after a repair is an ordinary first patch");
+  assert.deepEqual(prepareRepair({ ...reviewed, reviewPending: true }, request, reviews(finding())).needsDiagnosis, [],
+    "an unreviewed pending repair has not been confirmed as failed");
+});
+
+test("a recurring convention-only finding stays on the two-patch count rule", () => {
+  const convention = classification => ({ ...finding(classification, classification === "original" ? ["standards:parse"] : []),
+    basis: { kind: "standard", reference: "naming convention" } });
+  const standards = item => ["standards", "spec"].map(axis => ({ key: axis, ok: true,
+    structuredOutput: { axis, verdict: axis === "standards" ? "FAIL" : "PASS", findings: axis === "standards" ? [item] : [] } }));
+  const conventionGroup = { ...group, findingIds: ["standards:parse"] };
+  const first = prepareRepair({ id: "initial", snapshotId: "s" },
+    { previousDispatchId: "initial", groups: [conventionGroup] }, standards(convention("independent")));
+  const reviewed = { id: "review", snapshotId: "s", repair: first, reviewPending: false };
+  const request = { previousDispatchId: "review", groups: [conventionGroup] };
+  const second = prepareRepair(reviewed, request, standards(convention("original")));
+  assert.deepEqual(second.needsDiagnosis, []);
+  assert.deepEqual(prepareRepair({ ...reviewed, repair: second }, request, standards(convention("original"))).needsDiagnosis,
+    ["parser"]);
 });
 
 test("diagnostic command failures expose exit attribution without persisting raw output", async () => {

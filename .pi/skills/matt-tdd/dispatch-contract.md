@@ -12,13 +12,16 @@
   "scope": "已批准的行为、既有行为与架构边界；修复期间保持不变",
   "allowedFiles": ["src/parser.ts", "test/parser.test.ts"],
   "diagnosticFiles": ["test/parser.test.ts"],
-  "diagnosticCommands": ["npm test -- parser.test.ts"]
+  "diagnosticCommands": ["npm test -- parser.test.ts"],
+  "preReviewCommands": ["npm run typecheck", "npm test -- parser"]
 }
 ```
 
 `ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticFiles` 可选，必须是 `allowedFiles` 的精确子集，且只能列测试/fixture 路径，不得把生产源码列入；测试/fixture 路径按最小命名规则识别：任一路径目录段恰为 `test`、`tests`、`__tests__`、`fixture` 或 `fixtures`，或文件名匹配 `*.test.*` / `*.spec.*`；未命中一律 fail closed，不读取文件内容、不探测测试框架、不提供配置项。它只为宿主隔离诊断区授予添加/替换文件的权限，不授予原工作区写权限，缺省时范围规范化对象保持 v0.2.27 形状。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。授权确认会展示隔离诊断文件清单。
 
-用户显式 `/skill:matt-implement` 产生一次 invocation intent，只能绑定第一个限定范围；缺少该记录时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。把相对的 `.venv/bin/python` 改为项目内绝对解释器路径同样是 `diagnosticCommands` 替换，必须由用户显式确认新命令；确认后仍保留同一修复谱系，宿主不会自行发现或替换解释器。宿主以非模型上下文 custom entry 保存真实输入/确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
+`preReviewCommands` 可选：最多 6 条、每条不超过 300 字节的精确获批命令（如聚焦 typecheck、lint、相关测试），保留顺序、仅去重；缺省或为空时范围规范化对象保持原形状。它们同样必须是本地、非破坏性、无敏感数据的命令，并且须在基线上通过、结果确定、不写入工作区。授权确认会展示这份清单；用途与边界见 [宿主确定性校验](#宿主确定性校验)。
+
+用户显式 `/skill:matt-implement` 产生一次 invocation intent，只能绑定第一个限定范围；缺少该记录时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands`/`preReviewCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。把相对的 `.venv/bin/python` 改为项目内绝对解释器路径同样是 `diagnosticCommands` 替换，必须由用户显式确认新命令；确认后仍保留同一修复谱系，宿主不会自行发现或替换解释器。宿主以非模型上下文 custom entry 保存真实输入/确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
 
 授权最长 24 小时；授权对话最多等待 5 分钟，可取消。取消、失效、缺少可靠记录或无 UI 时 fail closed。新 ticket、实质范围扩张、架构选择或破坏性操作仍须新决定；不得以改写 `scope` 绕过根因门禁。新 session/fork 不继承授权；tree navigation 撤销。已经运行的 child 用 `/subagents-stop` 停止。
 
@@ -37,7 +40,8 @@
         "scope": "本票批准的行为与架构边界",
         "allowedFiles": ["src/parser.ts", "test/parser.test.ts"],
         "diagnosticFiles": ["test/parser.test.ts"],
-        "diagnosticCommands": ["npm test -- parser.test.ts"]
+        "diagnosticCommands": ["npm test -- parser.test.ts"],
+        "preReviewCommands": ["npm run typecheck", "npm test -- parser"]
       }
     ]
   }
@@ -46,11 +50,11 @@
 
 `spec`/`ticket` 必须是精确 active 仓库相对路径，不得指向 `.x-matt/work/shipped/`；`fixedPoint` 必须是存在且属于当前批准 starting HEAD ancestry 的原始完整 SHA。宿主自己读取 spec/tickets、Parent、`Blocked by` 与内容摘要；模型提供的 hash、tree、commit、授权或额外字段一律拒绝。每张 ticket 的 Parent 必须精确等于该 spec，Type 必须为 `ticket`，status 只能是 `ready-for-agent` 或 `resolved`；blocker 必须是真实 active ticket，自依赖、循环和未完成依赖 fail closed。已经 `resolved` 的启动 blocker 按批准 starting HEAD 的 ancestry 核验其完整 `Implementation commit`，不要求读取 archived 历史，也不创建 tracker artifact。首次工作区必须干净（ignored 本地 tracker 不计入）。
 
-提交 `batch` 必须触发一次真实 TUI/RPC 确认，展示 spec、原始 fixed point、每个声明 ticket 的 `scope`、完整 `allowedFiles` 与诊断清单；确认最长 24 小时、等待最多 5 分钟且可取消。`matt-implement` invocation intent、`matt-implement-spec` invocation 或 `batch` 元数据本身都不构成授权；无 UI 且没有当前 session branch 可恢复的有效 batch capability 时拒绝。可信 batch 记录以独立 custom entry 保存，不与单票 grant 混用；`/skill:matt-implement-spec` 作为 batch 入口不撤销该 capability，其他 skill、tree navigation、new session/fork、取消或过期撤销，queued work 不得启动。
+提交 `batch` 必须触发一次真实 TUI/RPC 确认，展示 spec、原始 fixed point、每个声明 ticket 的 `scope`、完整 `allowedFiles`、诊断清单与可选的 `preReviewCommands`；确认最长 24 小时、等待最多 5 分钟且可取消。`matt-implement` invocation intent、`matt-implement-spec` invocation 或 `batch` 元数据本身都不构成授权；无 UI 且没有当前 session branch 可恢复的有效 batch capability 时拒绝。可信 batch 记录以独立 custom entry 保存，不与单票 grant 混用；`/skill:matt-implement-spec` 作为 batch 入口不撤销该 capability，其他 skill、tree navigation、new session/fork、取消或过期撤销，queued work 不得启动。
 
 对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。当前 `implementation` 信封必须等于批准条目；undeclared ticket、额外文件/命令、语义变化、Parent/type/status/active path 不合法时拒绝，并提示提交新的显式 batch 确认。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding；只增 `allowedFiles` 或替换诊断清单仍需既有单票重新确认，batch 计划本身不扩张。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
 
-batch-bound 证据采集额外在受信任 collector 中生成 candidate tree 证明：宿主使用 OS temp 的 `GIT_INDEX_FILE`、临时 `GIT_OBJECT_DIRECTORY`，把原 object store 作为只读 alternate，只把本次已审项目路径 stage 到隔离 index 并 `write-tree`；真实 index、HEAD、object store 与工作区不被写入。tree、采集时 HEAD 与 Review Evidence snapshot 通过 collector stdout 和 workflow emit 绑定到宿主记录，至少包含完整双轴 `PASS` 与 `implement.status=COMPLETE` 才算 terminal candidate。
+batch-bound 证据采集额外在受信任 collector 中生成 candidate tree 证明：宿主使用 OS temp 的 `GIT_INDEX_FILE`、临时 `GIT_OBJECT_DIRECTORY`，把原 object store 作为只读 alternate，只把本次已审项目路径 stage 到隔离 index 并 `write-tree`；真实 index、HEAD、object store 与工作区不被写入。tree、采集时 HEAD 与 Review Evidence snapshot 通过 collector stdout 和 workflow emit 绑定到宿主记录，至少包含完整双轴 `PASS` 与 `implement.status=COMPLETE` 才算 terminal candidate；该票声明了 `preReviewCommands` 且宿主实测未通过（未被用户撤回）时，即使双轴 `PASS` 也不构成 terminal candidate，不能推进下一票。
 
 进入下一票前，宿主必须对前一票核验：真实 commit 只有一个 parent 且等于 candidate 采集时的 HEAD；commit tree 等于 candidate tree（因此内容、文件类型、可执行位和新文件都绑定）；commit 位于原始 fixed point ancestry；当前 HEAD 正好是该 commit，没有额外/无关提交、amend、merge 或 history switch；工作区干净；tracker 为 `resolved` 且 `Implementation commit` 精确等于该 commit。伪造 Comments、仅 branch 名称相同、部分 candidate、未 review 的 commit 或无法安全核验的 prerequisite 都停止，不接受“父会话说已提交”。全部 tickets 达到核验终态后才允许整份 spec 的 committed 双轴评审；不自动归档、改 spec 状态、push、开 PR 或合并。
 
@@ -81,7 +85,7 @@ batch-bound 证据采集额外在受信任 collector 中生成 candidate tree �
 
 finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重复、遗漏或通过改名清除已有根因计数。只有相同 `rootCauseId` 延续根因身份，`relatedFindingIds` 是因果关联，不把不同根因强制合组；同根因改名错误列出期望 group IDs。相同文件并不自动代表相同根因。父会话只合并根因，不合并 Standards/Spec verdict；无证据或越轴的报告属于 review contract failure，需要修复评审，而不是派发 writer。
 
-`previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：可在保留全部旧 `allowedFiles` 的前提下增加文件，也可替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
+`previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：可在保留全部旧 `allowedFiles` 的前提下增加文件，也可替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）或 `preReviewCommands`。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
 
 `repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer；只有下述显式 writer 执行恢复可继续失败 repair。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
 
@@ -105,7 +109,7 @@ pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前�
 
 宿主将最新候选 `snapshotId` 与本次调度基线绑定；每次修复都必须从精确候选开始，且不能越过 `allowedFiles`。同时保存最近一次正式评审的来源，计算从该已审快照到本次候选的**累计修复增量**，保留两端内容/hash、原获批 finding IDs 与根因契约，不只计算最后一次补丁。正式复审仍不重新裁决未变化且无依赖影响的已审内容。
 
-修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
+修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。writer 须在结构化结果的 `findingResolutions` 中对每条获批 finding 逐条交代，宿主在采集证据前校验其完整性并运行获批的 `preReviewCommands`（见 [宿主确定性校验](#宿主确定性校验)）；receipt 的 `verification.ok=false` 表示该候选尚不能正式送审。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
 
 候选准备好后，显式送审：
 
@@ -113,7 +117,7 @@ pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前�
 {"review": {"dispatchId": "<最新已完成 repair 的 dispatchId>"}}
 ```
 
-仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和 `laneTasks.standards` / `laneTasks.spec`；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，默认二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。
+仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和 `laneTasks.standards` / `laneTasks.spec`；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，默认二者 PASS 才能进入最终验证。repair/review/recovery 互斥；尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。待审修复的宿主校验仍未通过且可由 writer 纠正时，review 被拒绝（`Formal review refused`），须先继续 repair，见 [宿主确定性校验](#宿主确定性校验)。
 
 父会话不能凭 prose 抹掉有效 FAIL。若认为某条已记录的有效 blocking finding 与已确认验收/标准冲突，使用唯一的结构化复核路径：
 
@@ -145,9 +149,28 @@ fresh 只读 reviewer 对每个 challenge 只返回一个决定，不重报 verd
 
 合法的 reconsider 决定完成后返回 `state=complete` 与 `pi-x-matt.reconsideration-complete`：`reviewPassed` 表示 effective 双轴是否均 PASS，`remainingFindingIds` 列出仍然阻断的有效 IDs。这只说明复核动作已完成，不代表实现交付通过；任一 upheld/未挑战 blocker 仍为 FAIL，禁止提交或推进 batch。非法决定、缺失结果或执行失败仍失败，不能用“决定成功”掩盖它们。
 
+## 宿主确定性校验
+
+目的：把“同一问题反复送审”拦在双轴之前。只跟随真正运行 writer 的派发（initial、repair、writerRecovery）；review、recovery、reconsider 复用已结算候选，不重新校验。未提供 `preReviewCommands` 且没有获批 findings 时整段不存在，脚本与结果保持原形状。
+
+writer 返回完整 `COMPLETE` 后、证据采集与任何 reviewer 之前，宿主在 workflow 内做两项检查，结果写入 implement 结果的 `hostVerification`（`version=1`）并发布 `pi-x-matt.host-verification`：
+
+- **finding 交代（`accounting`，仅修复类派发）**：`findingResolutions` 必须对每个获批 finding ID 恰好一行，`findingId` 为带轴前缀的精确 ID（裸 ID 仅在唯一对应一条获批 finding 时接受），`evidence` 非空，`cycleTest` 为本次结果 `cycles` 中证明该修复的测试名，确无测试可表达时为 `null` 并在 evidence 说明原因。缺行、重复、未知 ID、缺证据或引用不存在的 cycle 均不通过。宿主只校验完整性与一致性，**不证明修复为真**；reviewer 会被提示逐条对照真实变更核验，交代与变更不符按原 finding ID 报告复发。
+- **评审前命令（`preReview`）**：宿主以固定的包内 runner 在项目根按顺序执行获批的 `preReviewCommands`，共享 10 分钟预算；每条记录真实退出码、信号、是否超时、耗时与输出 sha256，失败项另附去除 ANSI 的有界输出尾部（整体结果不超过 3500 字节）。runner 只执行授权时密封进证据基线的命令并核对其摘要，不接受 task 文本。预算耗尽的命令记为未通过，不视为通过。命令改动了候选快照或 index 时记 `drift=true` 并判为未通过。
+
+任一项未通过且属于 writer 可纠正的情形（不是 runner 自身错误、不是 `drift`，且原 writer 可恢复）时，宿主在同一 workflow 内 resume **同一 writer 一次**（`implement-correction`，10 分钟，同一授权范围），随后重跑两项检查（`pre-review-recheck`）。纠正返回完整 `COMPLETE` 则替换 implement 结果，被替换的结果保留在 `correctionHistory`；纠正返回 `BLOCKED`、不完整或执行失败时保留原 `COMPLETE` 结果并记录 `correction.state=rejected` 及原因，只沿用更新后的可恢复句柄。此纠正不计入根因修复轮次，每次 writer 派发至多一次，不追加 settlement。
+
+校验本身从不使 workflow 失败，后果在准入处体现：
+
+- **initial**：照常进入双轴。真实命令失败（非 runner 错误/`drift`/已撤回）时两个 reviewer 都会收到宿主实测失败的说明：除非 Pack 证据表明失败与本次变更无关，Standards 应报告为 `basis.kind=integrity` 的阻断 finding，Spec 仅在它证明某条验收未满足时报告。即使双轴 `PASS`，`verification.ok=false` 的候选也不可交付：父会话停止并请用户决定，不提交；batch 不推进。
+- **repair / writerRecovery**：`hostVerification.ok=false` 且原因仍可纠正（失败命令仍在当前获批 `preReviewCommands` 中，或仍有未交代的获批 finding）并且原 writer 可恢复时，`review` 被拒绝；用相同获批 findings 再次 `repair`，让同一 writer 修掉它。不得绕过已知失败送审。
+- **两个出口**：原 writer 已不可恢复时允许送审（由 reviewer 裁决，不另起 fresh writer）；命令失败与本次变更无关时停止并请用户决定，只有用户重新确认一份**不含该命令**的信封后才允许送审，结果标记 `hostVerification.waived="pre-review-command-withdrawn"`。父会话不能自行删减命令或以文字声明“与本次无关”。
+
+receipt 只携带宿主实测摘要 `verification: {ok, unresolvedFindingIds?, preReviewOk?, correction?, waived?}`，不回显命令输出；首次变为 `ok=false` 时宿主向父会话发送一次通知。失败命令的输出尾部会进入 writer 纠正 task 与 reviewer 可见的阶段结果，因此 `preReviewCommands` 不得打印凭据或敏感数据。该校验只能发现获批命令能检出的问题，不替代双轴评审，也不替代父会话的最终完整验证。
+
 ## 根因未收敛
 
-同一根因完成两次修复后仍需继续，第三次 writer 前触发 `DIAGNOSIS_REQUIRED`，无论两次修复之间是否正式送审；评审确认的修复相关回归立即触发。网络失败、缺失结果与授权等待不算根因修复轮次。阈值只触发诊断，不自动放行，不限制测试数量。诊断绑定最近候选快照；“已审 snapshot”在连续待审修复中指宿主已采集的最新修复候选，不表示 reviewer 已批准。
+同一根因完成两次修复后仍需继续，第三次 writer 前触发 `DIAGNOSIS_REQUIRED`，无论两次修复之间是否正式送审。此外，**修复经正式评审后仍被判定未解决**时，下一次 writer 前即触发，不等第三次：正式评审再次报告的非工程规范类（`basis.kind` 为 acceptance/safety/integrity）finding 若为 `classification=original`，或与上一轮获批 finding 同一 `rootCauseId`，即属此类；评审确认的修复相关回归（`classification=regression`）同样立即触发。纯工程规范类（`basis.kind=standard`）复发通常没有可红的复现，仍按次数规则。连续两次未送审的 repair 之间不触发这条“已评审复发”规则。网络失败、缺失结果与授权等待不算根因修复轮次。阈值只触发诊断，不自动放行，不限制测试数量。诊断绑定最近候选快照；“已审 snapshot”在连续待审修复中指宿主已采集的最新修复候选，不表示 reviewer 已批准。
 
 在父会话执行 [diagnosing-bugs 的受限修复诊断](../matt-diagnosing-bugs/SKILL.md)：只使用当前 Pack、原始失败、共享路径和必要的一层依赖。最小化原始 repro，解释不变量、校验/归一化顺序和预测，不重新设计模块、不重新创建 ticket、不重新发起 implement invocation。
 
@@ -219,10 +242,10 @@ committed `matt-code-review` 也可用同一 `recovery` 入口，引用该评审
 
 宿主检测到的报告契约错误（未知前驱、不符合上述因果例外的跨轴引用、缺少 approved predecessor 等）单独标记为 `contractError` 并保留原报告，不归一化为 PASS/FAIL，也不静默删除非法引用。此类 lane 仍通过同一 `recovery` 接口纠正，但每个候选快照对每个轴最多两次 report correction，与一次 execution recovery 分开计数；reload、重新确认或 correction 不重置。达到上限后停止，不提供自动 PASS 或无限重试；只有下述旧宿主报告重校验可在不消耗额度的情况下恢复本已合法的报告。若无效报告来自 reconsideration 决定，correction 保持同一 challenged target 集合；只有全部决定合法后才重新计算 effective result。有效 FAIL 不能走 recovery/correction，只能 reconsider 或按 effective findings 修复。
 
-阶段记录保存在宿主 session custom entries，并通过 `pi-matt:dispatch-phase` 事件通知：authorization、admission（单次 writer claim）、evidence、diagnosis、queue、rpc、reconcile、execution、settlement、workflow。运行中的 keyed child/settlement 由原生 lifecycle 事件报告；不要求模型轮询。完整运行 trace 与 deadline 以原生 status.json/events.jsonl 为准，模型按 completion 读取最终结果。
+阶段记录保存在宿主 session custom entries，并通过 `pi-matt:dispatch-phase` 事件通知：authorization、admission（单次 writer claim）、evidence、verification（评审前命令）、correction（宿主校验后的同 writer 纠正）、diagnosis、queue、rpc、reconcile、execution、settlement、workflow。运行中的 keyed child/settlement 由原生 lifecycle 事件报告；不要求模型轮询。完整运行 trace 与 deadline 以原生 status.json/events.jsonl 为准，模型按 completion 读取最终结果。
 
 升级后，对旧宿主以 `review-evidence` 拒绝的完整报告，可继续调用原 `recovery: {dispatchId, lanes}`。宿主先核验当前授权、最新 dispatch、候选快照与 Pack，再用当前契约原地重校验所选原报告。只有完整通过当前契约的报告才恢复为其真实 verdict，保留 `revalidationHistory` 与原报告，并发出 `pi-x-matt.report-revalidated`；不运行 reviewer/writer、不重新采证，也不消耗或重置原有计数。因此因旧位置解析错误耗尽两次纠错的候选仍可恢复。仍不合法的报告继续受原预算约束；结构/schema/执行失败不适用此路径，不能降级接受或豁免。恢复后的真实 FAIL 仍须修复，双 PASS 前不得提交或推进 batch。
 
-授权等待不计入 lane timeout；RPC acknowledgement 最多 10 秒；证据 host step 最多 2 分钟；worker 20 分钟、并行 reviewer 各 15 分钟；每个符合条件的 settlement 为 5 分钟执行预算，两个 settlement 可能串行。pi-subagents 0.88.0 起 child 等待 supervisor decision/interview 或 intercom ask 的时间不计入 lane timeout，`progress_update` 不暂停；workflow 总 deadline（若另有配置）仍按 wall-clock。15 分钟是单 lane 的执行预算，不是 wall-clock 上限或完整 TDD/恢复的总耗时；不能由总耗时直接认定模型卡顿或超时失效。
+授权等待不计入 lane timeout；RPC acknowledgement 最多 10 秒；证据 host step 最多 2 分钟；评审前命令共享 10 分钟预算、同 writer 纠正最多 10 分钟（均只在校验启用/未通过时发生）；worker 20 分钟、并行 reviewer 各 15 分钟；每个符合条件的 settlement 为 5 分钟执行预算，两个 settlement 可能串行。pi-subagents 0.88.0 起 child 等待 supervisor decision/interview 或 intercom ask 的时间不计入 lane timeout，`progress_update` 不暂停；workflow 总 deadline（若另有配置）仍按 wall-clock。15 分钟是单 lane 的执行预算，不是 wall-clock 上限或完整 TDD/恢复的总耗时；不能由总耗时直接认定模型卡顿或超时失效。
 
 RPC 回应丢失属于 acceptance unknown：保留 requestId，使用一次 `status id=rpc-spawn-<requestId>` 对账，不自动重新 spawn；未找到/已过期也不能证明未启动。超时与 settlement 的原始结果、恢复错误均保留在 `recoveryHistory` 与 gate 前快照，不只留下最后的 `fetch failed`。

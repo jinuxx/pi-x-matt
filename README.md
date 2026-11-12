@@ -11,7 +11,7 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.88.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.35
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.36
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -44,10 +44,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.35
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.36
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.35`。
+已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.36`。
 
 ## 架构
 
@@ -197,7 +197,9 @@ npm run pack:check     # 检查 package 文件清单
 
 已验证 plan 在 `turn_end` 经进程内 RPC 异步启动；TDD 与 committed `matt-code-review` 都经 session-scoped `pi-x-matt.tdd` owned-plan resource 解析，只授予包内 collector 固定命令。TDD 在 implement gate 后采集 worktree Pack；committed `reviewScope` 由宿主固定 F/H，并在两个 reviewer 前用同一个包内 fixed collector 和 extension-owned 产物路径执行一次对象采集。其他 workflow 仍使用无 host step 脚本。普通 prose output 被禁用；结果数量、lane key、`ok === true`、结构化 schema 与最终双轴 `PASS` gate 不变，任何不满足均 fail closed。repair-only 成功只是待审候选，不是交付通过。
 
-TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时确认绑定到 ticket/hash、项目/branch/HEAD 和精确范围，由宿主 custom entry 保存并在 reload 时恢复。同范围连续修复不重复入口确认；新 ticket、实质范围/架构变化和破坏性决定仍需确认。授权最多 24 小时，对话等待最多 5 分钟；取消、过期或无可信来源且无 UI 时 fail closed。`matt-implement-spec` 的 `batch` 入口另外以一次 TUI/RPC 确认冻结声明的 spec、原始 fixed point、每票 `scope`/`allowedFiles`/诊断清单、Parent 与 `Blocked by` 图；声明票之间由独立的可信 batch capability 签发新的 HEAD-bound 单票 grant，不重复询问，也不把模型提供的 hash/授权当作证据。完整输入、修复、诊断、增量 review、批量推进与局部恢复见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
+TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时确认绑定到 ticket/hash、项目/branch/HEAD 和精确范围，由宿主 custom entry 保存并在 reload 时恢复。同范围连续修复不重复入口确认；新 ticket、实质范围/架构变化和破坏性决定仍需确认。授权最多 24 小时，对话等待最多 5 分钟；取消、过期或无可信来源且无 UI 时 fail closed。`matt-implement-spec` 的 `batch` 入口另外以一次 TUI/RPC 确认冻结声明的 spec、原始 fixed point、每票 `scope`/`allowedFiles`/诊断清单/可选 `preReviewCommands`、Parent 与 `Blocked by` 图；声明票之间由独立的可信 batch capability 签发新的 HEAD-bound 单票 grant，不重复询问，也不把模型提供的 hash/授权当作证据。完整输入、修复、诊断、增量 review、批量推进与局部恢复见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
+
+宿主确定性校验把可机械检出的问题拦在双轴评审之前。`implementation.preReviewCommands` 可选声明最多 6 条本地命令（聚焦 typecheck、lint、相关测试），随授权信封一并确认；它们必须在基线上通过、结果确定、不写入工作区，并共享 10 分钟预算。每次 writer（初次实现、repair、writerRecovery）返回 `COMPLETE` 后、任何 reviewer 之前，宿主原样执行这些命令；修复派发还要求 writer 在 `findingResolutions` 中逐条交代每个获批 finding，由宿主核对是否完整。未通过且 writer 可恢复时，宿主在同一 workflow 内 resume 同一 writer 纠正一次（最多 10 分钟）并复检，结果记入 `implement.hostVerification`，工具 receipt 只带不含命令输出的 `verification` 摘要。校验仍失败时：repair 候选的正式 `review` 被拒绝，须以相同 findings 继续 repair；初次实现照常进入双轴并把失败告知 reviewer，但即使双 PASS 也不可交付。命令确与本次变更无关时，只有用户重新确认一份不含该命令的信封才能放行。这道门只拦得住命令能检出的问题，`findingResolutions` 也只是 writer 自述，都不替代双轴评审；命令失败输出的尾部会进入纠正 task 与 reviewer 证据，因此不要声明会打印敏感信息的命令。细节见 [宿主确定性校验](.pi/skills/matt-tdd/dispatch-contract.md#宿主确定性校验)。
 
 受限诊断可用可选的 `implementation.diagnosticFiles`（`allowedFiles` 的精确子集）与 `repair.diagnosis.testFiles` 提供内联复现内容；授权确认会展示这份隔离权限，缺省时保持既有范围对象形状。父流程必须在提交 `testFiles` 前完成脱敏，只使用合成或已脱敏 fixture；凭据只经环境变量，不写入测试、fixture 或输出。宿主先严格确认原工作区等于最近已审快照，再在自己的 OS temp 区从该已审状态（HEAD 加已审未提交变更，含删除/重命名）重建项目，只写入获批诊断文件并运行原批准命令；要求退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未被改动，否则 fail closed 且不排 writer。成功、失败与取消都清理宿主临时区；GREEN、其他症状、超时、取消、快照漂移和越权改动都不能解锁。该隔离只用于本机故障隔离，不是安全 sandbox，不联网安装依赖，也不复制个人 ignored 资料（因此不含被忽略的 `.venv`，相对的 `.venv/bin/python` 会以 127 失败）。需要虚拟环境依赖时，由用户显式批准使用项目绝对解释器路径的命令（属于新的 `diagnosticCommands` 授权信封，同一 ticket 修复谱系不变），例如 `/absolute/project/.venv/bin/python -B -m pytest -p no:cacheprovider tests/repro.py`，含空格路径按 shell 规则加引号；`-B` 避免未获批的 `__pycache__` 写入，`-p no:cacheprovider` 避免 pytest 缓存。宿主不自动发现或替换解释器、不安装依赖、不挂载或复制 `.venv`，解释器与依赖本身并非 OS 强制只读。失败按真实退出状态归因：127 命令/解释器不存在、126 不可执行、其他非 1 为命令失败；退出 1 但无目标文本按症状不匹配提示检查解释器与依赖，持久化只保留退出状态与输出 sha256，不保留原始输出。宿主只在该次临时区使用正文，repair 证据与 implement lane handoff 仅保留准确 path 与内容 sha256。该门禁不自动识别任意 secret/PII，也不能从会话记录抹去已经提交的工具输入；没有 `testFiles` 时保留原项目根诊断路径。
 
@@ -257,7 +259,7 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 /skill:matt-implement-spec .x-matt/work/<feature-slug>/spec.md
 ```
 
-它只支持 Local Markdown，在干净的当前分支按依赖 frontier 串行复用 `matt-implement`。入口把准确的 active spec、原始 fixed-point SHA 和全部声明 tickets 的 `scope`/`allowedFiles`/诊断清单作为顶层 `batch`（与 `implementation` 并列）交给 `pi_matt_dispatch`；宿主自己读取 spec/ticket 内容、Parent 与真实 blocker 图，并用一次 TUI/RPC 确认批准这些精确信封（24 小时上限、可取消、有界等待），而不是授予整份 spec 的无限通行证。之后每张声明票不再重复询问：宿主从可信 batch capability 签发 HEAD-bound 单票 grant，undeclared ticket、额外文件/命令、语义或 edges 漂移、无 UI 且无可恢复 batch 记录时拒绝并要求新的显式 batch 确认；批量入口不使用 `/skill:matt-implement` 伪造 intent。只有前一票真实 commit 的 parent 与宿主在隔离 Git index/object store 中采集的 dual-PASS candidate tree 精确一致、没有额外提交、原始 fixed point ancestry 成立、当前工作区干净，且本地 `Status: resolved` / `Implementation commit` 写回匹配后才开始下一票；任何阻塞、未核验提交、伪造 tracker 或失败都暂停整批，已成功提交不回滚。全部 tickets 达到经核验的终态后，才从原始 fixed point 到 HEAD 做一次 committed 整份 spec 双轴评审，不能只评最后一票或在半途以全 spec 判断未实现需求。最终 review 失败只报告并停止，不自动开修复票或循环广域 review。续跑需提供原始 fixed-point SHA，重新核验 resolved 提交的 ancestry，不能把当前 HEAD 当新基线；成功和暂停报告都会保留该 SHA。该入口不创建 worktree/分支、不 push/PR，parent spec 保持 `spec-ready`，归档仍需用户另行运行 `matt-archive`。
+它只支持 Local Markdown，在干净的当前分支按依赖 frontier 串行复用 `matt-implement`。入口把准确的 active spec、原始 fixed-point SHA 和全部声明 tickets 的 `scope`/`allowedFiles`/诊断清单（及可选的 `preReviewCommands`）作为顶层 `batch`（与 `implementation` 并列）交给 `pi_matt_dispatch`；宿主自己读取 spec/ticket 内容、Parent 与真实 blocker 图，并用一次 TUI/RPC 确认批准这些精确信封（24 小时上限、可取消、有界等待），而不是授予整份 spec 的无限通行证。之后每张声明票不再重复询问：宿主从可信 batch capability 签发 HEAD-bound 单票 grant，undeclared ticket、额外文件/命令、语义或 edges 漂移、无 UI 且无可恢复 batch 记录时拒绝并要求新的显式 batch 确认；批量入口不使用 `/skill:matt-implement` 伪造 intent。只有前一票真实 commit 的 parent 与宿主在隔离 Git index/object store 中采集的 dual-PASS candidate tree 精确一致、没有额外提交、原始 fixed point ancestry 成立、当前工作区干净，且本地 `Status: resolved` / `Implementation commit` 写回匹配后才开始下一票；任何阻塞、未核验提交、伪造 tracker 或失败都暂停整批，已成功提交不回滚。全部 tickets 达到经核验的终态后，才从原始 fixed point 到 HEAD 做一次 committed 整份 spec 双轴评审，不能只评最后一票或在半途以全 spec 判断未实现需求。最终 review 失败只报告并停止，不自动开修复票或循环广域 review。续跑需提供原始 fixed-point SHA，重新核验 resolved 提交的 ancestry，不能把当前 HEAD 当新基线；成功和暂停报告都会保留该 SHA。该入口不创建 worktree/分支、不 push/PR，parent spec 保持 `spec-ready`，归档仍需用户另行运行 `matt-archive`。
 
 具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确 regression seam 时，它把根因、循环命令和 seam 作为当前会话单 slice 交给 `matt-implement`；需要新回归测试但不想移动原工作区快照时，使用上述宿主隔离的内联 `testFiles` 路径。没有正确 seam 时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
 
@@ -282,7 +284,7 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 `matt-implement` 默认把 `matt-tdd` 中两个 fresh Standards/Spec reviewer 的 `PASS` 作为最终双轴复核，不再对同一 worktree 自动追加一轮 `matt-code-review`。只有用户明确要求、TDD reviewer 证据无效、TDD 后业务文件继续变化，或实现并非来自完整 `matt-tdd` 时，才启动 standalone code review。reviewer 完成限定范围检查后一次报告全部阻断 findings，不因首个问题提前返回。findings 按同一轮合并根因但保留两轴结论；已有连续修复授权覆盖时不重复询问，新增范围/决定才确认。
 
-修复与送审分开：结构化 `repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选证据，不自动启动双轴；不可恢复则停止，不暗中换 fresh writer。父会话核对实际改动、逐项 findings 与验证结果后，可继续同范围 repair，或显式 `review: {dispatchId: "<最新 repair>"}`。review 只启动 fresh 双轴，复用最新 implement 与 Evidence Pack，覆盖最近正式评审以来的**累计修复增量**，不重跑 writer、不重复取证。`reviewPending=true` 或 repair 的 `state=complete` 不表示双轴通过，不得提交或沿用旧 PASS。同根因两次修复后仍需继续或相关回归先受限诊断，不因推迟送审而重置计数。失败 reviewer 的一次 execution `recovery` 不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
+修复与送审分开：结构化 `repair` 只 resume 最近可恢复 writer、运行聚焦验证并采集候选证据，不自动启动双轴；不可恢复则停止，不暗中换 fresh writer。父会话核对实际改动、逐项 findings 与验证结果后，可继续同范围 repair，或显式 `review: {dispatchId: "<最新 repair>"}`。review 只启动 fresh 双轴，复用最新 implement 与 Evidence Pack，覆盖最近正式评审以来的**累计修复增量**，不重跑 writer、不重复取证。`reviewPending=true` 或 repair 的 `state=complete` 不表示双轴通过，不得提交或沿用旧 PASS。writer 须在 `findingResolutions` 中逐条交代获批 findings；receipt 的 `verification.ok=false`（交代不全或获批的评审前命令仍失败）时宿主拒绝正式 `review`，须继续同范围 repair。同根因两次修复后仍需继续时先受限诊断；修复经正式评审后，验收/安全/完整性类 finding 仍以原问题或同一根因复发时，下一次 writer 前即触发，相关回归同样立即触发（纯工程规范类复发仍按次数），不因推迟送审而重置计数。失败 reviewer 的一次 execution `recovery` 不重跑 writer/已通过轴，不替换有效 FAIL 或叠加已有 settlement。
 
 有效 FAIL 有异议时，父会话使用 `reconsider: {dispatchId, findings: [{findingId, reason, evidence}]}`，不能直接删除 finding。宿主只启动受影响轴的 fresh 只读 reviewer，沿用原 Evidence Pack；reviewer 对每条争议明确 `uphold`/`withdraw`，未争议 findings 与另一轴原样保留，最终仍须 effective 双轴 PASS。每个候选快照每轴最多一次异议复核，可一次提交多条争议；原报告、决定和根因计数保留。报告契约错误通过同一 `recovery` 接口有界纠正，每轴每候选最多两次，与 execution recovery 分开计数；不自动剔除非法引用，不把错误报告变成 PASS。无效异议决定的纠错保持原目标集合，reload 或重新授权不重置额度。后续 repair 使用 effective remaining findings。
 

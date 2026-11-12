@@ -295,6 +295,141 @@ test("writer execution recovery preserves failure history in the pinned native s
   assert.ok(recovered.emits.some(row => row.type === "pi-x-matt.review-pending"));
 });
 
+const HOST_FAILURE_NOTE = /宿主确定性校验未通过/;
+const hostResult = (key, stdout) => ({ key, kind: "command", ok: true, state: "passed", exitCode: 0,
+  stdout: JSON.stringify(stdout), stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 });
+const failingGate = { ok: false, drift: false, results: [{ command: "npm test", ok: false, exitCode: 1, tail: "expected 2, got 3" }] };
+const accountedResult = (plan, ids, extra = {}) => {
+  const result = implementResult(plan);
+  return { ...result, ...extra, structuredOutput: { ...result.structuredOutput,
+    findingResolutions: ids.map(findingId => ({ findingId, cycleTest: "works", evidence: "the cycle now covers it" })) } };
+};
+
+test("host verification only follows a writer run and tells reviewers about real command failures alone", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills["matt-tdd"];
+  const tasks = { implement: "Implement the slice", standards: "Standards only", spec: "Spec only" };
+  const evidence = { command: "trusted-collector", path: "/tmp/verified.md", preReviewCommand: "trusted-gate" };
+  const ungated = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence);
+  assert.deepEqual(ungated.hostCommands.map(row => row.key), ["review-evidence"]);
+  assert.doesNotMatch(ungated.rpcParams.script, /pre-review|hostVerification = /);
+
+  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
+    { verification: { approvedFindingIds: [] } });
+  assert.deepEqual(plan.hostCommands, [
+    { key: "pre-review", command: "trusted-gate" }, { key: "pre-review-recheck", command: "trusted-gate" },
+    { key: "review-evidence", command: "trusted-collector" },
+  ]);
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const cases = [
+    { name: "passing gate", gate: { ok: true, drift: false, results: [{ command: "npm test", ok: true, exitCode: 0 }] }, ok: true, note: false },
+    { name: "failing command", gate: failingGate, ok: false, note: true },
+    { name: "candidate drift", gate: { ok: false, drift: true, results: [{ command: "npm test", ok: true, exitCode: 0 }] }, ok: false, note: false },
+    { name: "runner failure", gate: new Error("host step exited 1"), ok: false, note: false },
+  ];
+  for (const { name, gate, ok, note } of cases) {
+    const calls = [], reviewerTasks = [];
+    const run = await runWorkflowScript({
+      script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+      launch: async (key, params) => {
+        calls.push(key);
+        if (key === "implement") return implementResult(plan);
+        reviewerTasks.push(params.task);
+        return reviewResult(plan, key, "PASS");
+      },
+      host: async key => {
+        calls.push(key);
+        if (key === "pre-review" && gate instanceof Error) throw gate;
+        return hostResult(key, key === "pre-review" ? gate : {});
+      },
+    });
+    // The writer returned no retained handle, so nothing can be corrected: the result is disclosed, not lost.
+    assert.deepEqual(calls, ["implement", "pre-review", "review-evidence", "standards", "spec"], name);
+    const { hostVerification } = run.value[0];
+    assert.equal(hostVerification.ok, ok, name);
+    assert.equal("accounting" in hostVerification, false, "an initial dispatch has no approved findings to account for");
+    if (gate instanceof Error) assert.match(hostVerification.preReview.error, /host step exited 1/);
+    else assert.deepEqual(hostVerification.preReview, gate);
+    assert.equal(reviewerTasks.length, 2);
+    assert.ok(reviewerTasks.every(task => HOST_FAILURE_NOTE.test(task) === note), name);
+    assert.ok(reviewerTasks.every(task => task.includes('"hostVerification"') ), "reviewers see the host-measured row itself");
+    assert.deepEqual(run.emits.filter(row => row.type === "pi-x-matt.host-verification").map(row => row.state), ["settled"]);
+    assert.deepEqual(run.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0].hostVerification, hostVerification);
+  }
+});
+
+test("a failed check resumes the same writer once, and a refused correction keeps the completed work", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const workflow = registry.skills["matt-tdd"];
+  const tasks = { implement: "Repair all approved findings", standards: "Standards only", spec: "Spec only" };
+  const evidence = { command: "trusted-collector", path: "/tmp/corrected.md", controlled: true,
+    claimCommand: "trusted-claim", preReviewCommand: "trusted-gate" };
+  const approved = ["standards:F1", "spec:F2"];
+  const boundary = { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: approved };
+  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
+    { repairOnly: true, resume: "writer-0", verification: { approvedFindingIds: approved } });
+  assert.deepEqual(plan.hostCommands.map(row => row.key), ["implement-claim", "pre-review", "pre-review-recheck", "review-evidence"]);
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const retained = runId => ({ runId, resumability: { state: "resumable" } });
+  const execute = async (correction, recheck) => {
+    const calls = [];
+    let correctionTask;
+    const run = await runWorkflowScript({
+      script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+      launch: async (key, params) => {
+        calls.push(key);
+        if (key === "implement") return { ...accountedResult(plan, ["standards:F1"]), ...retained("writer-1") };
+        assert.equal(key, "implement-correction");
+        assert.equal(params.resume, "writer-1", "the correction continues the writer that just ran, not the handle it resumed from");
+        assert.equal(params.timeoutMs, 600000);
+        for (const field of ["agent", "context", "skill", "outputSchema"]) assert.equal(field in params, false);
+        correctionTask = params.task;
+        if (correction instanceof Error) throw correction;
+        return correction;
+      },
+      host: async key => {
+        calls.push(key);
+        return hostResult(key, key === "pre-review" ? failingGate : key === "pre-review-recheck" ? recheck : { boundary });
+      },
+    });
+    assert.deepEqual(calls, ["implement-claim", "implement", "pre-review", "implement-correction", "pre-review-recheck", "review-evidence"]);
+    assert.match(correctionTask, /宿主校验纠正/);
+    assert.match(correctionTask, /"unresolvedFindingIds":\["spec:F2"\]/);
+    assert.match(correctionTask, /expected 2, got 3/);
+    assert.deepEqual(run.emits.filter(row => row.type === "pi-x-matt.host-verification").map(row => row.state), ["correcting", "settled"]);
+    assert.ok(run.emits.some(row => row.type === "pi-x-matt.review-pending"));
+    return run.value[0];
+  };
+  const passing = { ok: true, drift: false, results: [{ command: "npm test", ok: true, exitCode: 0 }] };
+
+  const applied = await execute({ ...accountedResult(plan, approved, { key: "implement-correction" }), ...retained("writer-2") }, passing);
+  assert.equal(applied.key, "implement");
+  assert.equal(applied.runId, "writer-2");
+  assert.equal(applied.structuredOutput.findingResolutions.length, 2);
+  assert.deepEqual(applied.correctionHistory.map(row => row.runId), ["writer-1"]);
+  assert.deepEqual([applied.hostVerification.ok, applied.hostVerification.correction, applied.hostVerification.initial.ok,
+    applied.hostVerification.initial.accounting.unresolvedFindingIds, applied.hostVerification.accounting.unresolvedFindingIds],
+  [true, { state: "applied" }, false, ["spec:F2"], []]);
+
+  const blocked = accountedResult(plan, approved, { key: "implement-correction" });
+  blocked.structuredOutput = { ...blocked.structuredOutput, status: "BLOCKED", summary: "needs a file outside the approved scope" };
+  const refused = await execute({ ...blocked, ...retained("writer-2") }, failingGate);
+  assert.equal(refused.structuredOutput.status, "COMPLETE", "a refused correction cannot erase the completed repair");
+  assert.equal(refused.structuredOutput.findingResolutions.length, 1);
+  assert.equal(refused.runId, "writer-2", "the next repair must resume the newest retained handle");
+  assert.equal("correctionHistory" in refused, false);
+  assert.deepEqual([refused.hostVerification.ok, refused.hostVerification.correction, refused.hostVerification.preReview.ok,
+    refused.hostVerification.accounting.unresolvedFindingIds],
+  [false, { state: "rejected", status: "BLOCKED", summary: "needs a file outside the approved scope" },
+    false, ["spec:F2"]]);
+
+  const crashed = await execute(new Error("fetch failed"), passing);
+  assert.equal(crashed.runId, "writer-1");
+  assert.equal(crashed.hostVerification.ok, false, "a passing gate does not excuse an unaccounted approved finding");
+  assert.equal(crashed.hostVerification.preReview.ok, true);
+  assert.match(crashed.hostVerification.correction.error, /fetch failed/);
+});
+
 test("both failing review axes retain all findings, not just the first gate error", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const plan = planFor(registry, "matt-tdd");

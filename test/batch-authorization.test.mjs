@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
-import { BATCH_ENTRY, collectCandidateTreeProof, confirmBatchPlan, createBatchAuthorization, normalizeBatchPlan, prepareBatchPlan, verifyBatchDispatch } from "../lib/batch-authorization.mjs";
+import { BATCH_ENTRY, batchOutcome, collectCandidateTreeProof, confirmBatchPlan, createBatchAuthorization, normalizeBatchPlan, prepareBatchPlan, verifyBatchDispatch } from "../lib/batch-authorization.mjs";
 import { AUTH_ENTRY, createDispatchAuthorization } from "../lib/dispatch-authorization.mjs";
 import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { IMPLEMENTATION_ENTRY } from "../lib/repair-contract.mjs";
@@ -120,8 +120,12 @@ async function batchFixture(run) {
               await mkdir(dirname(join(cwd, path)), { recursive: true });
               await writeFile(join(cwd, path), content);
             }
+            // A compliant writer accounts for exactly the finding IDs its repair handoff names.
+            const findingResolutions = JSON.parse(item.task.match(/"approvedFindingIds":(\[[^\]]*\])/)?.[1] ?? "[]")
+              .map(findingId => ({ findingId, cycleTest: worker.cycles[0].test, evidence: "covered by the cycle" }));
             results.push({ key: "implement", ok: true, agent: "matt-worker",
-              runId: `${launch.runId}-writer`, resumability: { state: "resumable" }, structuredOutput: worker });
+              runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
+              structuredOutput: findingResolutions.length ? { ...worker, findingResolutions } : worker });
           } else if (reviews?.[item.key]) {
             results.push({ key: item.key, ok: true, artifactPaths: [], ...reviews[item.key] });
           } else results.push(review(item.key));
@@ -129,7 +133,7 @@ async function batchFixture(run) {
         return results;
       },
       host: async (key, options) => {
-        calls.push(key === "implement-claim" ? "claim" : "evidence");
+        calls.push(key === "implement-claim" ? "claim" : key.startsWith("pre-review") ? key : "evidence");
         return exec("/bin/sh", ["-c", options.command], { cwd });
       },
     };
@@ -884,4 +888,25 @@ test("tree navigation revokes a pending batch confirmation before it can queue",
     await f.runtime.flush();
     assert.equal(f.launches.length, 0, "no RPC/writer starts for the revoked confirmation");
   });
+});
+
+test("a host-measured pre-review failure keeps a dual-PASS ticket out of the batch unless the user withdrew it", () => {
+  const sha = "a".repeat(40);
+  const outcome = hostVerification => batchOutcome({ state: "complete", workflow: {
+    value: [
+      { key: "implement", ok: true, structuredOutput: { status: "COMPLETE" }, ...(hostVerification ? { hostVerification } : {}) },
+      ...["standards", "spec"].map(axis => ({ key: axis, ok: true, structuredOutput: { axis, verdict: "PASS" } })),
+    ],
+    emits: [{ type: "pi-x-matt.batch-candidate", version: 1,
+      candidate: { tree: sha, head: sha, fixedPoint: sha, snapshotId: "s".repeat(32) } }],
+  } });
+  assert.equal(outcome().complete, true);
+  assert.equal(outcome({ version: 1, ok: true, preReview: { ok: true } }).complete, true);
+  const failed = outcome({ version: 1, ok: false, preReview: { ok: false, results: [{ command: "npm test", ok: false }] } });
+  assert.deepEqual([failed.complete, failed.resultsValid, failed.implementComplete, Boolean(failed.candidate)],
+    [false, false, true, true], "reviewer PASS cannot outvote a failing approved command");
+  assert.equal(outcome({ version: 1, ok: false, waived: "pre-review-command-withdrawn",
+    preReview: { ok: false, results: [] } }).complete, true);
+  assert.equal(outcome({ version: 1, ok: false, accounting: { ok: false, unresolvedFindingIds: ["spec:F1"] } }).complete, true,
+    "accounting is writer paperwork: formal review already judged the candidate itself");
 });

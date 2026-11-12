@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { authorizeWorkflowDispatch as authorizeDispatch, createDispatchAuthorization as createAuthorization, parseInvokedSkill } from "../lib/dispatch-authorization.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
-import { findProjectRoot, loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
+import { findProjectRoot, loadCurrentRegistry, verifyFindingResolutions } from "../lib/dispatcher-core.mjs";
 import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -489,6 +489,37 @@ test("TDD host evidence is captured once after implement and before both reviewe
   order.length = 0;
   await assert.rejects(() => execute({ ...runs, host: async () => { throw new Error("capture failed"); } }, () => {}), /capture failed/);
   assert.deepEqual(order, ["implement"], "no reviewer can launch without current Git evidence");
+});
+
+test("finding accounting checks that every approved finding is answered, not that the answer is true", () => {
+  const approved = ["standards:F1", "spec:F2", "spec:F3"];
+  const account = findingResolutions => verifyFindingResolutions({ structuredOutput: {
+    cycles: [{ test: "rejects empty input" }], findingResolutions } }, approved);
+  const row = (findingId, extra = {}) => ({ findingId, cycleTest: "rejects empty input", evidence: "covered by the new cycle", ...extra });
+
+  const complete = account([row("standards:F1"), row("F2"), row("spec:F3", { cycleTest: null })]);
+  assert.deepEqual([complete.ok, complete.resolvedFindingIds, complete.unresolvedFindingIds, complete.invalid],
+    [true, approved, [], []], "a bare id is accepted when it names exactly one approved finding; null marks a non-behavioural fix");
+
+  for (const missing of [undefined, [], "F1"]) {
+    assert.deepEqual(account(missing).unresolvedFindingIds, approved);
+    assert.equal(account(missing).ok, false);
+  }
+  const rejected = account([
+    row("spec:F2"), row("F2"), row("spec:F9"), row("standards:F1", { evidence: "  " }),
+    row("spec:F3", { cycleTest: "a test no cycle reported" }), null,
+  ]);
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(rejected.resolvedFindingIds, ["spec:F2"]);
+  assert.deepEqual(rejected.unresolvedFindingIds, ["standards:F1", "spec:F3"]);
+  assert.deepEqual(rejected.invalid, [
+    { findingId: "F2", reason: "duplicate finding id" }, { findingId: "spec:F9", reason: "unknown finding id" },
+    { findingId: "standards:F1", reason: "missing evidence" }, { findingId: "spec:F3", reason: "unknown cycle test" },
+    { findingId: "undefined", reason: "unknown finding id" },
+  ]);
+  assert.deepEqual(verifyFindingResolutions({ structuredOutput: { findingResolutions: [row("F1", { cycleTest: null })] } },
+    ["standards:F1", "spec:F1"]).invalid, [{ findingId: "F1", reason: "ambiguous finding id" }]);
+  assert.equal(verifyFindingResolutions(undefined, []).ok, true);
 });
 
 test("dispatcher supports complete per-lane task replacements", async () => {

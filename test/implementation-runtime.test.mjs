@@ -70,9 +70,18 @@ async function fixture(run) {
     laneTasks: { implement: "implement parser", standards: "standards only", spec: "AC1 only" },
     implementation: { ticket: "slice:parser", scope: "preserve parser contract", allowedFiles: ["parser.mjs"] },
   };
+  // `resolutions` replaces the compliant writer's accounting (null omits it); `correction` shapes the
+  // host-requested correction turn: { value } rewrites parser.mjs, the rest overrides its result.
   const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
-    workerOverride, reviews, beforeEvidence } = {}) => {
+    workerOverride, reviews, beforeEvidence, resolutions, correction = {} } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
+    // A compliant writer accounts for exactly the finding IDs its handoff names.
+    const accounted = (task, rows) => {
+      const ids = JSON.parse(task.match(/"approvedFindingIds":(\[[^\]]*\])/)?.[1] ?? "[]");
+      const findingResolutions = rows !== undefined ? rows
+        : ids.map(findingId => ({ findingId, cycleTest: worker.cycles[0].test, evidence: "parse cycle now covers it" }));
+      return findingResolutions?.length ? { ...worker, findingResolutions } : worker;
+    };
     const runs = {
       all: async items => {
         calls.push(...items.map(item => item.key));
@@ -86,8 +95,15 @@ async function fixture(run) {
               await writeFile(join(cwd, path), content);
             }
             results.push({ key: "implement", ok: true, agent: "matt-worker",
-              runId: `${launch.runId}-writer`, resumability: { state: "resumable" }, structuredOutput: worker,
+              runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
+              structuredOutput: accounted(item.task, resolutions),
               ...workerOverride });
+          } else if (item.key === "implement-correction") {
+            const { value: corrected, ...override } = correction;
+            if (corrected !== undefined) await writeFile(join(cwd, "parser.mjs"), corrected);
+            results.push({ key: item.key, ok: true, agent: "matt-worker",
+              runId: `${launch.runId}-correction`, resumability: { state: "resumable" },
+              continuation: { runIds: [item.resume] }, structuredOutput: accounted(item.task), ...override });
           } else if (reviews?.[item.key]) {
             results.push({ key: item.key, ok: true, artifactPaths: [], ...reviews[item.key] });
           } else if (item.key === "spec" && executionFailure) {
@@ -97,7 +113,7 @@ async function fixture(run) {
         return results;
       },
       host: async (key, options) => {
-        calls.push(key === "implement-claim" ? "claim" : "evidence");
+        calls.push(key === "implement-claim" ? "claim" : key.startsWith("pre-review") ? key : "evidence");
         if (key === "review-evidence" && beforeEvidence) await beforeEvidence();
         return exec("/bin/sh", ["-c", options.command], { cwd });
       },
@@ -510,23 +526,30 @@ test("deferred review rejects missing preparation, stale references and drift in
   });
 });
 
-test("a rejected formal re-review repairs its latest candidate, not the original writer or old increment", async () => {
+test("a rejected formal re-review needs diagnosis, then repairs its latest candidate, not the original writer or old increment", async () => {
   await fixture(async f => {
-    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    const red = "echo null reaches normalize; exit 1";
+    const params = { ...f.params, implementation: { ...f.params.implementation, diagnosticCommands: [red] } };
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
     await f.runtime.flush();
     await f.settle({ fail: true });
-    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+    const repair = await f.runtime.dispatch({ ...params, repair: {
       previousDispatchId: initial.details.dispatchId, groups: repairGroups,
     } }, undefined, f.ctx);
     await f.runtime.flush();
     await f.settle({ value: "first repair\n" });
-    const reviewDispatch = await f.runtime.dispatch({ ...f.params,
+    const reviewDispatch = await f.runtime.dispatch({ ...params,
       review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
     await f.runtime.flush();
     await f.settle({ fail: true, findingOverride: { ...finding, relatedFindingIds: ["spec:parse"] } });
-    const next = await f.runtime.dispatch({ ...f.params, repair: {
-      previousDispatchId: reviewDispatch.details.dispatchId, groups: repairGroups,
-    } }, undefined, f.ctx);
+    const again = { previousDispatchId: reviewDispatch.details.dispatchId, groups: repairGroups };
+    await assert.rejects(() => f.runtime.dispatch({ ...params, repair: again }, undefined, f.ctx),
+      /DIAGNOSIS_REQUIRED: parser/, "one reviewed failed patch already stops blind patching");
+    assert.equal(f.launches.length, 3);
+    const next = await f.runtime.dispatch({ ...params, repair: { ...again, diagnosis: {
+      rootCauseIds: ["parser"], explanation: "validation runs after normalize",
+      prediction: "null reaches normalize", command: red, expectedFailure: "null reaches normalize",
+    } } }, undefined, f.ctx);
     await f.runtime.flush();
     const repaired = await f.settle({ value: "second repair\n" });
     assert.equal(repaired.itemsSeen[0].resume, "run-1-writer");
@@ -535,6 +558,7 @@ test("a rejected formal re-review repairs its latest candidate, not the original
     assert.equal(pack.incremental.changes[0].before.content, "first repair\n");
     assert.equal(pack.incremental.changes[0].after.content, "second repair\n");
     assert.equal(record.repair.counts.parser, 2);
+    assert.equal(record.repair.diagnosis.exitCode, 1);
     assert.equal(record.reviewSourceId, reviewDispatch.details.dispatchId);
     assert.equal(next.details.reviewPending, true);
   });
@@ -1897,5 +1921,183 @@ test("committed admission rejects invalid scope and later history movement befor
     assert.deepEqual(calls, ["evidence"], "no reviewer launches after a drifted committed capture");
     assert.equal(itemsSeen.length, 0);
     assert.ok(queued.details.reviewEvidencePath);
+  });
+});
+
+const gated = params => ({ ...params, implementation: { ...params.implementation,
+  preReviewCommands: ["grep -q fixed parser.mjs"] } });
+const lastRecord = f => f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+const writerRow = run => (run.status.workflow.value ??
+  run.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results).find(row => row.key === "implement");
+const verificationNotices = f => f.notices.filter(text => /host verification failed/.test(text));
+
+test("a failing approved pre-review command gets one same-writer correction before any reviewer", async () => {
+  await fixture(async f => {
+    const params = gated(f.params);
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    assert.deepEqual(f.runtime.plans.get(initial.details.dispatchId).hostCommands.map(row => row.key),
+      ["implement-claim", "pre-review", "pre-review-recheck", "review-evidence"]);
+    await f.runtime.flush();
+    const run = await f.settle({ correction: { value: "fixed\n" } });
+    assert.equal(run.status.state, "complete");
+    assert.deepEqual(run.calls, ["claim", "implement", "pre-review", "implement-correction", "pre-review-recheck",
+      "evidence", "standards", "spec"]);
+    const correction = run.itemsSeen.find(item => item.key === "implement-correction");
+    assert.equal(correction.resume, "run-0-writer");
+    assert.match(run.itemsSeen[0].task, /Host pre-review commands .*grep -q fixed parser\.mjs/,
+      "the writer learns the gate before it runs, not from a failed correction");
+    assert.match(correction.task, /grep -q fixed parser\.mjs/);
+    for (const key of ["agent", "context", "skill", "outputSchema"]) assert.equal(key in correction, false);
+    const writer = writerRow(run);
+    assert.equal(writer.runId, "run-0-correction");
+    assert.deepEqual(writer.correctionHistory.map(row => row.runId), ["run-0-writer"]);
+    assert.equal(writer.hostVerification.ok, true);
+    assert.equal(writer.hostVerification.initial.preReview.results[0].exitCode, 1);
+    assert.deepEqual(writer.hostVerification.correction, { state: "applied" });
+    assert.deepEqual(run.status.workflow.emits.filter(row => row.type === "pi-x-matt.host-verification").map(row => row.state),
+      ["correcting", "settled"]);
+    assert.deepEqual(lastRecord(f).receipt.verification, { ok: true, preReviewOk: true, correction: "applied" });
+    assert.equal(verificationNotices(f).length, 0);
+    assert.doesNotMatch(run.itemsSeen.find(item => item.key === "standards").task, /宿主确定性校验未通过/);
+    const pack = JSON.parse(await readFile(lastRecord(f).evidence.snapshotPath, "utf8"));
+    assert.equal(pack.manifest.find(entry => entry.path === "parser.mjs").content, "fixed\n",
+      "reviewers judge the corrected candidate, not the one that failed the gate");
+  });
+});
+
+test("a gate that still fails is disclosed to reviewers and blocks formal review of a repair until the writer fixes it", async () => {
+  await fixture(async f => {
+    const params = gated(f.params);
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    const first = await f.settle({ fail: true, correction: { value: "still patched\n" } });
+    assert.equal(first.status.state, "failed");
+    assert.equal(writerRow(first).hostVerification.ok, false);
+    assert.deepEqual(writerRow(first).hostVerification.correction, { state: "applied" });
+    assert.match(first.itemsSeen.find(item => item.key === "standards").task, /宿主确定性校验未通过/);
+    assert.match(first.itemsSeen.find(item => item.key === "spec").task, /宿主确定性校验未通过/);
+    assert.deepEqual(lastRecord(f).receipt.verification, { ok: false, preReviewOk: false, correction: "applied" });
+    assert.equal(verificationNotices(f).length, 1);
+    assert.match(verificationNotices(f)[0], /approved pre-review command failed; in-workflow correction: applied.*Reviewers were told/);
+
+    const repair = await f.runtime.dispatch({ ...params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const second = await f.settle({ value: "wrong\n", correction: { value: "wrong again\n" } });
+    assert.equal(second.status.state, "complete");
+    assert.equal(second.itemsSeen[0].resume, "run-0-correction", "a repair resumes the newest retained handle");
+    assert.deepEqual(second.calls, ["claim", "implement", "pre-review", "implement-correction", "pre-review-recheck", "evidence"]);
+    assert.equal(verificationNotices(f).length, 2);
+    assert.match(verificationNotices(f)[1], /Formal review is refused/);
+    await assert.rejects(() => f.runtime.dispatch({ ...params, review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx),
+      /Formal review refused.*still failing: grep -q fixed parser\.mjs/);
+    assert.equal(f.launches.length, 2, "a refused review launches no reviewer");
+
+    const again = await f.runtime.dispatch({ ...params, repair: {
+      previousDispatchId: repair.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const third = await f.settle({ value: "fixed\n" });
+    assert.equal(third.itemsSeen[0].resume, "run-1-correction");
+    assert.deepEqual(third.calls, ["claim", "implement", "pre-review", "evidence"]);
+    assert.deepEqual(lastRecord(f).receipt.verification, { ok: true, unresolvedFindingIds: [], preReviewOk: true });
+    await f.runtime.dispatch({ ...params, review: { dispatchId: again.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "complete");
+    assert.equal(verificationNotices(f).length, 2);
+    assert.equal(f.prompts, 1);
+  });
+});
+
+test("only the user withdrawing a failing pre-review command lets a pending repair reach formal review", async () => {
+  await fixture(async f => {
+    const params = gated(f.params);
+    const initial = await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    const first = await f.settle({ fail: true, value: "fixed\n" });
+    assert.deepEqual(first.calls, ["claim", "implement", "pre-review", "evidence", "standards", "spec"]);
+    const repair = await f.runtime.dispatch({ ...params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "wrong\n", correction: { value: "wrong again\n" } });
+    await assert.rejects(() => f.runtime.dispatch({ ...params, review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx),
+      /Formal review refused/);
+    assert.equal(f.prompts, 1);
+    const notices = verificationNotices(f).length;
+    const reviewDispatch = await f.runtime.dispatch({ ...f.params,
+      review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    assert.equal(reviewDispatch.details.authorization, "user-confirmed");
+    assert.equal(f.prompts, 2, "dropping an approved command is a fresh user decision");
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(writerRow(reviewed).hostVerification.waived, "pre-review-command-withdrawn");
+    assert.doesNotMatch(reviewed.itemsSeen[0].task, /宿主确定性校验未通过/);
+    assert.equal(lastRecord(f).receipt.verification.waived, "pre-review-command-withdrawn");
+    assert.equal(verificationNotices(f).length, notices, "a carried result is not reported twice");
+  });
+});
+
+test("a repair must account for every approved finding before formal review", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    const first = await f.settle({ fail: true });
+    assert.equal(writerRow(first).hostVerification, undefined, "nothing is verified without findings or approved commands");
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    assert.match(repair.details.lanes.find(lane => lane.key === "implement").task,
+      /Finding accounting \(host-checked before any review\)/);
+    await f.runtime.flush();
+    const corrected = await f.settle({ value: "fixed\n", resolutions: null });
+    assert.deepEqual(corrected.calls, ["claim", "implement", "implement-correction", "evidence"]);
+    assert.match(corrected.itemsSeen.find(item => item.key === "implement-correction").task, /"unresolvedFindingIds":\["spec:parse"\]/);
+    assert.equal(writerRow(corrected).hostVerification.ok, true);
+    assert.deepEqual(writerRow(corrected).hostVerification.initial.accounting.unresolvedFindingIds, ["spec:parse"]);
+    assert.deepEqual(lastRecord(f).receipt.verification, { ok: true, unresolvedFindingIds: [], correction: "applied" });
+    assert.equal(verificationNotices(f).length, 0);
+
+    const second = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: repair.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const rejected = await f.settle({ value: "fixed again\n", resolutions: [
+      { findingId: "spec:other", cycleTest: "parse", evidence: "unrelated" },
+      { findingId: "parse", cycleTest: "no such cycle", evidence: "claims a test that did not run" },
+    ], correction: { ok: false, error: "fetch failed", structuredOutput: undefined } });
+    assert.equal(rejected.status.state, "complete");
+    assert.equal(rejected.itemsSeen[0].resume, "run-1-correction");
+    const writer = writerRow(rejected);
+    assert.equal(writer.runId, "run-2-correction", "a rejected correction still advanced the retained session");
+    assert.equal(writer.structuredOutput.findingResolutions.length, 2, "the rejected turn never replaces the COMPLETE result");
+    assert.equal(writer.hostVerification.ok, false);
+    assert.deepEqual(writer.hostVerification.accounting.invalid, [
+      { findingId: "spec:other", reason: "unknown finding id" }, { findingId: "parse", reason: "unknown cycle test" }]);
+    assert.equal(writer.hostVerification.correction.state, "rejected");
+    assert.equal(writer.hostVerification.correction.error, "fetch failed");
+    assert.match(verificationNotices(f).at(-1), /unaccounted approved findings: spec:parse; in-workflow correction: rejected/);
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, review: { dispatchId: second.details.dispatchId } }, undefined, f.ctx),
+      /Formal review refused.*unaccounted approved findings: spec:parse/);
+  });
+});
+
+test("an unaccounted repair whose writer is gone is not held hostage: review proceeds with the failure on record", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repair = await f.runtime.dispatch({ ...f.params, repair: {
+      previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const run = await f.settle({ value: "fixed\n", resolutions: null,
+      workerOverride: { resumability: { state: "unavailable" } } });
+    assert.deepEqual(run.calls, ["claim", "implement", "evidence"], "no correction turn without a resumable writer");
+    assert.equal(writerRow(run).hostVerification.ok, false);
+    assert.equal("correction" in writerRow(run).hostVerification, false);
+    await f.runtime.dispatch({ ...f.params, review: { dispatchId: repair.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.deepEqual(lastRecord(f).receipt.verification, { ok: false, unresolvedFindingIds: ["spec:parse"] });
   });
 });

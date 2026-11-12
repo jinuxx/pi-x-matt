@@ -78,7 +78,20 @@
               "additionalProperties": false
             }
           },
-          "residualRisks": { "type": "array", "items": { "type": "string" } }
+          "residualRisks": { "type": "array", "items": { "type": "string" } },
+          "findingResolutions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "findingId": { "type": "string", "minLength": 1 },
+                "cycleTest": { "type": ["string", "null"] },
+                "evidence": { "type": "string", "minLength": 1 }
+              },
+              "required": ["findingId", "cycleTest", "evidence"],
+              "additionalProperties": false
+            }
+          }
         },
         "required": ["status", "summary", "confirmedSeams", "cycles", "changedFiles", "commands", "residualRisks"],
         "additionalProperties": false

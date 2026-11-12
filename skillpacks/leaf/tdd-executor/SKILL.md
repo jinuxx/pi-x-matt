@@ -25,7 +25,7 @@ metadata:
 5. 应用 Pack 的隐私边界：业务项目的 `.x-matt/` 与个人 `.pi/` 仅本地；不向业务代码、测试、README/AGENTS 复制工具/harness/model、私有路径、session 或“由 AI 生成”等工作流元信息。业务本身需要的同名概念不机械删除；插件源码维护例外只能来自父会话已核验的真实 package root。
 6. 修复任务必须有结构化根因契约：获批 finding IDs、稳定根因 ID、必须保持的行为、校验/归一化顺序、共享调用路径和必要正反例/回归。先理解共同原因，不逐输入打补丁；发现原契约解释不了相关失败或引入相关回归时停止联系 supervisor。`DIAGNOSIS_REQUIRED` 未解除时不继续实现；不以改名、拆轮或重开初始任务绕过。
 
-同票修复由宿主 resume 最近的 writer，保留原上下文；仍以本次 task、根因契约和候选快照为准，旧完成声明不能替代本次验证。不重复实现已完成行为或人为制造旧行为的 RED；只为当前修复取得真实 RED→GREEN，全部获批 findings 一并核对，运行相关回归后返回本次证据。修复 `COMPLETE` 只表示本次 writer 完成，不代表双轴通过；是否继续修复或正式送审由父会话决定。
+同票修复由宿主 resume 最近的 writer，保留原上下文；仍以本次 task、根因契约和候选快照为准，旧完成声明不能替代本次验证。不重复实现已完成行为或人为制造旧行为的 RED；只为当前修复取得真实 RED→GREEN，全部获批 findings 一并核对，运行相关回归后返回本次证据。返回前重读每条获批 finding 的 expected/actual 与 locations，并在 `findingResolutions` 中逐条交代；宿主会在任何评审前校验交代是否完整，并运行已获批的评审前命令。若随后收到“宿主校验纠正” task，只修复它列出的失败，不扩大范围、不改测试迁就失败，再返回覆盖本次派发全部工作的完整累计结果；失败与本次改动无关或需要范围外文件/决定时如实返回 `BLOCKED`。修复 `COMPLETE` 只表示本次 writer 完成，不代表双轴通过；是否继续修复或正式送审由父会话决定。
 
 ## Red → Green
 
@@ -53,5 +53,6 @@ Refactor 不属于当前 red→green 循环。除了为当前 GREEN 必需的最
 - `changedFiles[]`：本次实际修改文件
 - `commands[]`：每个 RED/GREEN/related-regression 命令、phase、真实 exitCode、testCount（runner 不提供时为 null，禁止猜测）与 outcome；保留能核验数量和失败原因的输出摘要。这些是 worker-reported 测试记录，不得冒充 workflow 独立采集的 Git 证据
 - `residualRisks[]`：未覆盖行为、环境限制或待决事项
+- `findingResolutions[]`：仅修复任务提供，初次实现省略。对 task 中每个获批 finding ID 恰好一行：`findingId` 为带轴前缀的精确 ID；`cycleTest` 为本结果 `cycles` 中证明该修复的 `test`，确无测试可表达时为 `null`；`evidence` 说明改了什么、在哪里（`cycleTest` 为 `null` 时还须说明为何没有适用测试）。缺行、重复或未知 ID 会被宿主拒绝并阻止正式送审。这是自述交代，不是已修复的证据，不得把未真正解决的 finding 写成已解决
 
-缺少任一保留行为的真实 RED 证据、测试仍失败、无理由省略显式验收行为或改动超出批准范围时不得返回 `COMPLETE`。
+缺少任一保留行为的真实 RED 证据、测试仍失败、无理由省略显式验收行为或改动超出批准范围时不得返回 `COMPLETE`。task 列出宿主评审前命令时，它们会在你返回后由宿主原样执行；可在返回前运行确认，已知因本次改动而失败时不要返回 `COMPLETE`。

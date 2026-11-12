@@ -34,6 +34,8 @@ pi-subagents 0.88.0 的 `Response was truncated: the model reached its maximum o
 
 `matt-tdd` 的 **repair-only** 是明确的阶段边界：工具 receipt 的 `reviewPending=true`，成功结果只含 implement，且 emits 含 `pi-x-matt.review-pending`。这是“修复完成、尚未评审”，不是完整 TDD 成功，也不是 reviewer 丢失；禁止提交或复用修复前 PASS。核对本次 writer 证据与实际改动后，父会话选择继续同范围 repair 或显式 `review`。review 结果复用最近 implement，并包含本次 fresh Standards/Spec；只有当前候选的两轴 PASS 才能进入最终验证。缺少 pending 标记或预期结果时仍 fail closed，不凭单 lane `COMPLETE` 猜测模式。
 
+启用 [宿主确定性校验](dispatch-contract.md#宿主确定性校验) 的 writer 派发，在 implement 结果上附带宿主实测的 `hostVerification`（finding 交代的 `accounting`、评审前命令的 `preReview`、可能的 `correction`/`waived`），emits 含 `pi-x-matt.host-verification`（`correcting`/`settled`，只是过程标记，不是结果来源）；工具 receipt 的 `verification` 是其摘要。它是宿主测得的事实，不是 worker 自述，也不是 reviewer 结论：`ok=false` 不改变 lane 的 `COMPLETE` 或两轴 verdict，但该候选不可交付——repair 候选须继续 repair 直至通过才能正式送审，initial 候选即使双 PASS 也停止并请用户决定。`findingResolutions` 是 writer 的自述交代，宿主只核对其完整性，不能当作已修复的证据。被同 writer 纠正替换的结果保留在 implement 的 `correctionHistory`。
+
 失败 repair 可以按 [writer 执行恢复契约](dispatch-contract.md#失败-repair-的-writer-执行恢复) 显式使用一次 `writerRecovery`；原失败及 settlement history 保留于新 implement 的 `recoveryHistory`。成功仍按上述 repair-only 读取，必须用恢复返回的最新 dispatchId 正式送审。恢复失败、合法 BLOCKED 或不可恢复 writer 均不能以旧 COMPLETE 或 fresh writer 替代；reviewer `recovery` 仍不运行 implement。
 
 `reconsider` 成功结果仍包含 `implement` 与两轴，但受影响轴的 `structuredOutput` 是宿主按 reviewer decisions 合并后的 **effective review**：未 challenge findings 与另一轴逐字保留，只有明确 `withdraw` 的 finding 消失；任一保留/upheld blocker 使 verdict 仍是 `FAIL`。原始报告、每个 decision 与 effective verdict 保存在 `reconsiderationHistory`，不从它重建旧 PASS/FAIL。只有 effective 双轴 PASS 才进入最终验证；repair 尚未评审或 reconsider 仍有 FAIL 都不是交付通过。

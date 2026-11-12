@@ -80,6 +80,7 @@ export default function (pi: ExtensionAPI) {
           description: "Exact subset of allowedFiles the host may add or replace only inside its isolated diagnostic workspace.",
         })),
         diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands; runtime diagnosis is bounded to 30 seconds." })),
+        preReviewCommands: Type.Optional(Type.Array(text(), { maxItems: 6, description: "Exact approved deterministic checks (e.g. typecheck, full tests) the host runs in order after every writer run and before any review, within one shared 10-minute budget. They must pass on the baseline and must not write to the worktree. A failure gives the same writer one bounded correction turn and blocks formal review of a repair." })),
       })),
       repair: Type.Optional(Type.Object({
         previousDispatchId: text(),
@@ -108,6 +109,7 @@ export default function (pi: ExtensionAPI) {
           allowedFiles: strings(),
           diagnosticFiles: Type.Optional(Type.Array(text(), { description: "Exact subset of allowedFiles for host-isolated diagnostics only." })),
           diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands." })),
+          preReviewCommands: Type.Optional(Type.Array(text(), { maxItems: 6, description: "Exact approved deterministic checks the host runs after every writer run and before any review." })),
         }), { minItems: 1, description: "Declared serial ticket list; the host freezes each ticket's requirement content, Parent and Blocked by graph." }),
       }, { description: "One-confirmation batch capability for declared serial matt-tdd tickets. The host reads actual spec/ticket digests; model-provided hashes or authorization are never accepted. No implicit batch from matt-implement-spec or a plain intent." })),
       review: Type.Optional(Type.Object({

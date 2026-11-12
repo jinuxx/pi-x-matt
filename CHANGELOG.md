@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.2.36
+
+- 新增宿主确定性校验，把可机械检出的问题拦在双轴评审之前：`implementation.preReviewCommands` 可选声明最多 6 条本地命令（共享 10 分钟预算、须在基线通过且不写工作区），随授权信封一并确认，并在每次 writer（初次实现/repair/writerRecovery）返回 `COMPLETE` 后、任何 reviewer 之前由宿主原样执行；implement task 事先列出这些命令。
+- 校验未通过且 writer 可恢复时，宿主在同一 workflow 内 resume 同一 writer 纠正一次（最多 10 分钟）并复检，结果记入 `implement.hostVerification`，工具 receipt 只带不含命令输出的 `verification` 摘要；`review` 在 repair 候选校验仍失败时被宿主拒绝并说明失败命令或未交代的 finding，须继续同范围 repair，初次实现即使双 PASS 也不可交付。
+- 唯一放行出口是用户重新确认一份不含该命令的信封（`waived="pre-review-command-withdrawn"`），父会话不得自行删减；batch `resultsValid` 同样要求该票校验通过。
+- 新增 repair 的 `findingResolutions`：writer 须对每个获批 finding 恰好交代一行（`findingId`/`cycleTest`/`evidence`），宿主在评审前核对完整性并写入 reviewer 证据；它是自述交代，不是已修复的证据，也不改变双轴 gate。
+- 诊断门提前：修复经正式评审后，验收/安全/完整性类 finding 仍以原问题或同一 `rootCauseId` 复发时，下一次 writer 前即触发 `DIAGNOSIS_REQUIRED`，相关回归立即触发；纯工程规范类（`basis.kind=standard`）复发仍按两轮计数，连续两次未评审的 repair 不触发该规则。
+- 263 项测试、registry freshness、31 个移植来源的 upstream drift 与打包检查通过，包含用已安装 `pi-subagents` 0.88.0 真实校验器与 sandbox 执行生成脚本的兼容用例；child 使用 mock 结果，未在真实 Pi 会话端到端跑过带 `preReviewCommands` 的 ticket，也未在业务项目复跑。
+- 已知边界：该门只拦得住获批命令能检出的问题，宿主不预先验证基线是否绿灯，写文件的命令会被判为漂移且不触发纠正，命令失败输出的尾部会进入纠正 task 与 reviewer 证据，因此不要声明会打印敏感信息的命令；`findingResolutions` 只核对完整性，不核对真实性。
+- extension 与 `.mjs` 更新后须完整重启 Pi 并恢复原会话，仅 `/reload` 不够；固定旧 tag 的项目需按 README 用 `pi install -l` 切换版本。
+
 ## 0.2.35
 
 - 新增显式 `writerRecovery: {dispatchId}`，解除最新失败 repair 无法延续原 writer 的宿主死锁：只允许可恢复且无结构化结果的失败 repair 恢复一次，绑定 partial 快照并保留原失败、修复契约/计数与累计评审基线；不换 fresh writer、不追加 settlement，成功仍待正式双轴 review。
