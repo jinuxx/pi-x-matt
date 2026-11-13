@@ -32,7 +32,7 @@ Status: spec-ready
 Source session: pi:<PI_SESSION_ID>
 ```
 
-parent spec 的 `Status` 只有 `spec-ready` 与 `shipped`。`spec-ready` 只表示 parent spec 可以进入 `to-tickets`，不授权 `implement` 直接实现整份 spec；`shipped` 是显式归档终态，不能回到 active lifecycle。只有 `Type: ticket` 且 `Status: ready-for-agent` 的单个 ticket 才是实现入口。用户提供且后续工作依赖、不能安全压缩的事实、说明、样例或约束，经过 secrets 脱敏后写入 `## Reference Inputs`；内容可以是业务规则、现状描述、操作步骤、边界解释、样例或技术 contract，不以特定项目或材料类型为限，也不得只保存 agent 的行为摘要。发布后重新读取文件，核对路径、标题、正文、seams、Out of Scope、Reference Inputs、Type、Status 和 Source session。
+parent spec 的 `Status` 只有 `spec-ready` 与 `shipped`。`spec-ready` 只表示 parent spec 可以进入 `to-tickets`，不授权 `implement` 直接实现整份 spec；`shipped` 是显式归档终态，不能回到 active lifecycle。只有 `Type: ticket` 且 `Status: ready-for-agent` 的单个 ticket 才是实现入口。用户提供且后续工作依赖、不能安全压缩的事实、说明、样例或约束，经过 secrets 脱敏后写入 `## Reference Inputs`；内容可以是业务规则、现状描述、操作步骤、边界解释、样例或技术 contract，不以特定项目或材料类型为限，也不得只保存 agent 的行为摘要。发布后重新读取文件，核对路径、标题、正文、测试切入点、Out of Scope、Reference Inputs、Type、Status 和 Source session。
 
 ## Ticket 格式
 

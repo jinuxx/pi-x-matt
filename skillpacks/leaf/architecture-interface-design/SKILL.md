@@ -14,7 +14,7 @@ metadata:
 
 # Architecture Interface Design
 
-只针对父任务给出的一个 candidate、constraints、callers、dependency category 与 seam evidence 设计一个方案。不得重新扫描、扩大 candidate 或修改文件。
+只针对父任务给出的一个 candidate、constraints、callers、dependency category 与可替换点的依据设计一个方案。不得重新扫描、扩大 candidate 或修改文件。
 
 根据 lane taskPrefix 严格采用其中一种策略：
 

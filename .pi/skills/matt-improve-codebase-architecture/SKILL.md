@@ -19,7 +19,7 @@ metadata:
 
 ## Vocabulary
 
-所有建议只使用：**module**、**interface**、**implementation**、**depth/deep/shallow**、**seam**、**adapter**、**leverage**、**locality**。interface 同时是 caller surface 与 test surface。一个 adapter 是 hypothetical seam；只有 production/test 等至少两个真实 adapters 才说明 real seam。领域名称来自 `.x-matt/context/`；不要用 component/service/API/boundary 替代上述架构含义。
+所有建议只使用：**module**、**interface**、**implementation**、**depth/deep/shallow**、**可替换点**、**adapter**、**leverage**、**locality**。interface 同时是 caller surface 与 test surface。一个 adapter 是潜在的可替换点；只有 production/test 等至少两个真实 adapters 才说明实际的可替换点。领域名称来自 `.x-matt/context/`；不要用 component/service/API/boundary 替代上述架构含义。
 
 ## Scope gate
 
@@ -41,7 +41,7 @@ metadata:
 父会话读取 HTML 与 candidate evidence，确认每项都：
 
 - 指向真实 files/callers/tests；
-- 解释 shallow interface 或 locality/seam friction；
+- 解释 shallow interface 或 locality/可替换点 friction；
 - 通过 deletion test：删除 shallow module 会把复杂度集中到更小 interface 后方，而不是散到 callers；
 - 有 dependency category 与可观察 test-surface 收益；
 - ADR conflict 只在真实 friction 足以重开时明确标注；
@@ -63,7 +63,7 @@ metadata:
 
 - 哪些 future changes/bugs 证明它值得现在 deepening；
 - 哪些 responsibility 必须在新 module 后方，哪些仍属于 callers；
-- dependency category、real adapters 与 seam placement；
+- dependency category、real adapters 与可替换点的位置；
 - 哪个 interface-level observable behaviour 构成 test surface；
 - 哪些旧 shallow tests 在新 interface tests 覆盖后可删除；
 - migration boundary、明确 out of scope 与风险。
@@ -72,14 +72,14 @@ metadata:
 
 ## Design it twice
 
-只有用户已经选择 candidate、constraints/callers/dependency category/seam evidence 已确认，并明确想比较 alternative interfaces 时才进入：
+只有用户已经选择 candidate、constraints/callers/dependency category/可替换点的依据已确认，并明确想比较 alternative interfaces 时才进入：
 
 1. 先展示中立问题空间：所有方案必须满足的 constraints、依赖类别、真实 adapters，以及一个只用于 grounding 的粗略 code sketch；说明 sketch 不是 proposal。
 2. 调用 `pi_matt_dispatch`：
    - `workflow`: `architecture-design`
-   - `task`: 包含 candidate、files/callers evidence、确认 constraints、领域词汇、dependency category、seam/adapters、test surface、禁止范围和停止条件。
+   - `task`: 包含 candidate、files/callers evidence、确认 constraints、领域词汇、dependency category、可替换点/adapters、test surface、禁止范围和停止条件。
 3. 只消费 `minimal`、`flexible`、`common-caller` 三个 fresh reader lane 的 `structuredOutput`。数量/key/status/entries/tradeoffs 任一缺失即 fail closed；不得用两个方案冒充 design-it-twice。
-4. 顺序展示每个 interface、usage、隐藏的 implementation、dependency strategy 与 trade-offs，再以 depth、locality、seam placement 横向比较。给出有立场的推荐；元素可组合时提议 hybrid，但不得替用户确认。
+4. 顺序展示每个 interface、usage、隐藏的 implementation、dependency strategy 与 trade-offs，再以 depth、locality、可替换点的位置横向比较。给出有立场的推荐；元素可组合时提议 hybrid，但不得替用户确认。
 5. 使用 `ask_user_question` 让用户选择一个方案、hybrid、继续澄清或拒绝当前 candidate。未确认前保持 frontier 未完成。
 
 三个 readers 永远只读，不能修改 code、tests、`.x-matt/context/` 或 `.x-matt/adr/`。领域文档仍由父会话唯一写入。

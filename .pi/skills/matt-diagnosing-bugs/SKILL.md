@@ -39,7 +39,7 @@ metadata:
 
 ## Phase 1：Feedback-loop gate
 
-反馈循环是强制 gate。先尝试复用现有公开 seam，按以下优先级建立一个能抓住**这个症状**的命令：失败测试、HTTP/CLI 脚本、headless browser、脱敏 trace replay、throwaway harness、固定 seed 的 property/fuzz loop、`git bisect run`、old/new differential loop，最后才是结构化 HITL loop。
+反馈循环是强制 gate。先尝试复用现有公开测试切入点，按以下优先级建立一个能抓住**这个症状**的命令：失败测试、HTTP/CLI 脚本、headless browser、脱敏 trace replay、throwaway harness、固定 seed 的 property/fuzz loop、`git bisect run`、old/new differential loop，最后才是结构化 HITL loop。
 
 持续收紧循环：减少 setup、缩短到秒级、固定时间/RNG/文件系统/网络，并提高 flaky bug 的复现率。循环必须由 agent 无人值守执行；确实需要人工动作时，把步骤与观测分开并明确记录。
 
@@ -77,30 +77,30 @@ Root-cause gate 需要：
 - 至少一个假设被证伪，最终根因假设的 prediction 被真实命令支持；
 - 原始 Phase 1 loop 与最小 repro 在修复前仍为 red；
 - 根因能解释用户症状和最小 repro 中每个 load-bearing 元素；
-- 已识别正确的公开 regression seam，或明确证明当前架构没有这样的 seam；
+- 已识别正确的公开回归测试切入点，或明确证明当前架构没有这样的测试切入点；
 - 所有生产文件中的 `[DEBUG-<id>]` instrumentation 已移除，`grep` 结果为空。
 
-没有正确 regression seam 时，先清理所有诊断改动并停止。把“无法通过真实 call-site pattern 锁定 bug”作为架构 finding 报告，并提供已确认 root cause、call-site evidence、缺失 seam 与相关 files，建议用户在新的手动阶段调用已移植的 `matt-improve-codebase-architecture`，把 scope 固定在该 finding；不得写浅层测试，也不得在诊断阶段自动开始 refactor。
+没有正确回归测试切入点时，先清理所有诊断改动并停止。把“无法通过真实 call-site pattern 锁定 bug”作为架构 finding 报告，并提供已确认 root cause、call-site evidence、缺失测试切入点与相关 files，建议用户在新的手动阶段调用已移植的 `matt-improve-codebase-architecture`，把 scope 固定在该 finding；不得写浅层测试，也不得在诊断阶段自动开始 refactor。
 
 ## 交给 Implement
 
-Root-cause gate 通过且存在正确 seam 后，形成当前会话单 slice handoff：
+Root-cause gate 通过且存在正确测试切入点后，形成当前会话单 slice handoff：
 
 - 用户精确症状与已确认 root cause；
 - Phase 1 原始 loop 命令、最小 repro 命令及脱敏 RED 证据；
 - 被证伪假设和正确 prediction；
-- 已确认 regression seam、interface 与修复后可观察行为；
+- 已确认回归测试切入点、interface 与修复后可观察行为；
 - 固定基线、既有工作区改动、允许文件、测试/typecheck/full-suite 命令；
 - 临时 artifact 清单和 cleanup 条件。
 
-然后按已完整读取的 `matt-implement` 执行一个且仅一个当前会话 slice；已有 `Type: ticket`/`Status: ready-for-agent` ticket 时沿用其 tracker 生命周期。`matt-implement` 仍负责 seam 确认、唯一 `matt-worker` 的真实 RED→GREEN、完整验证、fresh 双轴 review、状态回写和提交。诊断证据不能替代 TDD 的 RED/GREEN，也不能替代 review。
+然后按已完整读取的 `matt-implement` 执行一个且仅一个当前会话 slice；已有 `Type: ticket`/`Status: ready-for-agent` ticket 时沿用其 tracker 生命周期。`matt-implement` 仍负责测试切入点确认、唯一 `matt-worker` 的真实 RED→GREEN、完整验证、fresh 双轴 review、状态回写和提交。诊断证据不能替代 TDD 的 RED/GREEN，也不能替代 review。
 
 ## Final cleanup
 
 只有以下条件全部满足才可宣称 bug 已修复：
 
 - Phase 1 原始 loop 对原始场景已 green；
-- regression test 在正确 seam 上通过；
+- regression test 在正确测试切入点上通过；
 - 相关测试、typecheck 和完整 suite 按 `matt-implement` 通过；
 - `grep` 确认所有 `[DEBUG-<id>]` instrumentation 已删除；
 - throwaway harness/artifact 已删除，或按用户批准保存在明确的 active `.x-matt/work/` 诊断路径且不含敏感数据；不得写入、枚举或把 `.x-matt/work/shipped/` 用作诊断路径，用户点名归档对象也只允许历史只读；

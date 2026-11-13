@@ -15,7 +15,7 @@ metadata:
 
 先应用[业务项目隐私契约](../matt-setup/privacy.md)：业务项目整个 `.x-matt/` 与个人 `.pi/` 都仅本地，不只 `.x-matt/work/`。发布前按 `.x-matt/agents/issue-tracker.md` 核验本机 exclude 生效且个人资料未被 Git 跟踪；未满足则停止并提示先运行 `matt-setup`。spec 按精确路径直接读写与核验，不暂存、不提交、不用 `git add -f`；ignored 文件不能因 Git-aware 搜索未返回就判为缺失。源码维护例外以已核验的 package root 为准。
 
-本 skill 只综合当前父会话中已经讨论和确认的内容，不重新 interview，不替用户补做产品或架构决定。是否需要 spec 必须在进入本 skill 前由用户通过 transition handoff 决定；一旦显式调用，本 skill 必须完成 seam 确认与发布 gate，不得因 agent 判断“一个 session 能完成”而静默跳过到 implement。
+本 skill 只综合当前父会话中已经讨论和确认的内容，不重新 interview，不替用户补做产品或架构决定。是否需要 spec 必须在进入本 skill 前由用户通过 transition handoff 决定；一旦显式调用，本 skill 必须完成测试切入点确认与发布 gate，不得因 agent 判断“一个 session 能完成”而静默跳过到 implement。
 
 ## 前置条件
 
@@ -27,16 +27,18 @@ metadata:
 6. Local Markdown 发布前读取非空 `PI_SESSION_ID`，用于写入 `Source session: pi:<PI_SESSION_ID>`。缺少 session identity 时停止发布，不使用模型名、时间戳或工作区路径代替。
 7. 解析 Local Markdown 输入、Wayfinder reference 或可能的历史规格时，默认跳过 `.x-matt/work/shipped/`，不得枚举其中 feature、标题或路径，也不得把其中内容当作当前输入的近似回退。只有用户在同一会话明确点名准确归档标题或路径时，才可只读对应对象作为历史依据；它不能作为 active Wayfinder map、待发布 parent、ticket 来源或任何状态改写目标。
 
-## Seam gate
+## 测试切入点确认
 
-写 spec 前先从讨论和代码中勾勒测试 seam：
+测试切入点就是用来验证目标行为的公开入口，例如 API、公开函数或命令。向用户说明“从哪个入口测、能验证什么、验证不到什么”，再请求确认，不要求用户理解内部术语。
 
-- 优先使用现有 seam；只有没有合适 seam 时才提议新 seam。
+写 spec 前先从讨论和代码中勾勒测试切入点：
+
+- 优先使用现有测试切入点；只有没有合适测试切入点时才提议新测试切入点。
 - 取能观察完整用户行为的最高公开 interface；不要把实现细节、内部 helper 或数据库字段当成测试面。
-- 尽量使用一个 seam；多个 seam 必须分别说明它们覆盖的独立行为。
-- 对每个 seam 写出 interface、可观察行为、输入约束和错误/边界结果。
+- 尽量使用一个测试切入点；多个测试切入点必须分别说明它们覆盖的独立行为。
+- 对每个测试切入点写出 interface、可观察行为、输入约束和错误/边界结果。
 
-使用 `ask_user_question` 请求用户确认这些 seams 是否符合预期。问题只针对 seam，不借机开启新的需求访谈。用户拒绝或修改 seam 时，更新 seam 记录并再次确认；未确认前不得写入或发布 spec。
+使用 `ask_user_question` 请求用户确认这些测试切入点是否符合预期。问题只针对测试切入点，不借机开启新的需求访谈。用户拒绝或修改测试切入点时，更新测试切入点记录并再次确认；未确认前不得写入或发布 spec。
 
 ## 综合规则
 
@@ -71,7 +73,7 @@ metadata:
 ## Testing Decisions
 
 - <只验证外部行为，不验证实现细节>
-- <要测试的模块和 seam>
+- <要测试的模块和测试切入点>
 - <代码库中的相关测试先例>
 
 ## Out of Scope
@@ -91,7 +93,7 @@ metadata:
 
 ## 发布 gate
 
-1. 先在父会话中展示生成的 spec 摘要，尤其是 seams 和 Out of Scope，确认内容忠实于本次讨论。
+1. 先在父会话中展示生成的 spec 摘要，尤其是测试切入点和 Out of Scope，确认内容忠实于本次讨论。
 2. 用户确认后，按 `.x-matt/agents/issue-tracker.md` 发布一个 parent spec。Local Markdown 必须写 `Type: spec`、`Status: spec-ready` 与 `Source session: pi:<PI_SESSION_ID>`，该状态只允许进入 `matt-to-tickets`；remote tracker 才使用项目配置中的 `ready-for-agent` label，且外部 runner 必须显式排除 parent spec，无法确认时停止发布。
 3. 发布后核对 issue URL/本地 spec 路径、标题、正文、`Reference Inputs`，以及配置要求的 Type/Status/Source session 或 label，确认只有一个 parent spec 被创建。
 4. 没有 tracker、label 配置、用户确认或可核验发布结果时，保持未发布状态并明确报告原因。

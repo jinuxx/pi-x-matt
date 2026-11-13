@@ -343,8 +343,8 @@ test("dispatcher builds two independent guarded review lanes", async () => {
 
 test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "已确认 seams 的实现任务", ROOT, {
-    implement: "已确认 seams 的实现任务；执行 RED/GREEN",
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "已确认测试切入点的实现任务", ROOT, {
+    implement: "已确认测试切入点的实现任务；执行 RED/GREEN",
     standards: "按当前 worktree diff 执行 Standards 复核",
     spec: "读取 ticket/spec 后按当前 worktree diff 执行 Spec 复核",
   });

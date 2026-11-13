@@ -15,7 +15,7 @@ Ticket:
 - Local Markdown 的 spec/ticket 仅本地维护且被 Git 忽略，按精确路径直接读取并计算 hash，不用 git show 或 Git-aware 搜索取代；不加入实现提交
 
 Acceptance matrix:
-- AC -> 公开 seam/interface -> 预期行为 -> 保留测试或省略理由
+- AC -> 公开测试切入点/interface -> 预期行为 -> 保留测试或省略理由
 - 保留项注明代表输入（字段映射/等价类）与预计展开的案例数；昂贵 fixture、外部依赖或慢命令的准备成本一并标注
 - 同一共享校验等价类只列一个代表输入，并说明该组合是否产生不同的可观察行为、状态转换或安全/数据完整性风险
 - Parent spec 仅提供本 ticket 相关 acceptance、decision、out-of-scope

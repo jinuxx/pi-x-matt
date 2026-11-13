@@ -38,6 +38,26 @@ test("checked-in registry is deterministic and current", async () => {
   assert.equal(current, expected);
 });
 
+test("workflow guidance uses Chinese testing terms without renaming the result protocol", async () => {
+  const registry = await buildRegistry(ROOT);
+  for (const skill of Object.values(registry.skills)) {
+    assert.doesNotMatch(await readFile(join(ROOT, skill.sourcePath), "utf8"), /\bseams?\b/i, skill.sourcePath);
+    for (const lane of skill.workflow?.lanes ?? []) {
+      assert.doesNotMatch(lane.taskPrefix, /\bseams?\b/i, `${skill.name}:${lane.key}`);
+    }
+  }
+  for (const path of ["README.md", ".pi/skills/matt-tdd/context-packs.md", ".x-matt/agents/issue-tracker.md"]) {
+    assert.doesNotMatch(await readFile(join(ROOT, path), "utf8"), /\bseams?\b/i, path);
+  }
+  const tdd = registry.skills["matt-tdd"];
+  assert.deepEqual(tdd.workflow.lanes[0].gate.nonEmpty, ["confirmedSeams", "cycles", "changedFiles", "commands"]);
+  assert.equal(tdd.workflow.lanes[0].outputSchema.properties.confirmedSeams.minItems, 1);
+  const guidance = await readFile(join(ROOT, tdd.sourcePath), "utf8");
+  assert.match(guidance, /测试切入点/);
+  assert.match(guidance, /从哪个入口测/);
+  assert.match(await readFile(join(ROOT, "skillpacks/leaf/codebase-design/SKILL.md"), "utf8"), /\*\*可替换点\*\*/);
+});
+
 test("registry captures parent workflows and their private leaves", async () => {
   const registry = await buildRegistry(ROOT);
   assert.deepEqual(Object.keys(registry.skills), [
@@ -294,7 +314,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.38");
+  assert.equal(manifest.version, "0.2.39");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -592,7 +612,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
 
   const toSpec = await readFile(join(ROOT, ".pi", "skills", "matt-to-spec", "SKILL.md"), "utf8");
   assert.match(toSpec, /不重新 interview/);
-  assert.match(toSpec, /Seam gate/);
+  assert.match(toSpec, /测试切入点确认/);
   assert.match(toSpec, /tracker/);
   assert.match(toSpec, /ready-for-agent/);
   assert.match(toSpec, /已移植的 `matt-setup`/);
@@ -696,7 +716,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(diagnosing, /\[DEBUG-<id>\]/);
   assert.match(diagnosing, /交给 Implement/);
   assert.match(diagnosing, /一个且仅一个当前会话 slice/);
-  assert.match(diagnosing, /没有正确 regression seam.*停止/);
+  assert.match(diagnosing, /没有正确回归测试切入点.*停止/);
   assert.match(diagnosing, /已移植的 `matt-improve-codebase-architecture`/);
   assert.match(diagnosing, /不得在诊断阶段自动开始 refactor/);
   assert.match(diagnosing, /不得写入、枚举或把 `\.x-matt\/work\/shipped\/` 用作诊断路径/);
@@ -804,8 +824,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
   assert.match(readme, /同范围连续修复不重复入口确认/);
   assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.38/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.38/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.39/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.39/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
   assert.match(readme, /`matt-archive <feature-slug>`/);
   assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);
