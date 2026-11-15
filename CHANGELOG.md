@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.41
+
+- 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.88.1`；核对六项补丁及公开接口，Pi/Node 下限、bundle 入口、RPC/named resource 与双轴 gate 不变，不误删仍有效的 `disableBuiltins` 等配置。
+- 移除 workflow child 已不存在的 `timedOut` 字段兼容和错误文本超时猜测；settlement 与通知只依据公共 `terminalOutcome.reason === "timeout"`，错误引用超时文字或预算耗尽不再误启恢复。
+- 修复共享 agent 对 pi-fff 模式的隐含依赖：`matt-reader`/`matt-reviewer`/`matt-worker` 原先显式声明 `ffgrep`、`fffind`，而这两个名称只在 pi-fff 非 `override` 模式注册；声明了子进程里不存在的工具，child 会在 `agent_start` 抛出工具诊断而失败（运行时源码如此，并非 0.88.1 新行为）。本机 pi-fff 在上次真实冒烟之后切到 `override`，按源码推断这条链路会因此失败；该失败未用真实 child 复现，待完整重启后的冒烟确认。现统一声明在所有模式下都存在的 `grep`/`find`，reviewer budget 与 grilling 指引同步；`ff` 名称并非上游弃用，仍可经个人 override 追加（须同步 `toolBudget.block`），不自动改动个人配置。
+- 直接采用原生的 fleet 对话框让位、compaction 唤醒与终态竞态修复，不新增轮询/唤醒/兜底；四个 leaf 保持显式 tools，researcher 保持精确 MCP selectors，不把 ambient MCP 修复变成权限继承，也不把 `subagent_launch` task 改写宣称为 RPC 审批。
+- 新增四项回归，升级前确认失败、适配后通过：旧超时字段/文本不得触发 settlement 或通知、结果先于终态落盘保持运行中、required child extension 提供的 MCP server 与精确工具选择。原生 sandbox/权限回归使用 mock child/model 与 PID liveness，不替代真实模型、实际 runner 退出观测或 TUI 验证。
+- 完整重启 Pi 后，`0.88.1` + Pi `1.5.2` 的真实冒烟通过：Research 与双轴 Review 正/负例共 5 个 fresh child，模型与 override 映射一致，无 settlement 或自动重试，仓库在运行前后未变。Review 正例两轴 PASS；负例两轴分别命中预置缺陷（各 1 项授权绕过与 2 项金额计算，均 P1），workflow 按 gate 失败且不发布 `workflow.value`，完整报告仍可从最后一个阶段快照读取。Research 走 Exa 精确选择器（`read` 加两个 `mcp__exa__` 工具，无额外 MCP 工具）。
+- 该冒烟同时以真实 child 验证了 `grep`/`find` 修复：本机 pi-fff 处于 `override` 模式，reviewer 子会话注册到的是 `grep`/`find` 并成功启动。`matt-reader` 只被 `architecture-design` 使用，需要用户先确认设计问题，本轮未实跑；`matt-worker` 的 TDD writer/repair 链同样未实跑，两者的契约回归仍只使用 mock 结果。
+
 ## 0.2.40
 
 - 修复完整候选因信封越界而丢失证据：collector 在拒绝前保存只读 `review.md/json`，结构化记录 `envelopeViolation` 与未声明路径；覆盖普通文件及仅暂存区越界，不启动 reviewer。

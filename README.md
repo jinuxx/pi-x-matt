@@ -6,15 +6,18 @@
 
 ## 安装
 
-要求已安装 Pi 1.2.0 或更高版本、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 `pi-subagents@0.88.0` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。Pi 支持下限仍为 `1.2.0`（`@earendil-works/pi-ai` peer 为 `>=1.2.0`），本 package 的 Pi host peer 为 `>=1.2.0`；Pi `0.86.1`/`1.0.0` 不再受支持。Node `22.19.0` 下限来自 bundled `undici@8.12.4` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时和工具 provider，再安装本 package：
+要求已安装 Pi 1.2.0 或更高版本、Node.js 22.19.0 或更高版本，以及提供 named workflow resource/host step 的 pi-subagents runtime。当前按 `pi-subagents@0.88.1` 验证，项目 runtime 与 bundled library 均固定该版本；不再支持旧 `workflowScript` RPC 的 0.69 runtime。Pi 支持下限仍为 `1.2.0`（`@earendil-works/pi-ai` peer 为 `>=1.2.0`），本 package 的 Pi host peer 为 `>=1.2.0`；Pi `0.86.1`/`1.0.0` 不再受支持。Node `22.19.0` 下限来自 bundled `undici@8.12.4` 的 `engines`，也与 Pi 自身要求一致。在目标代码库中先安装与项目绑定的子代理运行时，再安装本 package：
 
 ```bash
-pi install -l npm:@ff-labs/pi-fff
-pi install -l npm:pi-subagents@0.88.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
+pi install -l npm:pi-subagents@0.88.1
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.41
 ```
 
-`@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
+本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
+
+`fffind`、`ffgrep` 只在 pi-fff 的 `tools-and-ui` / `tools-only` 模式注册，`override` 模式下不存在。显式 tools allowlist 中声明了子进程里没有的工具，会让 child 以工具诊断（`missing`）直接启动失败，所以共享 agent 定义不再绑定这两个名称；这并非 pi-subagents 弃用了什么，而是定义不应依赖用户本机的 pi-fff 模式。需要这些工具时，在个人 `agentOverrides.<name>.tools` 中追加；`matt-reviewer` 还须在个人 `toolBudget.block` 中同步列出它们，否则它们不受 50 次取证上限约束（`toolBudget` 为整体替换，需连同 `hard` 一起写）。
+
+`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
 
 安装或升级 pi-subagents、本 package 的 extension 或 `lib/*.mjs` 后，退出并重新启动 Pi，再恢复原会话；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。仅修改 skills 等文本资源时，可使用：
 
@@ -26,7 +29,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 
 ```json
 {
-  "source": "npm:pi-subagents@0.88.0",
+  "source": "npm:pi-subagents@0.88.1",
   "autoload": false,
   "extensions": ["+bundle/index.js"],
   "skills": [],
@@ -37,17 +40,17 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.88.0`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。0.81.0 起 npm 发布包入口改为 `bundle/index.js`，公共 API subpath 也指向 `bundle/`；最小加载过滤必须与发布包 manifest 一致，不能沿用 `+index.js`。
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package 固定 bundle `pi-subagents@0.88.1`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts。上面的独立 project-local runtime 仍必须保留。0.81.0 起 npm 发布包入口改为 `bundle/index.js`，公共 API subpath 也指向 `bundle/`；最小加载过滤必须与发布包 manifest 一致，不能沿用 `+index.js`。
 
 本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
 
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.41
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.40`。
+已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.41`。
 
 ## 提示中的测试术语
 
@@ -86,7 +89,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.88.0",
+      "source": "npm:pi-subagents@0.88.1",
       "autoload": false,
       "extensions": ["+bundle/index.js"],
       "skills": [],
@@ -124,9 +127,9 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 
 若检索能力改由 MCP 提供，在本地 `subagents.agentOverrides.matt-researcher.tools` 中替换为 `["read", "mcp:<server>/<search-tool>", "mcp:<server>/<fetch-tool>"]`，使用实际 server/tool 名称，不改共享 agent 定义、不授予整台 MCP server 或 `tools: "inherit"`。Pi 原生 MCP 与 pi-mcp-adapter 均支持该 selector；adapter 的 metadata cache 首次建立后需重启 Pi。0.88.0 会跳过 adapter 中明确 `disabled: true` 的 server，但未知 server 或已启用而未匹配到工具仍失败，不能据父会话可用推断 child 可用。
 
-## 0.84.0 → 0.88.0 升级边界
+## 0.84.0 → 0.88.1 升级边界
 
-按 [官方 CHANGELOG](https://github.com/nicobailon/pi-subagents/blob/v0.88.0/CHANGELOG.md) 与 npm 发布源码逐项核对：
+按 [官方 CHANGELOG](https://github.com/nicobailon/pi-subagents/blob/v0.88.1/CHANGELOG.md) 与 npm 发布源码逐项核对：
 
 | 版本 | 与本 package 的关系 |
 | --- | --- |
@@ -135,8 +138,14 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 | 0.86.0 | 修复 compaction 后工具消失与循环 schema 验证崩溃；现有 schema 没有循环引用，不需要放松校验或调整工具激活配置。 |
 | 0.87.0 | `provider/id` 不再偷偷切换 provider；模型选择继续交给 settings，鉴权失败不自动换模型。新增 `defaultInheritGlobalContext`；四个 leaf 显式 `inheritGlobalContext: false`，保持默认不继承父会话的全局指令，仍可由用户逐 agent override。 |
 | 0.88.0 | child 等待 supervisor decision/interview 或 intercom ask 时暂停执行预算；`progress_update` 不暂停，workflow 总 deadline 仍是 wall-clock。输出长度截断现在是执行失败，不能解析 partial prose 或当成有效 FAIL；已有合法 `structured_output` 不受此项影响。bundled `undici` 升到安全修复版 `8.12.4`。 |
+| 0.88.1 | 后台 child 未声明 tools 且无 capability ceiling 时恢复 ambient MCP。本 package 四个 leaf 仍显式列 tools，researcher 仍只选精确 `mcp:` 工具，不借升级继承整台 server。required extension 注册但未选择的 MCP server 可降为 warning；其他必需扩展启动错误仍失败，不增加本地 catch/fallback。 |
+| 0.88.1 | 修复结果文件先于最终 status 落盘的竞态：同 PID namespace 中仍活跃的 child 保持 `running`，不伪造 `unknown` 终态。父流程继续等待原生 completion、核对完整 status；有结果文件不等于已取得 runner exit proof，真正未知的终态仍不可放行。 |
+| 0.88.1 | 手动 compaction 不再唤醒空闲或 Esc 停止的父会话；compaction 中到达的 completion 延后唤醒一次。fleet inspector 会为授权/select/confirm 对话框让位；直接使用原生修复，不额外插入唤醒、轮询或自建确认 UI。 |
+| 0.88.1 | `subagent_launch` handler 对新 child 的 task 改写现在生效，但不改其他字段或 resumed message，也不覆盖 RPC/SDK。本 package 的 RPC 授权与轴隔离仍由自己的 dispatcher 维护。 |
 
-本次没有废弃我们在用的 `disableBuiltins`、`projectRootResolution`、agent tools/skillPath、RPC `spawn`、named resource、`runs.all`/`runs.host`、`emit`、`terminalOutcome` 或结果事件。新增 `stop` 的 `drain: true` 是显式停止、不是交付完成；不自动替换本项目的失败恢复路径。latest progress 直接由原生 widget/status 展示，不再新增轮询或重复消息。
+0.88.1 没有废弃我们在用的 `disableBuiltins`、`projectRootResolution`、agent tools/skillPath、RPC `spawn`、named resource、`runs.all`/`runs.host`、`emit`、`terminalOutcome` 或结果事件。新增 `stop` 的 `drain: true` 是显式停止、不是交付完成；不自动替换本项目的失败恢复路径。latest progress 直接由原生 widget/status 展示，不再新增轮询或重复消息。
+
+移除的是早已不属于 workflow child 公共结果的 `timedOut` 兼容与错误文本超时猜测：settlement 和通知只使用 `terminalOutcome.reason === "timeout"`，避免 provider 错误引用超时文字时误启恢复；预算耗尽、截断、停止和基础设施失败仍不自动结算。这不删除上游在其他状态/直接运行结果中仍支持的 `timedOut`。
 
 **权限边界不扩大**：0.85.0 的嵌套 `subagent_launch` 审批只覆盖经工具调用启动的 workflow，不覆盖本 package 的 RPC 启动路径，不能宣称外部 permission extension 会逐 child 审批。dispatcher 自身的限定授权、唯一 writer、host command allowlist 与双轴 gate 继续生效；Node permission layer 也不是 child 的 OS sandbox。
 
@@ -303,10 +312,13 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 `allowedFiles` 是精确权限清单，可包含按已批准契约可能新建但尚不存在的文件；未使用的条目不构成改动承诺。writer 已完成、完整候选仅因越界失败时，宿主保留 `review.md/json` 与 `envelopeViolation`，并列出未声明路径。保持候选不变，保留旧文件、补齐必需 `allowedFiles` 后，用 `recollect: {dispatchId: "<最新越界派发>"}` 复用单票真实重新确认，仅重跑 collector（省略 laneTasks）。成功仍是待审候选，须再用新 dispatchId 显式 `review`，不重跑 writer。原校验证据、repair 谱系及 batch 提交门禁保留；缺失 Pack、宿主校验失败、其他执行失败或候选/index/证据漂移仍拒绝。详见 [恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#信封越界后的仅重采集)。
 
-最近一次真实只读冒烟基于 `pi-subagents@0.88.0` + Pi `1.5.2`，完整重启并 reload 后运行 Research 与 Code Review 正/负例，共 5 个真实模型 child。TDD writer/repair 链未在本轮实跑，下面旧版记录不代表其已在 0.88.0 通过。仓库内另可复现 registry、dispatcher、权限与 gate，以及针对已安装 `0.88.0` 的真实受限进程 sandbox、bundled resource 注册、原生 agent discovery 与 completion 截断契约测试；sandbox 测试只注入 mock child 结果，不调用模型，另有截断回复不得触发自动恢复与不可恢复 writer 保留原因的回归。0.80.0 起直接由 completion notice 唤醒空闲父会话，不再额外插入唤醒消息；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
+本次升级的契约测试针对已安装 `0.88.1` 的真实受限进程 sandbox、bundled resource 注册、原生 agent discovery、MCP 精确选择和终态写入竞态；child/model 与 PID liveness 使用 mock，不冒称真实模型、实际 runner 退出观测或 TUI 交互验证。旧 workflow 超时猜测与上游竞态/MCP 修复均有升级前失败、适配后通过的回归。
 
-- Research 真实冒烟（0.88.0 + Pi 1.5.2）：`state=complete`、research `ok=true`、fresh context；Exa MCP search、fetch 和 `structured_output` 各实际成功调用一次，请求/解析/回复模型均匹配 researcher override。父会话从完整 `workflow.value` 核验两个官方来源结论与 schema，无 settlement 或重试。
-- Code Review 真实冒烟（0.88.0 + Pi 1.5.2）：OS temp 两组独立合成夹具，正例 Standards/Spec 均 PASS，负例两轴分别识别授权缺陷与金额计算错误、各一项 P1。负例 workflow 按预期 failed、不产生 `workflow.value`，两轴完整报告仍可从最后一个阶段快照读取；正例为 complete。四个 reviewer 均为 fresh、匹配 reviewer 模型 override、一次成功调用 `structured_output`，两组均核实并行运行，无 writer、settlement 或自动重试。全部结果重新通过 schema 检查，夹具 hash、仓库 HEAD/index/worktree 在子代理运行前后一致。
+完整重启后的真实只读冒烟基于 `pi-subagents@0.88.1` + Pi `1.5.2`（本机 pi-fff 为 `override` 模式），运行 Research 与 Code Review 正/负例，共 5 个真实模型 child，全部 fresh context、模型匹配 override 映射、无 settlement 与自动重试，仓库与夹具在运行前后未变。`matt-reader` 只服务 `architecture-design`，需要用户先确认设计问题，本轮未实跑；TDD writer/repair 链同样未实跑。0.80.0 起直接由 completion notice 唤醒空闲父会话，不再额外插入唤醒消息；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
+
+- Research 真实冒烟（0.88.1 + Pi 1.5.2）：`state=complete`、research `ok=true`、fresh context，模型匹配 researcher override。子会话只持有 `read`、`mcp__exa__web_search_exa`、`mcp__exa__web_fetch_exa` 与 `structured_output`，实际只用 `read`、`mcp__exa__web_fetch_exa` 和 `structured_output`，未获得任何未授权 MCP 工具。父会话从完整 `workflow.value` 核验 5 条 claim 与 2 个固定版本官方来源（`raw.githubusercontent.com`），schema 合法，无 settlement 或重试。
+- Code Review 真实冒烟（0.88.1 + Pi 1.5.2）：OS temp 两组独立合成夹具，正例 Standards/Spec 均 PASS（0 findings）。负例 Standards 报告 1 项 P1 授权绕过、Spec 报告 2 项 P1 金额计算，负例 workflow 按 gate `standards.verdict` 失败、不产生 `workflow.value`，两轴完整报告仍可从最后一个阶段快照读取；正例为 complete。四个 reviewer 均为 fresh、匹配 reviewer 模型 override、`ok=true`，两组的两个轴经 `startedAt`/`endedAt` 核对确实重叠并行（正例 20.8s、负例 19.5s），无 writer、settlement 或自动重试。全部结果重新通过 schema 检查，夹具 hash、仓库 HEAD/status 在子代理运行前后一致。
+- 工具修复验证：本机 pi-fff 为 `override` 模式，reviewer 子会话实际注册到的是 `grep`/`find`（无 `ffgrep`/`fffind`）并成功启动，证明共享 agent 不再依赖本机 pi-fff 模式。
 
 - Research 单 lane 异步冒烟（0.83.1 + Pi 1.4.0，重启并重新配置模型后实跑）：workflow `state=complete`、research lane `ok=true`、`resolvedContext=fresh`；runtime 请求模型与 child session 的实际回复模型均匹配 researcher override，未继承父会话模型。已核实 `web_search`、`web_fetch` 与 `structured_output` 各实际调用成功一次，没有额外 settlement/relaunch。异步完成通知已返回，父会话从 `status.json` 的完整 `workflow.value` 核验了两项 findings、官方来源与空 gaps。
 - Code Review 双轴失败分支真实冒烟（0.83.1 + Pi 1.4.0，重启后实跑）：OS temp 负例夹具令两个 reviewer 均返回 `FAIL`，workflow 保持 `state=failed` 且不生成 `workflow.value`；父会话从实际 `status.json → workflow.emits` 的最后一个阶段快照完整读取 Standards 1 项与 Spec 2 项 findings，两个结果均 `ok=true` 且 schema 有效。仅启动两个只读 reviewer，无实现重跑或仓库改动。

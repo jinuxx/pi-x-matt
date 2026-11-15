@@ -12,6 +12,8 @@
 
 pi-subagents 0.88.0 的 `Response was truncated: the model reached its maximum output length.` 属于执行失败，不是有效评审 FAIL，也不是 timeout；不得从 partial `output` 补出结构化结果或自动追加 settlement。上游已经捕获合法 `structured_output` 时不因这一截断条件失败，仍须核对 `ok === true` 与 schema。lane timeout 与 settlement 数值是执行预算，supervisor 等待不计入，不能按 wall-clock 猜测终态。
 
+workflow child 的超时结算与通知只依据公共 `terminalOutcome.reason === "timeout"`；不再读取旧 `timedOut` 字段或根据 `error` 中出现的超时文字猜测。0.88.1 修复结果先于最终 status 落盘的窗口：仍活跃的 child 保持 `running`，须等待原生 completion，不依据结果文件存在强制补写终态、重复派发或绕过 runner exit proof；真正的未知终态仍停止。
+
 1. completion 与 targeted status 的 Preview 是有界预览，可能带截断标记（如 `[preview truncated]`、`…`），不是完整 JSON；不得据此汇总。
 2. 按通知给出的 retention-managed async dir 读取完整 `status.json`，先核对 workflow run ID 与终态：
    - `state === "complete"`：保持成功契约，从 `workflow.value` 的结果数组按 lane key 取 `structuredOutput`；缺少 `workflow.value` 仍须停止，不回退到阶段快照。

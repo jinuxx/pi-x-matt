@@ -32,7 +32,7 @@ metadata:
 
 - **Fact** 由代码、配置、文档、工具或一手外部资料决定。先自行调查；不要让用户回答可以查到的事实。
 - **Decision** 需要价值判断或取舍。必须由用户回答；代码现状和 agent 推荐只能作为证据。
-- 本地事实由父会话直接使用 `fffind`、`ffgrep`、`read` 等只读工具核验；需要外部一手资料时调用已注册的 `matt-research` workflow。
+- 本地事实由父会话直接使用 `find`、`grep`、`read` 等只读工具核验；需要外部一手资料时调用已注册的 `matt-research` workflow。
 - 异步调查是未解决前置条件。继续询问不依赖它的其他 frontier；调查完成前不要猜测其下游问题。
 
 ## 完成 gate

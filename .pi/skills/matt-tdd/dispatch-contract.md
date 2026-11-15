@@ -138,7 +138,7 @@ pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前�
 
 修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。writer 须在结构化结果的 `findingResolutions` 中对每条获批 finding 逐条交代，宿主在采集证据前校验其完整性并运行获批的 `preReviewCommands`（见 [宿主确定性校验](#宿主确定性校验)）；receipt 的 `verification.ok=false` 表示该候选尚不能正式送审。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
 
-collector 的 stdout 在 `pi-subagents@0.88.0` 中只是 4 KiB 预览，不能承载任意大小的 JSON。完整回执另存为宿主目录中的只读 `review-result.json`；3500 字节以内保持原回执形状，较大结果分为最多 24 帧，每帧在 4 KiB 以下。后续帧只由绑定该文件和固定序号的精确 host command 读取，逐帧核对序号、总数、长度和同一结果的 SHA-256，再无损还原 candidate 与全部 changedPaths。它不是重试或重新取证；加上 claim、校验和采集仍低于上游 32 次 host call 上限。超限或损坏时停止，不裁剪 proof，不从合流且有 1 MiB 上限的 `outputPath` 日志重建 JSON。
+collector 的 stdout 在 `pi-subagents@0.88.1` 中只是 4 KiB 预览，不能承载任意大小的 JSON。完整回执另存为宿主目录中的只读 `review-result.json`；3500 字节以内保持原回执形状，较大结果分为最多 24 帧，每帧在 4 KiB 以下。后续帧只由绑定该文件和固定序号的精确 host command 读取，逐帧核对序号、总数、长度和同一结果的 SHA-256，再无损还原 candidate 与全部 changedPaths。它不是重试或重新取证；加上 claim、校验和采集仍低于上游 32 次 host call 上限。超限或损坏时停止，不裁剪 proof，不从合流且有 1 MiB 上限的 `outputPath` 日志重建 JSON。
 
 候选准备好后，显式送审：
 

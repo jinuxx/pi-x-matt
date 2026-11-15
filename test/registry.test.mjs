@@ -281,7 +281,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.disableBuiltins, true);
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.deepEqual(settings.packages, [{
-    source: "npm:pi-subagents@0.88.0",
+    source: "npm:pi-subagents@0.88.1",
     autoload: false,
     extensions: ["+bundle/index.js"],
     skills: [],
@@ -314,7 +314,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.40");
+  assert.equal(manifest.version, "0.2.41");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -339,7 +339,7 @@ test("package manifest exposes namespaced resources", async () => {
   assert.deepEqual(manifest.pi.subagents.agents, ["./.pi/agents"]);
   assert.equal(manifest.engines.node, ">=22.19.0");
   assert.equal(manifest.peerDependencies["@earendil-works/pi-coding-agent"], ">=1.2.0");
-  assert.equal(manifest.dependencies["pi-subagents"], "0.88.0");
+  assert.equal(manifest.dependencies["pi-subagents"], "0.88.1");
   assert.deepEqual(manifest.bundledDependencies, ["pi-subagents"]);
   assert.equal(manifest.peerDependencies["pi-subagents"], undefined);
   assert.equal(manifest.repository.url, "git+https://github.com/jinuxx/pi-x-matt.git");
@@ -434,8 +434,9 @@ test("all project agents are leaf-only and use the private skill path", async ()
 
   for (const name of ["matt-reader", "matt-reviewer", "matt-worker"]) {
     const content = await readFile(join(ROOT, ".pi", "agents", `${name}.md`), "utf8");
-    assert.match(content, /tools:.*\bffgrep\b/);
-    assert.match(content, /tools:.*\bfffind\b/);
+    assert.match(content, /tools:.*\bgrep\b/);
+    assert.match(content, /tools:.*\bfind\b/);
+    assert.doesNotMatch(content, /\b(ffgrep|fffind)\b/);
   }
 
   const reviewer = await readFile(join(ROOT, ".pi", "agents", "matt-reviewer.md"), "utf8");
@@ -446,7 +447,7 @@ test("all project agents are leaf-only and use the private skill path", async ()
   assert.ok(reviewerBudget);
   assert.deepEqual(JSON.parse(reviewerBudget[1]), {
     hard: 50,
-    block: ["read", "grep", "find", "ffgrep", "fffind", "ls", "git_read"],
+    block: ["read", "grep", "find", "ls", "git_read"],
   });
   const gitTool = await readFile(join(ROOT, "child-tools", "review-readonly-git.ts"), "utf8");
   assert.match(gitTool, /"worktree-files"/);
@@ -824,8 +825,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
   assert.match(readme, /同范围连续修复不重复入口确认/);
   assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.40/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.40/);
+  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.41/);
+  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.41/);
   assert.match(readme, /三个只读 `architecture-design` lanes/);
   assert.match(readme, /`matt-archive <feature-slug>`/);
   assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);

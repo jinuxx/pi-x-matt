@@ -653,7 +653,7 @@ test("dispatcher resumes a timed-out retained child once for structured-output s
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
   const failures = [
-    { error: "Subagent timed out after 300000ms." },
+    { error: "Subagent timed out after 300000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
     // The runtime can wrap the timeout message inside the child receipt, so the
     // structured terminalOutcome is what identifies a real timeout.
     { error: "Child run failed.\n\nError: Subagent timed out after 300000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
@@ -689,6 +689,28 @@ test("dispatcher resumes a timed-out retained child once for structured-output s
     assert.equal(calls, 2);
     assert.equal(results[0].key, "research");
     assert.equal(results[0].structuredOutput.summary, "done");
+  }
+});
+
+test("dispatcher never settles a workflow child based on legacy flags or error prose", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "bounded research", ROOT);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  for (const failure of [
+    { timedOut: true },
+    { error: "Provider diagnostic quoted: Subagent timed out after 300000ms." },
+    { timedOut: true, error: "Subagent timed out after 300000ms.",
+      terminalOutcome: { state: "partial", reason: "budget_exhausted" } },
+  ]) {
+    let calls = 0;
+    await assert.rejects(() => new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script)({
+      all: async () => {
+        calls += 1;
+        return [{ key: "research", ok: false, runId: "retained-run",
+          resumability: { state: "resumable" }, ...failure }];
+      },
+    }), /before structuredOutput|without valid structuredOutput/);
+    assert.equal(calls, 1, "only the public terminalOutcome may authorize timeout settlement");
   }
 });
 

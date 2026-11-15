@@ -256,6 +256,22 @@ test("receipts distinguish provider failures, valid code FAIL and observed settl
   }] } }).settlement, "pending");
 });
 
+test("receipts do not infer workflow timeouts from removed flags or quoted errors", () => {
+  for (const failure of [
+    { timedOut: true },
+    { error: "Subagent timed out after 300000ms." },
+    { timedOut: true, error: "Subagent timed out after 300000ms.",
+      terminalOutcome: { state: "partial", reason: "budget_exhausted" } },
+  ]) {
+    const status = { state: "running", workflow: { emits: [{
+      type: "pi-x-matt.stage-results",
+      results: [{ key: "implement", ok: false, runId: "retained",
+        resumability: { state: "resumable" }, ...failure }],
+    }] } };
+    assert.equal(workflowReceipt(status).settlement, null);
+  }
+});
+
 test("receipts carry host-measured verification only when a gate ran", () => {
   const receipt = hostVerification => workflowReceipt({ workflow: { emits: [{ type: "pi-x-matt.stage-results",
     results: [{ key: "implement", ok: true, ...(hostVerification ? { hostVerification } : {}) }] }] } });

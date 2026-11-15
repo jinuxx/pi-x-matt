@@ -27,6 +27,73 @@ const { consumeWorkflowResourcePermit, authorizeWorkflowResourceHost } = await i
 const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/notify.js")));
 const { createCapacityResilientJsonWriter } = await import(pathToFileURL(join(SOURCE_DIR, "shared/capacity-resilient-json.js")));
 const { TRUNCATED_RESPONSE_ERROR } = await import(pathToFileURL(join(SOURCE_DIR, "shared/utils.js")));
+const { reconcileAsyncRun } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/stale-run-reconciler.js")));
+
+test("a live child keeps pending terminal proof between result and final status writes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-matt-terminal-race-"));
+  try {
+    const runId = "matt-terminal-race", resultsDir = join(directory, "results");
+    const asyncDir = join(directory, runId), statusPath = join(asyncDir, "status.json");
+    const pending = { version: 1, state: "pending", runId, runnerProcessInstanceId: "runner-live" };
+    const running = {
+      lifecycleArtifactVersion: 3, runId, mode: "single", state: "running", pid: 12345,
+      pidNamespaceScope: "test-scope", startedAt: 1000, lastUpdate: 1500,
+      processTerminal: pending, steps: [{ agent: "matt-researcher", status: "running", startedAt: 1000 }],
+    };
+    await mkdir(asyncDir);
+    await mkdir(resultsDir);
+    await writeFile(statusPath, JSON.stringify(running));
+    await writeFile(join(resultsDir, `${runId}.json`), JSON.stringify({ id: runId, success: true, state: "complete" }));
+    const options = { resultsDir, now: () => 2000, kill: () => true, pidNamespaceScope: () => "test-scope" };
+    const live = reconcileAsyncRun(asyncDir, options);
+    assert.equal(live.repaired, false);
+    assert.equal(live.status.state, "running");
+    assert.deepEqual(JSON.parse(await readFile(statusPath, "utf8")), running);
+    const complete = { ...running, state: "complete", endedAt: 2000,
+      processTerminal: { ...pending, state: "unknown", reason: "observer-unavailable" } };
+    await writeFile(statusPath, JSON.stringify(complete));
+    const settled = reconcileAsyncRun(asyncDir, options);
+    assert.equal(settled.repaired, false);
+    assert.deepEqual(settled.status, complete);
+    await writeFile(statusPath, JSON.stringify(running));
+    const foreign = reconcileAsyncRun(asyncDir, { ...options, pidNamespaceScope: () => "other-scope" });
+    assert.equal(foreign.repaired, true, "an unrelated live PID cannot keep this child running");
+    assert.equal(foreign.status.processTerminal.state, "unknown", "a result file alone is not observed exit proof");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("precise MCP grants exclude ambient tools and require the server's defining child extension", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-matt-mcp-grant-"));
+  try {
+    const script = `
+      import assert from "node:assert/strict";
+      import { resolveMcpDirectToolResolution, extensionOnlyMcpServers } from
+        ${JSON.stringify(pathToFileURL(join(SOURCE_DIR, "runs/shared/mcp-direct-tool-allowlist.js")).href)};
+      const extensionPath = ${JSON.stringify(join(directory, "required.ts"))};
+      const names = ["web_search_exa", "web_fetch_exa", "unapproved_write"];
+      const host = {
+        getCommands: () => [{ name: "mcp", sourceInfo: { path: "builtin:mcp" } }],
+        getAllTools: () => names.map(name => ({ name: "mcp__exa__" + name, namespace: { name: "mcp__exa" } })),
+        getMcpServers: () => [{ name: "exa", extensionPath }],
+      };
+      const grant = resolveMcpDirectToolResolution(["exa/web_search_exa", "exa/web_fetch_exa"], process.cwd(), host);
+      assert.deepEqual(grant.unresolvedSelectors, []);
+      assert.deepEqual(grant.selections.map(row => row.name), ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"]);
+      assert.deepEqual(extensionOnlyMcpServers(grant.selections, host, process.cwd(), true, () => false), ["exa"]);
+      assert.deepEqual(extensionOnlyMcpServers(grant.selections, host, process.cwd(), true,
+        path => path === extensionPath), []);
+      assert.deepEqual(resolveMcpDirectToolResolution(["exa/missing"], process.cwd(), host).unresolvedSelectors, ["exa/missing"]);
+    `;
+    execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: directory, encoding: "utf8",
+      env: { ...process.env, PI_CODING_AGENT_DIR: join(directory, "user") },
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 function planFor(registry, name, evidence) {
   const workflow = registry.skills[name];
