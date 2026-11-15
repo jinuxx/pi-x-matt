@@ -11,7 +11,7 @@
 ```bash
 pi install -l npm:@ff-labs/pi-fff
 pi install -l npm:pi-subagents@0.88.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.39
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 ```
 
 `@ff-labs/pi-fff` 为本地代码子代理提供 `fffind` 与 `ffgrep`。`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
@@ -44,10 +44,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.39
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.40
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.39`。
+已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.40`。
 
 ## 提示中的测试术语
 
@@ -298,6 +298,10 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 父会话按 [Workflow Result Reading](.pi/skills/matt-tdd/results.md) 读取每个 lane 的 `structuredOutput`：completion/targeted status 的 Preview 有界且可能被截断，必须读取通知指向的 retention-managed `status.json`。成功时仍读取完整 `workflow.value`；失败时读取 `workflow.emits` 中最后一个 `pi-x-matt.stage-results` 累积快照（在阶段 gate 前发布），保留两个复核轴的全部结果。复核结论不通过与执行失败/结果缺失/schema 无效分别报告，均不授权提交或自动重跑实现。不解析普通 `output`、`outputReference`，也不从 receipt、通知或旧 transcript 拼装结果。
 
 ## 已验证行为
+
+### 信封越界的原地恢复
+
+`allowedFiles` 是精确权限清单，可包含按已批准契约可能新建但尚不存在的文件；未使用的条目不构成改动承诺。writer 已完成、完整候选仅因越界失败时，宿主保留 `review.md/json` 与 `envelopeViolation`，并列出未声明路径。保持候选不变，保留旧文件、补齐必需 `allowedFiles` 后，用 `recollect: {dispatchId: "<最新越界派发>"}` 复用单票真实重新确认，仅重跑 collector（省略 laneTasks）。成功仍是待审候选，须再用新 dispatchId 显式 `review`，不重跑 writer。原校验证据、repair 谱系及 batch 提交门禁保留；缺失 Pack、宿主校验失败、其他执行失败或候选/index/证据漂移仍拒绝。详见 [恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#信封越界后的仅重采集)。
 
 最近一次真实只读冒烟基于 `pi-subagents@0.88.0` + Pi `1.5.2`，完整重启并 reload 后运行 Research 与 Code Review 正/负例，共 5 个真实模型 child。TDD writer/repair 链未在本轮实跑，下面旧版记录不代表其已在 0.88.0 通过。仓库内另可复现 registry、dispatcher、权限与 gate，以及针对已安装 `0.88.0` 的真实受限进程 sandbox、bundled resource 注册、原生 agent discovery 与 completion 截断契约测试；sandbox 测试只注入 mock child 结果，不调用模型，另有截断回复不得触发自动恢复与不可恢复 writer 保留原因的回归。0.80.0 起直接由 completion notice 唤醒空闲父会话，不再额外插入唤醒消息；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
 

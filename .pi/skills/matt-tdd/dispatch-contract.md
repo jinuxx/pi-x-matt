@@ -60,6 +60,33 @@ batch-bound 证据采集额外在受信任 collector 中生成 candidate tree �
 
 风险接受的 batch 候选也必须匹配原宿主 candidate tree、parent 与 snapshot；tracker 除 `Status: resolved`、`Implementation commit` 外还必须在 `## Comments` 记录 `Risk acceptance: <acceptRisk 返回的 dispatchId>`。缺失/不匹配的风险收据不能推进下一票；普通 batch 确认本身不接受任何风险。
 
+## 信封越界后的仅重采集
+
+`allowedFiles` 是权限清单，不是承诺一定会改动的文件清单；条目无需已经存在。应预先包含按已批准契约可能新建的精确文件路径，不用目录/glob 或无关文件扩大权限。
+
+writer 已合法 `COMPLETE`、但完整候选因信封越界被拒绝时，collector 仍将只读 `review.md/json` 保存，Pack 与宿主记录包含 `envelopeViolation.paths` 和原 `allowedFiles`。原派发保持 `failed`，reviewer 不启动，不生成可交付 batch candidate。不要使用 `repair`、`writerRecovery` 或重发 initial 来处理这类失败。
+
+保持工作区、HEAD、index 和原 Pack 不变，使用最新派发 ID，并在原 `implementation` 中保留全部旧文件、只添加必需路径：
+
+```json
+{
+  "workflow": "matt-tdd",
+  "task": "仅重采集已完成实现的候选证据",
+  "implementation": {
+    "ticket": "slice:example",
+    "scope": "与原授权完全相同的行为及架构边界",
+    "allowedFiles": ["src/parser.ts", "src/response.ts", "test/parser.test.ts"]
+  },
+  "recollect": {"dispatchId": "<最新信封越界派发 ID>"}
+}
+```
+
+示例中的 ticket/scope/诊断清单/`preReviewCommands` 必须替换为原批准值；仅允许增加 `allowedFiles`，其余不变。`recollect` 不接收 laneTasks。新增权限复用既有单票 TUI/RPC 重新确认；无确认、仍有未声明路径、非最新派发、候选/index/Pack 漂移、writer 未完成、宿主校验失败、已有 reviewer 结果或其他类型的执行失败都拒绝。宿主在入队、启动和采集边界核验候选，不接受模型提供的 hash 或路径。
+
+确认后只运行固定 collector，不启动/恢复 writer、不运行 reviewer，也不重复执行原已结算的评审前命令。保留原基线、writer 结果及宿主校验证据、repair findings/计数和 batch binding；batch 计划不扩张。成功仅返回 `reviewPending=true` 与 `pi-x-matt.review-pending`，随后用新 dispatchId 显式 `review`（提供两轴 laneTasks）。仍须 fresh 双轴通过、父会话最终验证，以及原 batch candidate tree/commit parent/本地 tracker 校验，才能交付或推进下一票。
+
+旧版本已经丢失 Pack 的失败没有可核验候选绑定，不能用此入口自动补认当前工作区；错误会明确说明缺证，不回退重跑 writer。需要保留原实现与失败证据，由用户另行决定。
+
 ## 修复而非重新实现
 
 保存工具返回的 `dispatchId`。只要同一 session/project/ticket 已有未取消派发（不按当前授权 invocationId 过滤），就不能再次发送无 `repair/review/recovery` 的初始实现；重新确认授权、显式重新 invocation 或替换诊断清单都不能把谱系重置为 initial。只有排队后未启动即被取消的派发不构成该阻断。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。

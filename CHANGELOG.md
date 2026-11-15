@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.2.40
+
+- 修复完整候选因信封越界而丢失证据：collector 在拒绝前保存只读 `review.md/json`，结构化记录 `envelopeViolation` 与未声明路径；覆盖普通文件及仅暂存区越界，不启动 reviewer。
+- 新增显式 `recollect: {dispatchId}`：复用已有单票重新确认，只允许增加 `allowedFiles`，随后仅运行 collector，不重跑 writer、宿主校验命令或 reviewer；成功仍待显式 `review`。
+- 恢复绑定最新派发、原候选/index/Pack 与基线，保留已完成 writer、宿主校验证据、repair findings/计数和 batch binding；未确认、缺证、漂移、宿主校验失败及其他执行失败仍拒绝，不改变 batch candidate tree、commit parent/tree 和 tracker 门禁。
+- 文档明确 `allowedFiles` 是权限清单，条目可尚不存在，未使用的声明不构成改动承诺；越界错误列出路径和恢复指引，不再以原始 `ENOENT` 收场。
+- 本地 281 项测试、registry freshness 与 31 个移植来源的 upstream drift 检查通过；包含原生受限 runtime 中无 child session 的仅重采集回归，模型结果使用 mock，未在反馈的业务项目端到端复跑。
+- 升级后须完整退出并重启 Pi，再恢复原会话，仅 `/reload` 不够。旧版本已经丢失 Pack 的失败无法自动补认当前工作区，需保留原实现与失败证据，由用户另行决定。
+
 ## 0.2.39
 
 - 测试提示统一使用“测试切入点”，架构中表示依赖替换位置的术语改为“可替换点”；补充直白解释，保留既有协议字段及上游原文。

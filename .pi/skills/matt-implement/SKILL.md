@@ -64,6 +64,8 @@ TDD worker 是唯一写者。implement 父会话不直接与 worker 并行写入
 
 ### 2. 持续验证
 
+完整候选仅因 `envelopeViolation` 被拒绝时，按 [仅重采集契约](../matt-tdd/dispatch-contract.md#信封越界后的仅重采集) 保留原候选，补齐 `allowedFiles` 并真实重新确认，使用 `recollect` 仅运行 collector；不提供 laneTasks，不重跑 writer，不改变诊断清单或 `preReviewCommands`。成功仍待审，随后用最新 dispatchId 显式 `review`。其他失败、缺失 Pack、宿主校验失败或漂移不适用，不重发 initial 解阻。
+
 若 repair 因 writer 执行失败而未完成，不回退引用旧成功 dispatch，也不使用 reviewer `recovery`。仅在 [writer 执行恢复契约](../matt-tdd/dispatch-contract.md#失败-repair-的-writer-执行恢复) 满足时，可显式使用 `writerRecovery: {dispatchId: "<最新失败 repair>"}` 与 implement task，恢复同一 writer 一次；保留 partial 快照与原修复契约/计数。合法 BLOCKED、不可恢复/缺失 writer 或恢复再次失败仍停止，不另起 fresh writer；成功后继续使用最新 dispatchId 正式送审，不把恢复当成 PASS。
 
 TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成后运行一次相关回归命令；只有明确属于当前 slice 的聚焦 typecheck 才交给 worker。TDD 完成后，父会话再运行必要的 ticket 相关复核、typecheck（若有）和一次完整测试套件。完整测试套件不得消耗 TDD worker 的 workflow runtime。任何失败都保持未提交状态，报告命令、失败证据和阻塞原因。

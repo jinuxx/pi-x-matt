@@ -56,6 +56,8 @@ reviewer 完成限定范围检查后一次报告全部有证据的阻断项，�
 
 上游方法把 refactor 放在 review 阶段，而不是 red→green 循环内。不要让 worker 在测试刚变绿后顺手扩大重构范围；需要重构时，根据 review finding 由父会话取得授权后再启动下一次受限实现。
 
+完整候选仅因 `envelopeViolation` 被拒绝时，原失败与越界 Pack 会保留。按 [仅重采集](dispatch-contract.md#信封越界后的仅重采集) 使用 `recollect: {dispatchId: "<最新越界派发>"}`：保留原信封全部文件、只增加必需 `allowedFiles`，复用单票真实重新确认；不提供 laneTasks，不重跑任何模型。宿主校验失败或候选/index/证据漂移仍停止。成功是待审候选，用新 dispatchId 显式 `review`，不称完整 TDD 通过。
+
 ## 汇总
 
 失败 repair 的 writer 执行恢复使用独立的 `writerRecovery: {dispatchId: "<最新失败 repair>"}`，只提供 `laneTasks.implement`；完整条件见 [失败 repair 的 writer 执行恢复](dispatch-contract.md#失败-repair-的-writer-执行恢复)。宿主只对失败且无结构化结果、仍可恢复的原 writer 显式 resume 一次，保留 partial 快照、失败、原 findings/计数与正式评审基线；不用于合法 BLOCKED、初次实现失败或不可恢复 writer，不追加 settlement，不换 fresh writer。恢复成功仍只产生待审候选，随后须用最新 dispatchId 正式 review。此入口不改变 reviewer `recovery` 的含义。

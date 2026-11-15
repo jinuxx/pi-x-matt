@@ -73,6 +73,39 @@ function implementResult(plan) {
   };
 }
 
+test("envelope recollection runs in the pinned sandbox with only a collector capability and no child sessions", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const template = planFor(registry, "matt-tdd");
+  const original = implementResult(template);
+  const evidence = {
+    controlled: true, path: "/tmp/mock-review.md", head: "a".repeat(40),
+    command: "trusted-collector", claimCommand: "must-not-claim",
+    resultPath: "/tmp/mock-review-result.json",
+  };
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "recollect", ROOT,
+    { implement: "unused", standards: "unused", spec: "unused" }, evidence, undefined,
+    { implementResult: original, repairOnly: true, recollect: true });
+  assert.deepEqual(plan.lanes, []);
+  assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: "trusted-collector" }]);
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const calls = [], emits = [];
+  const result = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async () => { throw new Error("Recollection must not launch a child"); },
+    onEmit: values => { emits.splice(0, emits.length, ...values); },
+    host: async key => {
+      calls.push(key);
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
+        outputPath: "/tmp/mock-collector-output", durationMs: 1,
+        stdout: JSON.stringify({ path: evidence.path, head: evidence.head, snapshotId: "b".repeat(64),
+          complete: true, boundary: { incremental: false, changedPaths: ["response.mjs"], approvedFindingIds: [] } }) };
+    },
+  });
+  assert.deepEqual(calls, ["review-evidence"]);
+  assert.deepEqual(result.value, [original]);
+  assert.ok(emits.some(row => row.type === "pi-x-matt.review-pending"));
+});
+
 test("large evidence receipt survives the real host preview before both reviewers", async () => {
   const directory = await mkdtemp(join(tmpdir(), "matt-large-receipt-"));
   let evidence;

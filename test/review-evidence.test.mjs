@@ -123,6 +123,51 @@ test("evidence collector preserves pre-existing changes and flags non-text evide
   });
 });
 
+test("a complete out-of-envelope candidate is persisted before the host command rejects it", async () => {
+  await fixture(async cwd => {
+    const evidence = await prepareTddEvidence(cwd, fileURLToPath(new URL("..", import.meta.url)), {
+      allowedFiles: ["tracked.txt"],
+    });
+    try {
+      await writeFile(join(cwd, "response.mjs"), "export const response = { candidates: [] };\n");
+      assert.throws(() => execSync(evidence.command, { cwd, stdio: "pipe" }), error => {
+        assert.match(error.stderr.toString(), /outside the approved envelope.*response\.mjs/);
+        assert.match(error.stderr.toString(), /recollect/);
+        return true;
+      });
+      const pack = JSON.parse(await readFile(evidence.snapshotPath, "utf8"));
+      assert.equal(pack.complete, true);
+      assert.deepEqual(pack.envelopeViolation, { paths: ["response.mjs"], allowedFiles: ["tracked.txt"] });
+      assert.deepEqual(pack.incremental.changes.map(change => change.path), ["response.mjs"]);
+      assert.match(await readFile(evidence.path, "utf8"), /envelopeViolation/);
+      assert.equal(pack.manifest.find(entry => entry.path === "response.mjs").content,
+        "export const response = { candidates: [] };\n");
+      assert.throws(() => repairDelta(pack.baseline, pack, { allowedFiles: ["tracked.txt"] }), /response\.mjs/);
+    } finally { await rm(dirname(evidence.path), { recursive: true, force: true }); }
+  });
+});
+
+test("out-of-envelope staging is preserved even when it is absent from the formal-review increment", async () => {
+  await fixture(async (cwd, git) => {
+    const recovery = await collectReviewEvidence(cwd);
+    await writeFile(join(cwd, "tracked.txt"), "already staged at admission\n");
+    git("add", "tracked.txt");
+    const evidence = await prepareTddEvidence(cwd, fileURLToPath(new URL("..", import.meta.url)), {
+      allowedFiles: ["response.mjs"], recoveryIndex: recovery.index,
+    });
+    try {
+      assert.throws(() => execSync(evidence.command, { cwd, stdio: "pipe" }), error => {
+        assert.match(error.stderr.toString(), /index paths outside the approved envelope/);
+        return true;
+      });
+      const pack = JSON.parse(await readFile(evidence.snapshotPath, "utf8"));
+      assert.deepEqual(pack.incremental.changes, []);
+      assert.deepEqual(pack.envelopeViolation.paths, ["tracked.txt"]);
+      assert.equal(pack.index, pack.baseline.index);
+    } finally { await rm(dirname(evidence.path), { recursive: true, force: true }); }
+  });
+});
+
 test("repair increments bind reviewed snapshots, ignore unchanged work and retain restored HEAD contents", async () => {
   await fixture(async cwd => {
     await writeFile(join(cwd, "tracked.txt"), "first reviewed implementation\n");

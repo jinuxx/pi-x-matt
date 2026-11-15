@@ -165,6 +165,158 @@ async function failedEvidenceReceipt(f, options = {}, request = f.params) {
   return { dispatch, failed, record };
 }
 
+async function failedEnvelope(f, request = f.params) {
+  const dispatch = await f.runtime.dispatch(request, undefined, f.ctx);
+  await f.runtime.flush();
+  const failed = await f.settle({ files: { "response.mjs": "export const candidates = [];\n" } });
+  assert.equal(failed.status.state, "failed");
+  assert.match(failed.status.error, /outside the approved envelope/);
+  const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+  assert.deepEqual(record.envelopeViolation.paths, ["response.mjs"]);
+  return { dispatch, failed, record };
+}
+
+test("envelope recollection reuses explicit reapproval and the completed writer, then permits fresh review", async () => {
+  await fixture(async f => {
+    const request = { ...f.params, implementation: { ...f.params.implementation,
+      preReviewCommands: ["node -e 'process.exit(0)'"] } };
+    const { dispatch, record, failed } = await failedEnvelope(f, request);
+    assert.deepEqual(failed.calls, ["claim", "implement", "pre-review", "evidence"]);
+    const oldPack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+    const recollect = { ...request, laneTasks: {}, recollect: { dispatchId: dispatch.details.dispatchId } };
+    await assert.rejects(() => f.runtime.dispatch(recollect, undefined, f.ctx), /response\.mjs/);
+    await assert.rejects(() => f.runtime.dispatch({ ...request,
+      laneTasks: { standards: "standards", spec: "spec" }, review: { dispatchId: record.id } },
+    undefined, f.ctx), /response\.mjs.*recollect/);
+    const widened = { ...recollect, implementation: { ...request.implementation,
+      allowedFiles: ["parser.mjs", "response.mjs"] } };
+    await assert.rejects(() => f.runtime.dispatch(widened, undefined, { ...f.ctx, hasUI: false }), /authorization/);
+    await assert.rejects(() => f.runtime.dispatch(widened, undefined,
+      { ...f.ctx, ui: { confirm: async () => false } }), /not authorized/);
+    f.reload();
+    const queued = await f.runtime.dispatch(widened, undefined, f.ctx);
+    assert.equal(queued.details.authorization, "user-confirmed");
+    assert.deepEqual(queued.details.lanes, []);
+    assert.equal(queued.details.reviewPending, true);
+    await f.runtime.flush();
+    assert.equal(f.launches.at(-1).hostCommands.some(command => command.key === "implement-claim"), false);
+    const captured = await f.settle();
+    assert.deepEqual(captured.calls, ["evidence"], "no claim, writer, verification rerun or reviewer");
+    assert.equal(captured.status.state, "complete");
+    const next = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    const pack = JSON.parse(await readFile(next.evidence.snapshotPath, "utf8"));
+    assert.equal(pack.snapshotId, oldPack.snapshotId);
+    assert.deepEqual(pack.baseline, oldPack.baseline);
+    assert.equal(pack.envelopeViolation, undefined);
+    assert.equal(captured.status.workflow.value[0].hostVerification.ok, true);
+    assert.deepEqual(captured.status.workflow.value[0],
+      failed.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0]);
+    await f.runtime.dispatch({ ...widened, laneTasks: { standards: "standards", spec: "spec" },
+      recollect: undefined, review: { dispatchId: next.id } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "complete");
+    assert.equal(f.launches.length, 3);
+  });
+});
+
+test("envelope recollection preserves a failed repair's findings, counts and formal-review baseline", async () => {
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ fail: true });
+    const repaired = await f.runtime.dispatch({ ...f.params, laneTasks: { implement: "repair parser" },
+      repair: { previousDispatchId: initial.details.dispatchId, groups: repairGroups } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "repaired\n", files: { "response.mjs": "response\n" } });
+    const source = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(source.state, "failed");
+    const widened = { ...f.params, implementation: { ...f.params.implementation,
+      allowedFiles: ["parser.mjs", "response.mjs"] } };
+    await f.runtime.dispatch({ ...widened, laneTasks: {},
+      recollect: { dispatchId: repaired.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const captured = await f.settle();
+    assert.deepEqual(captured.calls, ["evidence"]);
+    const pending = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.deepEqual(pending.repair, source.repair);
+    assert.equal(pending.reviewSourceId, initial.details.dispatchId);
+    const pack = JSON.parse(await readFile(pending.evidence.snapshotPath, "utf8"));
+    const oldPack = JSON.parse(await readFile(source.evidence.snapshotPath, "utf8"));
+    assert.deepEqual(pack.baseline, oldPack.baseline);
+    assert.deepEqual(pack.incremental.approvedFindingIds, ["spec:parse"]);
+    await f.runtime.dispatch({ ...widened, laneTasks: { standards: "standards", spec: "spec" },
+      review: { dispatchId: pending.id } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.equal(reviewed.status.state, "complete");
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+  });
+});
+
+test("envelope recollection rejects candidate or artifact drift and cannot change approved checks", async () => {
+  for (const change of ["worktree", "index", "pack", "checks"]) {
+    await fixture(async f => {
+      const { record } = await failedEnvelope(f);
+      const implementation = { ...f.params.implementation, allowedFiles: ["parser.mjs", "response.mjs"],
+        ...(change === "checks" ? { preReviewCommands: ["node -e 'process.exit(0)'"] } : {}) };
+      if (change === "worktree") await writeFile(join(f.ctx.cwd, "response.mjs"), "changed\n");
+      if (change === "index") await exec("git", ["add", "response.mjs"], { cwd: f.ctx.cwd });
+      if (change === "pack") {
+        await chmod(record.evidence.snapshotPath, 0o600);
+        await writeFile(record.evidence.snapshotPath, "{}");
+      }
+      await assert.rejects(() => f.runtime.dispatch({ ...f.params, implementation, laneTasks: {},
+        recollect: { dispatchId: record.id } }, undefined, f.ctx), /stale|changed|checks|commands/i);
+      assert.equal(f.runtime.plans.size, 0);
+      assert.equal(f.launches.length, 1);
+    });
+  }
+});
+
+test("envelope recollection rechecks queued bindings and rejects drift during collection", async () => {
+  for (const when of ["queued", "collector"]) {
+    await fixture(async f => {
+      const { record } = await failedEnvelope(f);
+      const request = { ...f.params, laneTasks: {}, implementation: { ...f.params.implementation,
+        allowedFiles: ["parser.mjs", "response.mjs"] }, recollect: { dispatchId: record.id } };
+      await f.runtime.dispatch(request, undefined, f.ctx);
+      if (when === "queued") await writeFile(join(f.ctx.cwd, "response.mjs"), "drift\n");
+      await f.runtime.flush();
+      if (when === "queued") {
+        assert.equal(f.launches.length, 1);
+        assert.equal(f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data.state, "cancelled");
+      } else {
+        const failed = await f.settle({ beforeEvidence: () => writeFile(join(f.ctx.cwd, "response.mjs"), "drift\n") });
+        assert.equal(failed.status.state, "failed");
+        assert.match(failed.status.error, /candidate or index is stale/);
+        assert.deepEqual(failed.calls, ["evidence"]);
+      }
+    });
+  }
+});
+
+test("envelope recollection cannot bypass failed host verification or recover an unrelated failure", async () => {
+  await fixture(async f => {
+    const request = { ...f.params, implementation: { ...f.params.implementation,
+      preReviewCommands: ["node -e 'process.exit(1)'"] } };
+    const { record } = await failedEnvelope(f, request);
+    await assert.rejects(() => f.runtime.dispatch({ ...request, laneTasks: {},
+      implementation: { ...request.implementation, allowedFiles: ["parser.mjs", "response.mjs"] },
+      recollect: { dispatchId: record.id } }, undefined, f.ctx), /failed host checks/);
+    assert.equal(f.runtime.plans.size, 0);
+  });
+  await fixture(async f => {
+    const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ files: { "binary.bin": Buffer.from([0, 255]) } });
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, laneTasks: {},
+      recollect: { dispatchId: initial.details.dispatchId } }, undefined, f.ctx), /failed envelopeViolation/);
+    assert.equal(f.runtime.plans.size, 0);
+  });
+});
+
 test("evidence receipt failure resumes only fresh reviewers after reload without repeating the completed writer", async () => {
   await fixture(async f => {
     const { dispatch } = await failedEvidenceReceipt(f);

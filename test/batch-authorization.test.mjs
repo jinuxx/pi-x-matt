@@ -428,6 +428,56 @@ test("undeclared tickets, files outside the approved envelope and new follow-up 
   });
 });
 
+test("batch envelope recollection runs only the collector and preserves candidate commit and tracker gates", async () => {
+  await batchFixture(async f => {
+    const base = { workflow: "matt-tdd", task: "shared",
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    const initial = await f.runtime.dispatch({ ...base, implementation: implementation(T1),
+      batch: batchParams(f.fixedPoint) }, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ files: { "response.mjs": "export const candidates = [];\n" } });
+    assert.equal(failed.status.state, "failed");
+    assert.deepEqual(failed.calls, ["claim", "implement", "evidence"]);
+    const source = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.deepEqual(source.envelopeViolation.paths, ["response.mjs"]);
+    assert.equal(source.batchOutcome.complete, false);
+    const scope = { ...implementation(T1), allowedFiles: ["parser.mjs", "response.mjs"] };
+    const recollected = await f.runtime.dispatch({ ...base, laneTasks: {}, implementation: scope,
+      recollect: { dispatchId: initial.details.dispatchId } }, undefined, f.ctx);
+    assert.equal(recollected.details.authorization, "user-confirmed");
+    assert.equal(f.prompts, 2);
+    await f.runtime.flush();
+    const captured = await f.settle();
+    assert.deepEqual(captured.calls, ["evidence"]);
+    assert.equal(captured.status.state, "complete");
+    const pending = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(pending.batch.id, source.batch.id);
+    assert.equal(pending.batchOutcome.complete, false);
+    assert.ok(pending.batchOutcome.candidate.tree);
+    await assert.rejects(() => f.runtime.dispatch({ ...base, implementation: implementation(T2) },
+      undefined, f.ctx), /must be resolved/);
+    await f.runtime.dispatch({ ...base, laneTasks: { standards: "standards", spec: "spec" },
+      implementation: scope, review: { dispatchId: pending.id } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "complete");
+    const final = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(final.batchOutcome.complete, true);
+    const cwd = f.ctx.cwd;
+    await git(cwd, "add", "parser.mjs", "response.mjs");
+    await git(cwd, "commit", "-qm", "implemented");
+    const commit = await git(cwd, "rev-parse", "HEAD");
+    assert.equal(await git(cwd, "rev-parse", "HEAD^{tree}"), final.batchOutcome.candidate.tree);
+    assert.equal(await git(cwd, "rev-parse", "HEAD^"), final.batchOutcome.candidate.head);
+    await assert.rejects(() => f.runtime.dispatch({ ...base, implementation: implementation(T2) },
+      undefined, f.ctx), /must be resolved/);
+    await resolveTicket(cwd, T1, commit);
+    await f.runtime.dispatch({ ...base, implementation: implementation(T2) }, undefined, f.ctx);
+    assert.equal(f.prompts, 2, "the original batch plan still authorizes the next declared ticket");
+  });
+});
+
 test("batch state restores on reload, survives matt-implement-spec, and revokes on other skills, expiry, fork and cancellation", async () => {
   let now = 1_000;
   const entries = [];
