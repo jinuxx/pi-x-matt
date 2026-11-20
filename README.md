@@ -10,7 +10,7 @@
 
 ```bash
 pi install -l npm:pi-subagents@0.88.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.44
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.45
 ```
 
 本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
@@ -47,10 +47,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.44
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.45
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.44`。
+已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.45`。
 
 ## 提示中的测试术语
 
@@ -229,7 +229,7 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 
 批次当前票的首次 writer 若因外部环境无法启动聚焦测试，且宿主保存了结构化环境阻塞及失败快照，可在环境修复后用 [`blockedRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次批次实现的环境阻塞恢复) 经显式确认续跑同一 writer 一次。范围与门禁不变，不重发 initial。
 
-批次当前票双 PASS 后若父会话发现最终验证回归，可用 [`finalValidationRepair: {dispatchId, command, expectedFailure}`](.pi/skills/matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修)。用户确认命令后，宿主在临时 checkout 中核验基线通过、已审候选复现，再只续跑原 writer。证实回归即锁住当前票；新候选必须通过同一验证和 fresh 双轴复审，才能交付或推进。
+批次当前票双 PASS 后若父会话发现最终验证回归，可用 [`finalValidationRepair: {dispatchId, command, expectedFailure}`](.pi/skills/matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修)。用户确认命令后，宿主在临时 checkout 中核验基线通过、已审候选复现，再只续跑原 writer。证实回归即锁住当前票；新候选须通过所有已登记的验证和 fresh 双轴复审。再次双 PASS 后可确认另一条失败命令，仍共享每票两次续修的上限。
 
 默认交付要求双 PASS。仅全部剩余 finding 为普通 Standards P2 且 Spec PASS 时，可用 `acceptRisk: {dispatchId, findingIds, reason, evidence}` 请求用户对精确候选重新真实确认；返回 `accepted-risk`，保留原 FAIL，不称 PASS，不豁免验收、安全、数据完整性或 P0/P1。batch 仍核验精确 commit/tree/parent，并要求本地 tracker 写回风险收据；单票收据不能豁免最终整份 spec 评审。详见 [显式风险接受与收尾](.pi/skills/matt-tdd/dispatch-contract.md#显式风险接受与收尾)。
 

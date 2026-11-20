@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.45
+
+- 修复 [#5 的后续反馈](https://github.com/jinuxx/pi-x-matt/issues/5#issuecomment-7033822370)：已修复的最终验证通过且候选再次双 PASS 后，同一票可经用户确认登记另一条失败命令；尚未解决的命令不得替换。
+- 保留已登记命令及失败证据，全部通过才重新送审，同一票仍最多续修两次。兼容 v0.2.44 已保存的单命令验证回执。
+
 ## 0.2.44
 
 - 修复 [#5](https://github.com/jinuxx/pi-x-matt/issues/5)：批次当前票双 PASS 后，父会话可用 `finalValidationRepair` 申请确认一条最终验证命令。宿主确认本票基线通过、未漂移的候选真实失败后，只续跑原 writer，不伪造 reviewer finding。

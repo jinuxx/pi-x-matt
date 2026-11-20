@@ -581,6 +581,76 @@ test("verified final regression revokes old PASS and resumes the same writer bef
   });
 });
 
+for (const reintroduceFirst of [false, true]) {
+  test(`a second final check after fresh dual PASS ${reintroduceFirst ? "cannot regress the first check" : "preserves the first check and shared repair budget"}`, async () => {
+    await batchFixture(async f => {
+      const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1) };
+      const request = (dispatchId, marker) => ({ ...common, laneTasks: { implement: "fix the regression" },
+        finalValidationRepair: { dispatchId,
+          command: `if grep -qx '${marker}' parser.mjs; then echo '${marker} regression'; exit 1; fi`,
+          expectedFailure: `${marker} regression` } });
+      const send = params => f.runtime.dispatch(params, undefined, f.ctx);
+      const reviewCandidate = dispatchId => send({ ...common, review: { dispatchId },
+        laneTasks: { standards: "fresh standards", spec: "fresh spec" } });
+      const record = id => f.entries.findLast(entry =>
+        entry.customType === IMPLEMENTATION_ENTRY && entry.data.id === id).data;
+      const initial = await send({ ...common, batch: batchParams(f.fixedPoint),
+        laneTasks: { implement: "implement", standards: "standards", spec: "spec" } });
+      await f.runtime.flush();
+      await f.settle({ value: "first\nsecond\nthird\n" });
+      const first = await send(request(initial.details.dispatchId, "first"));
+      await f.runtime.flush();
+      await f.settle({ value: "second\nthird\n" });
+      await assert.rejects(() => send(request(first.details.dispatchId, "second")), /dual PASS|dual-PASS/i);
+      assert.equal(f.prompts, 2, "an unresolved validation cannot be replaced");
+      const firstReview = await reviewCandidate(first.details.dispatchId);
+      await f.runtime.flush();
+      await f.settle();
+      const firstReviewId = firstReview.details.dispatchId;
+      const firstProof = structuredClone(record(firstReviewId).finalValidation);
+      assert.equal(record(firstReviewId).batchOutcome.complete, true);
+      if (!reintroduceFirst) {
+        // Simulate an already-reviewed v0.2.44 receipt restored from this session.
+        const pass = record(firstReviewId).finalValidationPass;
+        [pass.result] = pass.results;
+        delete pass.results;
+      }
+      f.reload();
+      await assert.rejects(() => send(request(firstReviewId, "first")), /must differ/);
+      const nextRequest = request(firstReviewId, "second");
+      await assert.rejects(() => f.runtime.dispatch(nextRequest, undefined, { ...f.ctx, hasUI: false }), /confirmation/);
+      assert.equal(record(firstReviewId).batchOutcome.complete, true);
+      const second = await send(nextRequest);
+      assert.equal(f.prompts, 3);
+      assert.equal(record(firstReviewId).batchOutcome.complete, false);
+      await f.runtime.flush();
+      const repaired = await f.settle({ value: reintroduceFirst ? "first\nthird\n" : "third\n" });
+      assert.equal(repaired.itemsSeen[0].resume, "run-1-writer");
+      const pending = record(second.details.dispatchId);
+      assert.equal(pending.finalValidation.attempts, 2);
+      assert.equal(pending.finalValidation.priorChecks[0].failure.outputSha256, firstProof.failure.outputSha256);
+      assert.equal(pending.finalValidation.priorChecks[0].sourceId, firstProof.sourceId);
+      f.reload();
+      if (reintroduceFirst) {
+        await assert.rejects(() => reviewCandidate(pending.id), /previously registered final validation/i);
+        assert.equal(f.runtime.plans.size, 0);
+        assert.equal(record(pending.id).batchOutcome.complete, false);
+        return;
+      }
+      const final = await reviewCandidate(pending.id);
+      await f.runtime.flush();
+      assert.deepEqual((await f.settle()).calls, ["standards", "spec"]);
+      const delivered = record(final.details.dispatchId);
+      assert.equal(delivered.batchOutcome.complete, true);
+      assert.deepEqual(delivered.finalValidationPass.results.map(row => [row.sourceId, row.exitCode]), [
+        [initial.details.dispatchId, 0], [firstReviewId, 0],
+      ]);
+      await assert.rejects(() => send(request(delivered.id, "third")), /budget exhausted/);
+      assert.equal(f.prompts, 3, "a fresh command cannot reset the ticket-wide repair budget");
+    });
+  });
+}
+
 test("final regression must pass on the parent and match the candidate symptom; proven red stays locked without a writer", async () => {
   await batchFixture(async f => {
     const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1) };

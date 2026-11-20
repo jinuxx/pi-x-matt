@@ -132,7 +132,9 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 仍提供 `workflow=matt-tdd`、当前 `implementation` 与仅 `laneTasks.implement`，省略 `batch`。宿主另行取得用户对精确命令的真实确认，再从本票的提交前 HEAD（不是整批 fixed point）构建临时 checkout，先运行基线，再覆写已审候选运行同一命令。每次运行最多 5 分钟；命令必须是本地、确定性、只读、无敏感数据，且能在无 `.git`、无未跟踪本地配置和无自动复制的依赖目录的 checkout 中运行。临时 checkout 不是安全沙箱；需要时使用已明确批准的外部本地工具路径，不运行安装、生产访问或写入命令。基线必须退出 0，候选必须退出 1 且输出包含 `expectedFailure`；环境失败、命令写入 checkout、症状不符或候选/index 漂移均不授权续修。
 
-宿主仅持久化退出状态和输出摘要，绑定原批次、当前票和已审快照。证实回归便阻止旧候选交付，即使原 writer 不可用、派发取消或 reload 也不能恢复旧 PASS。只续跑原 writer，不伪造 reviewer finding，不改变已批准的行为或文件范围；确需新增文件或变更其他获批命令仍须另行确认。修复成功仅为 `reviewPending`。以最新 dispatchId 调用 `review` 时，宿主先对新候选运行同一最终验证，失败不启动 reviewers；通过后仍须 fresh 双轴 PASS，再按原 commit/tree/parent 和 tracker 门禁推进。原命令仍复现时可对最新待审修复使用 `finalValidationRepair: {dispatchId}`，仅复用原命令，总计最多两次续修，不另起 initial/worker，不用风险接受绕过。未登记的其余父会话最终验证仍由父会话负责。
+宿主仅持久化退出状态和输出摘要，绑定原批次、当前票和已审快照。证实回归便阻止旧候选交付，即使原 writer 不可用、派发取消或 reload 也不能恢复旧 PASS。只续跑原 writer，不伪造 reviewer finding，不改变已批准的行为或文件范围；确需新增文件或变更其他获批命令仍须另行确认。修复成功仅为 `reviewPending`。以最新 dispatchId 调用 `review` 时，宿主先对新候选运行所有已登记的最终验证；任一失败不启动 reviewers。通过后仍须 fresh 双轴 PASS，再按原 commit/tree/parent 和 tracker 门禁推进。
+
+当前命令仍复现相同失败时，可对最新待审修复使用 `finalValidationRepair: {dispatchId}`，仅复用当前命令，不能替换它。已登记的验证全部通过且最新候选再次双 PASS 后，若父会话发现另一条回归，可带最新 dispatchId、不同的命令和失败原文再次登记，重新取得用户确认并核验基线和失败候选；旧证据与已登记命令保留。每票总计最多两次续修，登记新命令不重置预算，不另起 initial/worker，不用风险接受绕过。未登记的其余父会话最终验证仍由父会话负责。
 
 ### 失败 repair 的 writer 执行恢复
 
