@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.43
+
+- 修复 v0.2.42 发布后的 CI 失败：README 安装和更新命令的 tag 由测试与 `package.json` 的版本比对，不再依赖硬编码的旧版本。
+- 运行时行为不变，包含 [#4](https://github.com/jinuxx/pi-x-matt/issues/4) 的 `blockedRecovery` 修复。
+
 ## 0.2.42
 
 - 修复 [#4](https://github.com/jinuxx/pi-x-matt/issues/4)：批次当前票首次因外部环境无法启动聚焦测试时，可在环境修复后用 `blockedRecovery: {dispatchId}` 经用户确认续跑同一 writer 一次，不重发 initial。

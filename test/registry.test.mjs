@@ -314,7 +314,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.42");
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -825,8 +825,12 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
   assert.match(readme, /同范围连续修复不重复入口确认/);
   assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
-  assert.match(readme, /pi install -l git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.41/);
-  assert.match(readme, /pi update git:github\.com\/jinuxx\/pi-x-matt@v0\.2\.41/);
+  const { version } = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
+  const readmeTags = [...readme.matchAll(/pi (install -l|update) git:github\.com\/jinuxx\/pi-x-matt@v([^\s`]+)/g)];
+  for (const command of ["install -l", "update"]) {
+    const versions = readmeTags.filter(([, action]) => action === command).map(([, , tagVersion]) => tagVersion);
+    assert.deepEqual(new Set(versions), new Set([version]), `README pi ${command} tags must match package.json`);
+  }
   assert.match(readme, /三个只读 `architecture-design` lanes/);
   assert.match(readme, /`matt-archive <feature-slug>`/);
   assert.match(readme, /默认把 `\.x-matt\/work\/shipped\/` 视为不存在/);
