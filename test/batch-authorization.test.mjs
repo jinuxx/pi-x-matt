@@ -106,7 +106,7 @@ async function batchFixture(run) {
     runtime.start(ctx, reason);
     return runtime;
   };
-  const settle = async ({ value = "first slice\n", files = {}, reviews } = {}) => {
+  const settle = async ({ value = "first slice\n", files = {}, reviews, workerOverride } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
     const runs = {
       all: async items => {
@@ -125,7 +125,8 @@ async function batchFixture(run) {
               .map(findingId => ({ findingId, cycleTest: worker.cycles[0].test, evidence: "covered by the cycle" }));
             results.push({ key: "implement", ok: true, agent: "matt-worker",
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
-              structuredOutput: findingResolutions.length ? { ...worker, findingResolutions } : worker });
+              structuredOutput: findingResolutions.length ? { ...worker, findingResolutions } : worker,
+              ...workerOverride });
           } else if (reviews?.[item.key]) {
             results.push({ key: item.key, ok: true, artifactPaths: [], ...reviews[item.key] });
           } else results.push(review(item.key));
@@ -190,6 +191,92 @@ async function repoFixture(run) {
     await rm(cwd, { recursive: true, force: true });
   }
 }
+
+const environmentBlocked = {
+  status: "BLOCKED", summary: "Offline runner unavailable", confirmedSeams: worker.confirmedSeams,
+  cycles: [], changedFiles: ["parser.mjs"], commands: [], residualRisks: [],
+  environmentBlocker: { command: "node --test parser.mjs", evidence: "Test runner dependency missing before tests started" },
+};
+
+test("initial environment BLOCKED resumes the original batch writer once without weakening delivery gates", async () => {
+  await batchFixture(async f => {
+    const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    const batch = batchParams(f.fixedPoint);
+    const checks = ["node -e 'process.exit(0)'"];
+    batch.tickets[0].preReviewCommands = common.implementation.preReviewCommands = checks;
+    const first = await f.runtime.dispatch({ ...common, batch }, undefined, f.ctx);
+    await f.runtime.flush();
+    const failed = await f.settle({ value: "draft\n", workerOverride: { structuredOutput: environmentBlocked } });
+    assert.equal(failed.status.state, "failed");
+    assert.deepEqual(failed.calls, ["claim", "implement"]);
+    assert.match(failed.status.error, /implement\.status/);
+    const next = { ...common, implementation: implementation(T2) };
+    await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /must be resolved/);
+    f.reload();
+    const resume = { ...common, blockedRecovery: { dispatchId: first.details.dispatchId } };
+    const recovered = await f.runtime.dispatch(resume, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.mjs"), "utf8"), "draft\n");
+    const clean = await f.settle();
+    assert.deepEqual(clean.calls, ["claim", "implement", "pre-review", "evidence", "standards", "spec"]);
+    assert.equal(clean.status.state, "complete");
+    assert.equal(clean.itemsSeen[0].resume, "run-0-writer");
+    assert.equal(clean.itemsSeen[0].agent, undefined);
+    assert.deepEqual(clean.status.workflow.value[0].recoveryHistory[0].structuredOutput, environmentBlocked);
+    const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+    assert.equal(pack.baseline.head, f.fixedPoint);
+    assert.deepEqual(pack.baseline.manifest, [], "review still compares against the pre-writer baseline, not the draft");
+    await assert.rejects(() => f.runtime.dispatch({ ...resume, blockedRecovery: { dispatchId: recovered.details.dispatchId } },
+      undefined, f.ctx), /exhausted/);
+    await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /must be resolved/);
+    await git(f.ctx.cwd, "add", "parser.mjs");
+    await git(f.ctx.cwd, "commit", "-qm", "verified first slice");
+    await resolveTicket(f.ctx.cwd, T1, await git(f.ctx.cwd, "rev-parse", "HEAD"));
+    await f.runtime.dispatch(next, undefined, f.ctx);
+    assert.equal(f.prompts, 2, "one batch approval and one explicit environment recovery approval");
+  });
+});
+
+test("initial environment BLOCKED recovery refuses unproven, changed, or unapproved state", async () => {
+  await batchFixture(async f => {
+    const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    const first = await f.runtime.dispatch({ ...common, batch: batchParams(f.fixedPoint) }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ value: "draft\n", workerOverride: { structuredOutput: environmentBlocked } });
+    const resume = { ...common, blockedRecovery: { dispatchId: first.details.dispatchId } };
+    const paths = { ...resume, implementation: { ...resume.implementation, allowedFiles: ["parser.mjs", "extra.mjs"] } };
+    await assert.rejects(() => f.runtime.dispatch(paths, undefined, f.ctx), /exact.*envelope/i);
+    f.ctx.ui.confirm = async () => false;
+    await assert.rejects(() => f.runtime.dispatch(resume, undefined, f.ctx), /not approved/);
+    f.ctx.ui.confirm = async () => true;
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "changed\n");
+    await assert.rejects(() => f.runtime.dispatch(resume, undefined, f.ctx), /snapshot.*stale/);
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "draft\n");
+    await git(f.ctx.cwd, "add", "parser.mjs");
+    await assert.rejects(() => f.runtime.dispatch(resume, undefined, f.ctx), /snapshot.*stale/);
+    await git(f.ctx.cwd, "restore", "--staged", "parser.mjs");
+    await f.runtime.dispatch(resume, undefined, f.ctx);
+    await writeFile(join(f.ctx.cwd, SPEC), `${specContent}\nChanged acceptance.\n`);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    assert.match(f.notices.at(-1), /spec content drift/i);
+  });
+
+  await batchFixture(async f => {
+    const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    const first = await f.runtime.dispatch({ ...common, batch: batchParams(f.fixedPoint) }, undefined, f.ctx);
+    await f.runtime.flush();
+    const { environmentBlocker, ...businessBlocked } = environmentBlocked;
+    await f.settle({ workerOverride: { structuredOutput: businessBlocked } });
+    await assert.rejects(() => f.runtime.dispatch({ ...common, blockedRecovery: { dispatchId: first.details.dispatchId } },
+      undefined, f.ctx), /no sealed environment blocker/i);
+    assert.equal(f.launches.length, 1);
+  });
+});
 
 test("a risk-accepted batch candidate needs its exact commit and tracker acceptance receipt before advancing", async () => {
   await batchFixture(async f => {

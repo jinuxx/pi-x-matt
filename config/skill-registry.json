@@ -1216,7 +1216,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "5e62228594e3736ebd84e779fcbf3f14da57bc1fcf0eb9df4bf900beaca718da",
+      "sourceDigest": "f351d7d5f2bd95f358fec93985e1112ef3277ff8e899c8eab128f7e936009696",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
@@ -1551,7 +1551,7 @@
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
       "sourceDigest": "34683e905704bcd088dcc79585d6ab0061a01ccf52d1b53383c35df95694a133",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "c869e558b5b481764129bc83a0d74f39816f0a60193f02a9125a26615e496e0c",
+      "workflowDigest": "89b2b909f2fa584534695b955fd00d143470a4c12966e3f9f2351a4974ff8bc5",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1592,7 +1592,6 @@
                 },
                 "confirmedSeams": {
                   "type": "array",
-                  "minItems": 1,
                   "items": {
                     "type": "object",
                     "properties": {
@@ -1623,7 +1622,6 @@
                 },
                 "cycles": {
                   "type": "array",
-                  "minItems": 1,
                   "items": {
                     "type": "object",
                     "properties": {
@@ -1659,7 +1657,6 @@
                 },
                 "changedFiles": {
                   "type": "array",
-                  "minItems": 1,
                   "items": {
                     "type": "string",
                     "minLength": 1
@@ -1667,7 +1664,6 @@
                 },
                 "commands": {
                   "type": "array",
-                  "minItems": 2,
                   "items": {
                     "type": "object",
                     "properties": {
@@ -1714,6 +1710,24 @@
                     "type": "string"
                   }
                 },
+                "environmentBlocker": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "evidence": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "command",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                },
                 "findingResolutions": {
                   "type": "array",
                   "items": {
@@ -1752,6 +1766,44 @@
                 "commands",
                 "residualRisks"
               ],
+              "if": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "const": "COMPLETE"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "confirmedSeams": {
+                    "type": "array",
+                    "minItems": 1
+                  },
+                  "cycles": {
+                    "type": "array",
+                    "minItems": 1
+                  },
+                  "changedFiles": {
+                    "type": "array",
+                    "minItems": 1
+                  },
+                  "commands": {
+                    "type": "array",
+                    "minItems": 2
+                  }
+                },
+                "not": {
+                  "type": "object",
+                  "required": [
+                    "environmentBlocker"
+                  ]
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -2227,7 +2279,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "9af4b8ffeaa0a1fbfd8243840b10e128bb6ef93152772540754d8363156b8528",
+      "sourceDigest": "449d14474c6c87537a0b9f43821c1eaba1ad041d47f9d9c3a02dbf14ab393609",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "a496f5513d4a4cf889bc48e189e579f4b0bdf6aa",
       "upstreamDigest": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0"

@@ -22,7 +22,6 @@
           "summary": { "type": "string", "minLength": 1 },
           "confirmedSeams": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "object",
               "properties": {
@@ -40,7 +39,6 @@
           },
           "cycles": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "object",
               "properties": {
@@ -59,12 +57,10 @@
           },
           "changedFiles": {
             "type": "array",
-            "minItems": 1,
             "items": { "type": "string", "minLength": 1 }
           },
           "commands": {
             "type": "array",
-            "minItems": 2,
             "items": {
               "type": "object",
               "properties": {
@@ -79,6 +75,15 @@
             }
           },
           "residualRisks": { "type": "array", "items": { "type": "string" } },
+          "environmentBlocker": {
+            "type": "object",
+            "properties": {
+              "command": { "type": "string", "minLength": 1 },
+              "evidence": { "type": "string", "minLength": 1 }
+            },
+            "required": ["command", "evidence"],
+            "additionalProperties": false
+          },
           "findingResolutions": {
             "type": "array",
             "items": {
@@ -94,6 +99,17 @@
           }
         },
         "required": ["status", "summary", "confirmedSeams", "cycles", "changedFiles", "commands", "residualRisks"],
+        "if": { "type": "object", "properties": { "status": { "const": "COMPLETE" } }, "required": ["status"] },
+        "then": {
+          "type": "object",
+          "properties": {
+            "confirmedSeams": { "type": "array", "minItems": 1 },
+            "cycles": { "type": "array", "minItems": 1 },
+            "changedFiles": { "type": "array", "minItems": 1 },
+            "commands": { "type": "array", "minItems": 2 }
+          },
+          "not": { "type": "object", "required": ["environmentBlocker"] }
+        },
         "additionalProperties": false
       }
     },

@@ -10,7 +10,7 @@
 
 ```bash
 pi install -l npm:pi-subagents@0.88.1
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.41
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.42
 ```
 
 本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
@@ -47,10 +47,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.41
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.42
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.41`。
+已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.42`。
 
 ## 提示中的测试术语
 
@@ -226,6 +226,8 @@ TDD 必须提供限定的 `implementation`；真实用户 invocation/运行时�
 初次 TDD/双轴 review 仍需完整 `laneTasks`；follow-up 只提供实际执行 lane 的 task。committed `matt-code-review` 可用 `recovery: {dispatchId, lanes}` 一次恢复失败轴，省略 `reviewScope`，复用原 F/H、Pack 与另一轴结论；先解决额度/网络问题，不盲重试或替换有效 FAIL。
 
 最新 repair 的 writer 执行失败且无结构化结果时，可显式使用 `writerRecovery: {dispatchId: "<最新失败 repair>"}`，只提供 implement task。宿主绑定首次观察失败终态时的 partial 快照，只 resume 同一个可恢复 writer 一次，保留失败、原修复契约/计数与累计评审基线；不自动追加 settlement，不换 fresh writer。成功仍为 `reviewPending=true`，必须用恢复返回的最新 dispatchId 正式 review；合法 BLOCKED、初次实现失败、不可恢复 writer 或恢复再次失败仍停止。详见 [writer 执行恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#失败-repair-的-writer-执行恢复)。extension/`.mjs` 更新后须完整重启 Pi 并恢复原会话，仅 `/reload` 不够。
+
+批次当前票的首次 writer 若因外部环境无法启动聚焦测试，且宿主保存了结构化环境阻塞及失败快照，可在环境修复后用 [`blockedRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次批次实现的环境阻塞恢复) 经显式确认续跑同一 writer 一次。范围与门禁不变，不重发 initial。
 
 默认交付要求双 PASS。仅全部剩余 finding 为普通 Standards P2 且 Spec PASS 时，可用 `acceptRisk: {dispatchId, findingIds, reason, evidence}` 请求用户对精确候选重新真实确认；返回 `accepted-risk`，保留原 FAIL，不称 PASS，不豁免验收、安全、数据完整性或 P0/P1。batch 仍核验精确 commit/tree/parent，并要求本地 tracker 写回风险收据；单票收据不能豁免最终整份 spec 评审。详见 [显式风险接受与收尾](.pi/skills/matt-tdd/dispatch-contract.md#显式风险接受与收尾)。
 

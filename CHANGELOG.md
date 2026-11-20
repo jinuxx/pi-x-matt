@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.42
+
+- 修复 [#4](https://github.com/jinuxx/pi-x-matt/issues/4)：批次当前票首次因外部环境无法启动聚焦测试时，可在环境修复后用 `blockedRecovery: {dispatchId}` 经用户确认续跑同一 writer 一次，不重发 initial。
+- 保留测试草稿、原失败及 TDD 基线；缺少失败快照、原 writer 不可恢复或证据漂移时拒绝续跑。未启动的测试不算 RED，宿主检查、双轴评审和批次交付门禁不变。
+- 升级后完整重启 Pi。旧版本未保存失败快照的派发不补认；本版以自动化回归验证恢复与拒绝路径，未复跑原 Maven 场景。
+
 ## 0.2.41
 
 - 将 project-local runtime 与 bundled `pi-subagents` 同步固定到 `0.88.1`；核对六项补丁及公开接口，Pi/Node 下限、bundle 入口、RPC/named resource 与双轴 gate 不变，不误删仍有效的 `disableBuiltins` 等配置。

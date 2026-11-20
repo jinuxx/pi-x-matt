@@ -51,7 +51,7 @@ test("workflow guidance uses Chinese testing terms without renaming the result p
   }
   const tdd = registry.skills["matt-tdd"];
   assert.deepEqual(tdd.workflow.lanes[0].gate.nonEmpty, ["confirmedSeams", "cycles", "changedFiles", "commands"]);
-  assert.equal(tdd.workflow.lanes[0].outputSchema.properties.confirmedSeams.minItems, 1);
+  assert.equal(tdd.workflow.lanes[0].outputSchema.then.properties.confirmedSeams.minItems, 1);
   const guidance = await readFile(join(ROOT, tdd.sourcePath), "utf8");
   assert.match(guidance, /测试切入点/);
   assert.match(guidance, /从哪个入口测/);
@@ -314,7 +314,7 @@ test("execution parents require complete structured results rather than completi
 test("package manifest exposes namespaced resources", async () => {
   const manifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   assert.equal(manifest.name, "pi-x-matt");
-  assert.equal(manifest.version, "0.2.41");
+  assert.equal(manifest.version, "0.2.42");
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.pi.extensions, ["./.pi/extensions/pi-matt-dispatch/index.ts"]);
@@ -956,9 +956,10 @@ test("workflow schemas require structured output and distinct review axes", asyn
     equals: "COMPLETE",
     nonEmpty: ["confirmedSeams", "cycles", "changedFiles", "commands"],
   });
-  assert.equal(implement.outputSchema.properties.confirmedSeams.minItems, 1);
-  assert.equal(implement.outputSchema.properties.cycles.minItems, 1);
-  assert.equal(implement.outputSchema.properties.commands.minItems, 2);
+  assert.equal(implement.outputSchema.if.properties.status.const, "COMPLETE");
+  assert.equal(implement.outputSchema.then.properties.confirmedSeams.minItems, 1);
+  assert.equal(implement.outputSchema.then.properties.cycles.minItems, 1);
+  assert.equal(implement.outputSchema.then.properties.commands.minItems, 2);
   assert.deepEqual(implement.outputSchema.properties.commands.items.required, ["command", "phase", "exitCode", "testCount", "outcome"]);
   const workerSkill = await readFile(join(ROOT, "skillpacks/leaf/tdd-executor/SKILL.md"), "utf8");
   assert.match(workerSkill, /Implementation Context Pack/);

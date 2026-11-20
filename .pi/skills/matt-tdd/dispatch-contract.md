@@ -116,6 +116,12 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 `repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer；只有下述显式 writer 执行恢复可继续失败 repair。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
 
+### 初次批次实现的环境阻塞恢复
+
+仅当批次当前票的首次 writer 在聚焦测试未启动时以 `BLOCKED` 返回 `environmentBlocker: { command, evidence }`，且宿主保存了失败快照，才能在修复外部环境后显式使用 `blockedRecovery: { dispatchId: "<最新失败派发>" }`。提供原 `implementation` 和完整 `implement` / `standards` / `spec` laneTasks，省略 `batch`。宿主核验原批次授权、需求、工单、分支、HEAD、信封、工作区和 index，并要求用户确认环境已修复。`command` 仅用于展示诊断，不由宿主执行。
+
+只续跑原 writer 一次，保留草稿和原 `BLOCKED` 结果。未启动的测试不算 RED；续跑返回完整 `COMPLETE` 后，原宿主检查、候选采集、双轴评审及批次提交门禁照常执行。业务阻塞、不可恢复的 writer、旧版本未保存快照的派发或再次失败仍须停止：保留草稿和失败派发 ID，由用户决定是否另存草稿为本地补丁、另行规划工作，不在原批次重发 initial 或跳票。
+
 ### 失败 repair 的 writer 执行恢复
 
 ```json
