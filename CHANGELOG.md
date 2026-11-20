@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.44
+
+- 修复 [#5](https://github.com/jinuxx/pi-x-matt/issues/5)：批次当前票双 PASS 后，父会话可用 `finalValidationRepair` 申请确认一条最终验证命令。宿主确认本票基线通过、未漂移的候选真实失败后，只续跑原 writer，不伪造 reviewer finding。
+- 证实回归后旧 PASS 不再放行。新候选必须通过同一命令、fresh 双轴复审及原有 commit/tree/parent 和 tracker 核验；派发取消、证据漂移或 writer 不可用不会解锁当前票。
+
 ## 0.2.43
 
 - 修复 v0.2.42 发布后的 CI 失败：README 安装和更新命令的 tag 由测试与 `package.json` 的版本比对，不再依赖硬编码的旧版本。

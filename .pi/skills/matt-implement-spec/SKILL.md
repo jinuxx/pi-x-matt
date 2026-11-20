@@ -50,6 +50,8 @@ frontier 仅包含 `ready-for-agent` 且全部 blockers 已 `resolved`、实现�
 5. 等 TDD 和双轴 review 均成功，由父会话执行该票的完整验证并提交。双轴 `PASS` 不足以交付：该票声明了 `preReviewCommands` 且 receipt `verification.ok=false` 时，先按 `matt-implement` 的修复路径让同一 writer 通过宿主校验，或停下来请用户决定，不提交也不推进下一票。batch 运行中宿主只为该票记录 trusted collector 在隔离 index/object store 中算出的 candidate tree；提交必须只有一个 parent 等于采集时的 HEAD，且 tree 与会话相关的文件内容/类型/可执行位完全一致，不能夹带无关文件、额外提交、amend、merge 或 history switch。只有提交成功、真实 commit 属于原始 fixed point ancestry、当前工作区干净，且本地 tracker `Status: resolved` 与 `Implementation commit` 写回均核验通过并匹配该 commit，才进入下一张；“代码已提交、tracker 待修复”必须暂停，不重新提交。宿主无法安全核验 prerequisite 时停止，不接受“父会话说已提交”。
 6. 保存该票标题、commit、dispatchId、验证结果和原始 fixed point；重读并计算下一轮 frontier。已提交实现属于当前 HEAD ancestry 才解锁后续工作，不依赖内存中的“done”标记。每张票执行完成后仅编排 parent 可以继续下一张，`matt-implement` 自身不批量循环。
 
+当前票双 PASS 后若父会话完整验证发现本票引入的回归，不提交、不推进，也不编造 reviewer finding。保持已审候选原样，按 [最终验证续修](../matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修) 请求独立确认实际失败的命令；宿主证实回归后续跑同一 writer。对修复结果显式 `review`，等宿主复验和 fresh 双轴 PASS，再完成其余父会话验证、提交和 tracker 核验。
+
 ## 整份 spec 评审与结束
 
 全部 tickets 均已达到核验过的终态，才进入整份 spec 评审；中途只做当前票的 TDD 双轴复核。parent spec 始终保持 `spec-ready`，已批准排除项须带原始依据，不能静默减少 spec 需求。

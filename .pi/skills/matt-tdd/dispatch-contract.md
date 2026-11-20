@@ -122,6 +122,18 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 只续跑原 writer 一次，保留草稿和原 `BLOCKED` 结果。未启动的测试不算 RED；续跑返回完整 `COMPLETE` 后，原宿主检查、候选采集、双轴评审及批次提交门禁照常执行。业务阻塞、不可恢复的 writer、旧版本未保存快照的派发或再次失败仍须停止：保留草稿和失败派发 ID，由用户决定是否另存草稿为本地补丁、另行规划工作，不在原批次重发 initial 或跳票。
 
+### 双 PASS 后的最终验证续修
+
+仅用于原有效批次当前票的最新双 PASS：父会话发现完整验证中的本票回归，尚未提交或修改已审候选。
+
+```json
+{"finalValidationRepair": {"dispatchId": "<最新双 PASS 派发>", "command": "<精确命令>", "expectedFailure": "<稳定的失败原文>"}}
+```
+
+仍提供 `workflow=matt-tdd`、当前 `implementation` 与仅 `laneTasks.implement`，省略 `batch`。宿主另行取得用户对精确命令的真实确认，再从本票的提交前 HEAD（不是整批 fixed point）构建临时 checkout，先运行基线，再覆写已审候选运行同一命令。每次运行最多 5 分钟；命令必须是本地、确定性、只读、无敏感数据，且能在无 `.git`、无未跟踪本地配置和无自动复制的依赖目录的 checkout 中运行。临时 checkout 不是安全沙箱；需要时使用已明确批准的外部本地工具路径，不运行安装、生产访问或写入命令。基线必须退出 0，候选必须退出 1 且输出包含 `expectedFailure`；环境失败、命令写入 checkout、症状不符或候选/index 漂移均不授权续修。
+
+宿主仅持久化退出状态和输出摘要，绑定原批次、当前票和已审快照。证实回归便阻止旧候选交付，即使原 writer 不可用、派发取消或 reload 也不能恢复旧 PASS。只续跑原 writer，不伪造 reviewer finding，不改变已批准的行为或文件范围；确需新增文件或变更其他获批命令仍须另行确认。修复成功仅为 `reviewPending`。以最新 dispatchId 调用 `review` 时，宿主先对新候选运行同一最终验证，失败不启动 reviewers；通过后仍须 fresh 双轴 PASS，再按原 commit/tree/parent 和 tracker 门禁推进。原命令仍复现时可对最新待审修复使用 `finalValidationRepair: {dispatchId}`，仅复用原命令，总计最多两次续修，不另起 initial/worker，不用风险接受绕过。未登记的其余父会话最终验证仍由父会话负责。
+
 ### 失败 repair 的 writer 执行恢复
 
 ```json

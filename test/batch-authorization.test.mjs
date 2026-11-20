@@ -515,6 +515,105 @@ test("undeclared tickets, files outside the approved envelope and new follow-up 
   });
 });
 
+test("verified final regression revokes old PASS and resumes the same writer before fresh review", async () => {
+  await batchFixture(async f => {
+    const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1) };
+    const initial = await f.runtime.dispatch({ ...common, batch: batchParams(f.fixedPoint),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } }, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal((await f.settle()).status.state, "complete");
+    const request = { ...common, laneTasks: { implement: "fix the regression" }, finalValidationRepair: {
+      dispatchId: initial.details.dispatchId,
+      command: "if grep -qx 'first slice' parser.mjs; then echo 'parser regression'; exit 1; fi",
+      expectedFailure: "parser regression",
+    } };
+    const formalReview = dispatchId => ({ ...common, review: { dispatchId },
+      laneTasks: { standards: "fresh standards", spec: "fresh spec" } });
+    await assert.rejects(() => f.runtime.dispatch(request, undefined, { ...f.ctx, hasUI: false }), /confirmation/i);
+    const queued = await f.runtime.dispatch(request, undefined, f.ctx);
+    assert.equal(queued.details.reviewPending, true);
+    assert.equal(f.prompts, 2);
+    // Reload cancels a plan that was never launched, but must not undo the observed regression.
+    f.reload();
+    const record = () => f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    const source = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY &&
+      entry.data.id === initial.details.dispatchId).at(-1).data;
+    assert.equal(source.batchOutcome.complete, false);
+    assert.equal(source.finalValidation.failure.exitCode, 1);
+    const retry = { ...request, finalValidationRepair: { dispatchId: source.id } };
+    const cancelledByDrift = await f.runtime.dispatch(retry, undefined, { ...f.ctx, hasUI: false });
+    await git(f.ctx.cwd, "add", "parser.mjs");
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    assert.equal(record().id, cancelledByDrift.details.dispatchId);
+    assert.equal(record().state, "cancelled");
+    await git(f.ctx.cwd, "restore", "--staged", "parser.mjs");
+    const pending = await f.runtime.dispatch(retry, undefined, { ...f.ctx, hasUI: false });
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: "first slice\nincomplete repair\n" });
+    assert.equal(repaired.itemsSeen[0].resume, "run-0-writer");
+    assert.deepEqual(repaired.calls, ["claim", "implement", "evidence"]);
+    assert.equal(record().batchOutcome.complete, false);
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch(formalReview(pending.details.dispatchId), undefined, f.ctx), /still fails/);
+    assert.equal(f.runtime.plans.size, 0);
+    const second = await f.runtime.dispatch({ ...retry, finalValidationRepair: { dispatchId: pending.details.dispatchId } },
+      undefined, { ...f.ctx, hasUI: false });
+    await f.runtime.flush();
+    const corrected = await f.settle({ value: "corrected slice\n" });
+    assert.equal(corrected.itemsSeen[0].resume, "run-1-writer");
+    await f.runtime.dispatch(formalReview(second.details.dispatchId), undefined, { ...f.ctx, hasUI: false });
+    await f.runtime.flush();
+    const reviewed = await f.settle();
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(record().batchOutcome.complete, true);
+    assert.equal(record().finalValidationPass.snapshotId, record().snapshotId);
+    const { cwd } = f.ctx;
+    await git(cwd, "add", "parser.mjs");
+    await git(cwd, "commit", "-qm", "fixed");
+    const commit = await git(cwd, "rev-parse", "HEAD");
+    const next = { ...common, implementation: implementation(T2),
+      laneTasks: { implement: "next", standards: "standards", spec: "spec" } };
+    await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /must be resolved/);
+    await resolveTicket(cwd, T1, commit);
+    await f.runtime.dispatch(next, undefined, f.ctx);
+    assert.equal(f.prompts, 2);
+  });
+});
+
+test("final regression must pass on the parent and match the candidate symptom; proven red stays locked without a writer", async () => {
+  await batchFixture(async f => {
+    const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1) };
+    const initial = await f.runtime.dispatch({ ...common, batch: batchParams(f.fixedPoint),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } }, undefined, f.ctx);
+    await f.runtime.flush();
+    await f.settle({ workerOverride: { resumability: { state: "unavailable" } } });
+    const source = () => f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY &&
+      entry.data.id === initial.details.dispatchId).at(-1).data;
+    const request = command => ({ ...common, laneTasks: { implement: "fix" }, finalValidationRepair: {
+      dispatchId: initial.details.dispatchId, command, expectedFailure: "parser regression",
+    } });
+    await assert.rejects(() => f.runtime.dispatch(request("echo 'parser regression'; exit 1"), undefined, f.ctx), /clean parent/);
+    await assert.rejects(() => f.runtime.dispatch(request(
+      "if grep -qx 'first slice' parser.mjs; then echo 'different failure'; exit 1; fi"), undefined, f.ctx), /expected text/);
+    await assert.rejects(() => f.runtime.dispatch(request(
+      "if grep -qx 'first slice' parser.mjs; then touch output.tmp; echo 'parser regression'; exit 1; fi"), undefined, f.ctx),
+    /modified the isolated checkout/);
+    assert.equal(source().batchOutcome.complete, true, "an unproven failure must not replace the review outcome");
+    await assert.rejects(() => f.runtime.dispatch(request(
+      "if grep -qx 'first slice' parser.mjs; then echo 'parser regression'; exit 1; fi"), undefined, f.ctx), /writer is unavailable/);
+    assert.equal(source().batchOutcome.complete, false);
+    const { cwd } = f.ctx;
+    await git(cwd, "add", "parser.mjs");
+    await git(cwd, "commit", "-qm", "premature delivery");
+    await resolveTicket(cwd, T1, await git(cwd, "rev-parse", "HEAD"));
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch({ ...common, implementation: implementation(T2),
+      laneTasks: { implement: "next", standards: "standards", spec: "spec" } }, undefined, f.ctx), /final validation/i);
+    assert.equal(f.launches.length, 1);
+  });
+});
+
 test("batch envelope recollection runs only the collector and preserves candidate commit and tracker gates", async () => {
   await batchFixture(async f => {
     const base = { workflow: "matt-tdd", task: "shared",
