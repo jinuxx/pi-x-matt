@@ -201,7 +201,7 @@ test("envelope recollection reuses explicit reapproval and the completed writer,
     await f.runtime.flush();
     assert.equal(f.launches.at(-1).hostCommands.some(command => command.key === "implement-claim"), false);
     const captured = await f.settle();
-    assert.deepEqual(captured.calls, ["evidence"], "no claim, writer, verification rerun or reviewer");
+    assert.deepEqual(captured.calls, ["pre-review", "evidence"], "verified only after approval, with no writer or reviewer");
     assert.equal(captured.status.state, "complete");
     const next = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
     const pack = JSON.parse(await readFile(next.evidence.snapshotPath, "utf8"));
@@ -209,8 +209,8 @@ test("envelope recollection reuses explicit reapproval and the completed writer,
     assert.deepEqual(pack.baseline, oldPack.baseline);
     assert.equal(pack.envelopeViolation, undefined);
     assert.equal(captured.status.workflow.value[0].hostVerification.ok, true);
-    assert.deepEqual(captured.status.workflow.value[0],
-      failed.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0]);
+    assert.deepEqual(captured.status.workflow.value[0].structuredOutput,
+      failed.status.workflow.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0].structuredOutput);
     await f.runtime.dispatch({ ...widened, laneTasks: { standards: "standards", spec: "spec" },
       recollect: undefined, review: { dispatchId: next.id } }, undefined, f.ctx);
     await f.runtime.flush();
@@ -302,10 +302,17 @@ test("envelope recollection cannot bypass failed host verification or recover an
     const request = { ...f.params, implementation: { ...f.params.implementation,
       preReviewCommands: ["node -e 'process.exit(1)'"] } };
     const { record } = await failedEnvelope(f, request);
-    await assert.rejects(() => f.runtime.dispatch({ ...request, laneTasks: {},
+    const widened = { ...request, laneTasks: {},
       implementation: { ...request.implementation, allowedFiles: ["parser.mjs", "response.mjs"] },
-      recollect: { dispatchId: record.id } }, undefined, f.ctx), /failed host checks/);
-    assert.equal(f.runtime.plans.size, 0);
+      recollect: { dispatchId: record.id } };
+    const queued = await f.runtime.dispatch(widened, undefined, f.ctx);
+    await f.runtime.flush();
+    const result = await f.settle();
+    assert.deepEqual(result.calls, ["pre-review", "evidence"]);
+    assert.equal(result.status.workflow.value[0].hostVerification.ok, false);
+    await assert.rejects(() => f.runtime.dispatch({ ...widened, recollect: undefined,
+      laneTasks: { standards: "standards", spec: "spec" }, review: { dispatchId: queued.details.dispatchId } },
+    undefined, f.ctx), /host verification.*still fails/);
   });
   await fixture(async f => {
     const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);
@@ -1507,7 +1514,6 @@ test("explicit reapproval amends the same-ticket file envelope without severing 
     assert.equal(f.runtime.plans.size, 0);
     await f.runtime.flush();
     assert.equal(f.launches.length, 3);
-    f.runtime.input({ text: "/skill:matt-implement", source: "interactive" });
     await assert.rejects(() => f.runtime.dispatch({ ...replaced }, undefined, f.ctx), /already has a dispatch/);
     assert.equal(f.prompts, 4);
     await assert.rejects(() => f.runtime.dispatch({ ...replaced, repair: {
@@ -1522,7 +1528,7 @@ test("explicit reapproval amends the same-ticket file envelope without severing 
     assert.deepEqual(reviewed.calls, ["standards", "spec"]);
     assert.equal(reviewed.status.state, "complete");
     assert.deepEqual(reviewed.status.workflow.value.map(row => row.key), ["implement", "standards", "spec"]);
-    assert.equal(f.prompts, 4);
+    assert.equal(f.prompts, 5, "only the valid follow-up prompts for the changed envelope");
   });
 });
 

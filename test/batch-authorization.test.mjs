@@ -81,7 +81,7 @@ async function batchFixture(run) {
   const entries = [], launches = [], notices = [], messages = [];
   let prompts = 0, runtime, clock = Date.now();
   const ctx = {
-    cwd, hasUI: true, isProjectTrusted: () => true,
+    cwd, hasUI: true, mode: "tui", isIdle: () => true, isProjectTrusted: () => true,
     sessionManager: { getSessionId: () => "batch-session", getBranch: () => entries },
     ui: { confirm: async (_title, text) => { prompts++; messages.push(text); return true; } },
   };
@@ -198,6 +198,103 @@ const environmentBlocked = {
   environmentBlocker: { command: "node --test parser.mjs", evidence: "Test runner dependency missing before tests started" },
 };
 
+test("native spec command confirms a local plan once and survives more than 24 hours", async () => {
+  await batchFixture(async f => {
+    const planPath = join(f.ctx.cwd, `${SPEC}.dispatch.json`);
+    const plan = batchParams(f.fixedPoint);
+    plan.tickets[0].finalValidationCommands = ["grep -qx 'first slice' parser.mjs"];
+    const text = JSON.stringify({ tickets: plan.tickets });
+    await writeFile(planPath, text);
+    await assert.rejects(() => f.runtime.beginBatchCommand(SPEC, { ...f.ctx, hasUI: false }), /explicit TUI\/RPC confirmation/);
+    await f.runtime.beginBatchCommand(SPEC, f.ctx);
+    assert.match(f.messages.at(-1), /Local plan SHA-256:/);
+    const common = { workflow: "matt-tdd", task: "shared",
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    const request = { ...common, implementation: implementation(T1), batch: batchParams(f.fixedPoint) };
+    await assert.rejects(() => f.runtime.dispatch({ ...request, batch: { ...request.batch, tickets:
+      request.batch.tickets.map(item => ({ ...item, diagnosticCommands: ["true"] })) } }, undefined, f.ctx), /differs from/);
+    await f.runtime.dispatch(request, undefined, f.ctx);
+    assert.equal(f.prompts, 1);
+    await f.runtime.flush();
+    const result = await f.settle();
+    assert.equal(result.status.state, "complete");
+    const checked = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(checked.requiredValidation.ok, true);
+    assert.equal(checked.requiredValidation.snapshotId, checked.snapshotId);
+    await git(f.ctx.cwd, "add", "parser.mjs");
+    await git(f.ctx.cwd, "commit", "-qm", "first ticket");
+    await resolveTicket(f.ctx.cwd, T1, await git(f.ctx.cwd, "rev-parse", "HEAD"));
+    f.clock += 25 * 60 * 60 * 1000;
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch({ ...common, implementation: implementation(T3) }, undefined, f.ctx),
+      /not declared/);
+    await writeFile(planPath, `${text}\n`);
+    await assert.rejects(() => f.runtime.dispatch({ ...common, implementation: implementation(T2) }, undefined, f.ctx),
+      /Local dispatch plan changed/);
+    await writeFile(planPath, text);
+    await f.runtime.dispatch({ ...common, implementation: implementation(T2) }, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+    assert.equal((await f.settle({ value: "second slice\n" })).status.state, "complete");
+    assert.equal(f.prompts, 1);
+    f.runtime.revoke("user-cancelled");
+    await assert.rejects(() => f.runtime.dispatch({ ...common, implementation: implementation(T2) }, undefined, f.ctx),
+      /revoked or expired/);
+  });
+});
+
+test("rewritable input cannot authorize a batch and a native command without a local plan still requires confirmation", async () => {
+  await batchFixture(async f => {
+    const params = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      batch: batchParams(f.fixedPoint), laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    f.ctx.hasUI = false;
+    for (const source of ["extension", "interactive", "rpc"]) {
+      f.runtime.input({ text: `/skill:matt-implement-spec ${SPEC}`, source });
+      await assert.rejects(() => f.runtime.dispatch(params, undefined, f.ctx), /requires one explicit/);
+    }
+    await f.runtime.beginBatchCommand(SPEC, { ...f.ctx, mode: "rpc" });
+    await assert.rejects(() => f.runtime.dispatch(params, undefined, f.ctx), /requires one explicit/);
+    assert.equal(f.launches.length, 0);
+  });
+});
+
+test("revocation wins the existing writer claim even after RPC handoff", async () => {
+  await batchFixture(async f => {
+    const params = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      batch: batchParams(f.fixedPoint), laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
+    f.runtime.revoke("user-cancelled");
+    const { calls, status } = await f.settle();
+    assert.deepEqual(calls, ["claim"]);
+    assert.equal(status.state, "failed");
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.mjs"), "utf8"), "original\n");
+    assert.equal(f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data.state, "cancelled");
+    await f.runtime.dispatch(params, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2, "fresh real confirmation can start a writer that never claimed");
+  });
+});
+
+test("initial batch launch rechecks worktree and ignored spec after queuing", async () => {
+  await batchFixture(async f => {
+    const params = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      batch: batchParams(f.fixedPoint), laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    await f.runtime.dispatch(params, undefined, f.ctx);
+    await writeFile(join(f.ctx.cwd, SPEC), `${specContent}\nChanged after queue.\n`);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 0);
+    assert.match(f.notices.at(-1), /spec content drift/);
+    await writeFile(join(f.ctx.cwd, SPEC), specContent);
+    await f.runtime.dispatch(params, undefined, f.ctx);
+    await writeFile(join(f.ctx.cwd, "parser.mjs"), "changed after queue\n");
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 0);
+    assert.match(f.notices.at(-1), /clean worktree|changed after admission/);
+  });
+});
+
 test("initial environment BLOCKED resumes the original batch writer once without weakening delivery gates", async () => {
   await batchFixture(async f => {
     const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
@@ -313,13 +410,12 @@ test("a risk-accepted batch candidate needs its exact commit and tracker accepta
   });
 });
 
-test("a batch needs one genuine confirmation of the sealed plan and no single-ticket intent can bypass it", async () => {
+test("a batch needs one genuine confirmation of the sealed plan", async () => {
   await batchFixture(async f => {
     const params = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
       laneTasks: { implement: "implement", standards: "standards", spec: "spec" },
       batch: batchParams(f.fixedPoint) };
     const records = () => f.entries.filter(entry => entry.customType === BATCH_ENTRY).length;
-    f.runtime.input({ text: "/skill:matt-implement", source: "interactive" });
     await assert.rejects(() => f.runtime.dispatch(params, undefined, { ...f.ctx, hasUI: false }),
       /confirmation.*no workflow was queued/i);
     assert.equal(records(), 0);
@@ -330,13 +426,13 @@ test("a batch needs one genuine confirmation of the sealed plan and no single-ti
     assert.equal(f.prompts, 0, "the explicit denial path never persists a capability");
     const queued = await f.runtime.dispatch(params, undefined, f.ctx);
     assert.equal(queued.details.authorization, "batch-plan");
-    assert.equal(f.prompts, 1, "the explicit matt-implement intent never replaces the batch confirmation");
+    assert.equal(f.prompts, 1);
     const message = f.messages.join("\n");
     for (const value of [SPEC, f.fixedPoint, T1, T2, "parser slice", "second slice", "parser.mjs"]) {
       assert.ok(message.includes(value), value);
     }
     assert.equal(f.entries.filter(entry => entry.customType === BATCH_ENTRY).at(-1).data.kind, "batch");
-    assert.equal(f.runtime.authorization.current().source, "batch-plan");
+    assert.equal(f.runtime.authorization.current().source, "batch-confirmed-plan");
     await assert.rejects(() => f.runtime.dispatch({ workflow: "matt-research", task: "research",
       batch: batchParams(f.fixedPoint) }, undefined, f.ctx), /only apply to matt-tdd|only.*matt-tdd/i);
   });
@@ -515,24 +611,35 @@ test("undeclared tickets, files outside the approved envelope and new follow-up 
   });
 });
 
-test("verified final regression revokes old PASS and resumes the same writer before fresh review", async () => {
+test("preapproved final regression revokes old PASS without prompting and resumes the same writer before fresh review", async () => {
   await batchFixture(async f => {
     const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1) };
-    const initial = await f.runtime.dispatch({ ...common, batch: batchParams(f.fixedPoint),
+    const command = "if grep -qx 'first slice' parser.mjs; then echo 'parser regression'; exit 1; fi";
+    const plan = batchParams(f.fixedPoint);
+    plan.tickets[0].finalValidationCommands = [command];
+    await writeFile(join(f.ctx.cwd, `${SPEC}.dispatch.json`), JSON.stringify({ tickets: plan.tickets }));
+    await f.runtime.beginBatchCommand(SPEC, f.ctx);
+    const initial = await f.runtime.dispatch({ ...common,
       laneTasks: { implement: "implement", standards: "standards", spec: "spec" } }, undefined, f.ctx);
     await f.runtime.flush();
     assert.equal((await f.settle()).status.state, "complete");
     const request = { ...common, laneTasks: { implement: "fix the regression" }, finalValidationRepair: {
       dispatchId: initial.details.dispatchId,
-      command: "if grep -qx 'first slice' parser.mjs; then echo 'parser regression'; exit 1; fi",
+      command,
       expectedFailure: "parser regression",
     } };
+    const failedGate = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(failedGate.batchOutcome.resultsValid, true);
+    assert.equal(failedGate.batchOutcome.complete, false);
+    assert.equal(failedGate.requiredValidation.ok, false);
     const formalReview = dispatchId => ({ ...common, review: { dispatchId },
       laneTasks: { standards: "fresh standards", spec: "fresh spec" } });
-    await assert.rejects(() => f.runtime.dispatch(request, undefined, { ...f.ctx, hasUI: false }), /confirmation/i);
-    const queued = await f.runtime.dispatch(request, undefined, f.ctx);
+    await assert.rejects(() => f.runtime.dispatch({ ...request, finalValidationRepair: {
+      ...request.finalValidationRepair, command: `${command}; true`,
+    } }, undefined, { ...f.ctx, hasUI: false }), /confirmation/i);
+    const queued = await f.runtime.dispatch(request, undefined, { ...f.ctx, hasUI: false });
     assert.equal(queued.details.reviewPending, true);
-    assert.equal(f.prompts, 2);
+    assert.equal(f.prompts, 1);
     // Reload cancels a plan that was never launched, but must not undo the observed regression.
     f.reload();
     const record = () => f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
@@ -577,7 +684,7 @@ test("verified final regression revokes old PASS and resumes the same writer bef
     await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /must be resolved/);
     await resolveTicket(cwd, T1, commit);
     await f.runtime.dispatch(next, undefined, f.ctx);
-    assert.equal(f.prompts, 2);
+    assert.equal(f.prompts, 1);
   });
 });
 
@@ -737,7 +844,7 @@ test("batch envelope recollection runs only the collector and preserves candidat
 test("batch state restores on reload, survives matt-implement-spec, and revokes on other skills, expiry, fork and cancellation", async () => {
   let now = 1_000;
   const entries = [];
-  const store = createBatchAuthorization({ now: () => now,
+  const store = createBatchAuthorization({ now: () => now, uuid: () => "batch-1",
     persist: data => entries.push({ type: "custom", customType: BATCH_ENTRY, data }) });
   store.start("session", []);
   const sealed = { version: 1, kind: "batch", sessionId: "session", invocationId: "batch-1",
@@ -760,7 +867,9 @@ test("batch state restores on reload, survives matt-implement-spec, and revokes 
   restored.start("session", entries.filter(entry => entry.data.kind === "batch"));
   assert.equal(restored.active("batch-1"), true);
   now += 24 * 60 * 60 * 1000 + 1;
-  assert.equal(restored.active("batch-1"), false);
+  assert.equal(restored.active("batch-1"), true);
+  restored.start("session", [{ type: "custom", customType: BATCH_ENTRY, data: sealed }]);
+  assert.equal(restored.active("batch-1"), false, "legacy confirmed authorization still expires");
   restored.start("other-session", entries.filter(entry => entry.data.kind === "batch"));
   assert.equal(restored.active("batch-1"), false, "another session cannot inherit a batch grant");
   const singles = createDispatchAuthorization();
@@ -786,6 +895,8 @@ test("batch validation rejects invalid Parent/type/status paths, self cycles and
     assert.deepEqual(sealed.tickets.map(item => item.ticket), [T1, T2]);
     assert.equal(sealed.spec.path, SPEC);
     assert.match(sealed.spec.digest, /^[0-9a-f]{64}$/);
+    await assert.rejects(() => prepareBatchPlan(cwd,
+      { ...plan, tickets: [...plan.tickets].reverse() }, identity), /place unresolved blocker/);
     for (const [content, error] of [
       [ticket("01: parser", ".x-matt/work/other/spec.md", "None"), /Parent/],
       [ticket("01: parser", SPEC, "None").replace("Type: ticket", "Type: spec"), /Type/],
@@ -1107,7 +1218,9 @@ test("post-seal Blocked by drift queues nothing on the public dispatch path", as
     /drift|no workflow was queued/i);
     assert.equal(f.runtime.plans.size, 1, "the drifted dispatch adds no queued work");
     await f.runtime.flush();
-    assert.equal(f.launches.length, 1);
+    assert.equal(f.launches.length, 0, "the previously queued writer must not start after dependency drift");
+    assert.equal(f.runtime.plans.size, 0);
+    assert.match(f.notices.at(-1), /requirement drift/);
   });
 });
 
@@ -1161,15 +1274,15 @@ test("a stale batch confirmation cannot revoke a newer session capability", asyn
   const controller = new AbortController();
   const pending = confirmBatchPlan({
     hasUI: true, ui: { confirm: () => new Promise(resolve => { resolveDialog = resolve; }) },
-  }, sealed, controller.signal, store, { now });
+  }, sealed, controller.signal, store);
   await Promise.resolve();
   store.start("new-session", []);
-  store.establish({ ...sealed, sessionId: "new-session", invocationId: "new-batch" });
+  const replacement = store.establish({ ...sealed, sessionId: "new-session" });
   controller.abort(new Error("old dialog replaced"));
   resolveDialog(true);
   await assert.rejects(() => pending, /replaced|cancel|lifecycle/i);
   assert.equal(store.current().kind, "batch", "the old callback cannot rewrite the replacement session state");
-  assert.equal(store.active("new-batch"), true);
+  assert.equal(store.active(replacement.invocationId), true);
   assert.equal(store.active("old-batch"), false);
 });
 

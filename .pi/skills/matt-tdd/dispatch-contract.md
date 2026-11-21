@@ -21,9 +21,9 @@
 
 `preReviewCommands` 可选：最多 6 条、每条不超过 300 字节的精确获批命令（如聚焦 typecheck、lint、相关测试），保留顺序、仅去重；缺省或为空时范围规范化对象保持原形状。它们同样必须是本地、非破坏性、无敏感数据的命令，并且须在基线上通过、结果确定、不写入工作区。授权确认会展示这份清单；用途与边界见 [宿主确定性校验](#宿主确定性校验)。
 
-用户显式 `/skill:matt-implement` 产生一次 invocation intent，只能绑定第一个限定范围；缺少该记录时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands`/`preReviewCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。把相对的 `.venv/bin/python` 改为项目内绝对解释器路径同样是 `diagnosticCommands` 替换，必须由用户显式确认新命令；确认后仍保留同一修复谱系，宿主不会自行发现或替换解释器。宿主以非模型上下文 custom entry 保存真实输入/确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
+`/skill:matt-implement` 只启动编排。宿主缺少有效授权时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands`/`preReviewCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。把相对的 `.venv/bin/python` 改为项目内绝对解释器路径同样是 `diagnosticCommands` 替换，必须由用户显式确认新命令；确认后仍保留同一修复谱系，宿主不会自行发现或替换解释器。宿主以非模型上下文 custom entry 保存确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
 
-授权最长 24 小时；授权对话最多等待 5 分钟，可取消。取消、失效、缺少可靠记录或无 UI 时 fail closed。新 ticket、实质范围扩张、架构选择或破坏性操作仍须新决定；不得以改写 `scope` 绕过根因门禁。新 session/fork 不继承授权；tree navigation 撤销。已经运行的 child 用 `/subagents-stop` 停止。
+新确认的单票和批次授权不按时间过期。旧确认记录按原期限处理，旧命令直接签发的记录不恢复。授权对话最多等待 5 分钟，可取消。取消、失效或没有可信授权且无 UI 时 fail closed。新 ticket、实质范围扩张、架构选择或破坏性操作仍须新决定；不得以改写 `scope` 绕过根因门禁。新 session/fork 不继承授权；tree navigation 撤销。已经取得启动权的 child 用 `/subagents-stop` 停止。
 
 ## 批量授权（matt-implement-spec）
 
@@ -50,7 +50,7 @@
 
 `spec`/`ticket` 必须是精确 active 仓库相对路径，不得指向 `.x-matt/work/shipped/`；`fixedPoint` 必须是存在且属于当前批准 starting HEAD ancestry 的原始完整 SHA。宿主自己读取 spec/tickets、Parent、`Blocked by` 与内容摘要；模型提供的 hash、tree、commit、授权或额外字段一律拒绝。每张 ticket 的 Parent 必须精确等于该 spec，Type 必须为 `ticket`，status 只能是 `ready-for-agent` 或 `resolved`；blocker 必须是真实 active ticket，自依赖、循环和未完成依赖 fail closed。已经 `resolved` 的启动 blocker 按批准 starting HEAD 的 ancestry 核验其完整 `Implementation commit`，不要求读取 archived 历史，也不创建 tracker artifact。首次工作区必须干净（ignored 本地 tracker 不计入）。
 
-提交 `batch` 必须触发一次真实 TUI/RPC 确认，展示 spec、原始 fixed point、每个声明 ticket 的 `scope`、完整 `allowedFiles`、诊断清单与可选的 `preReviewCommands`；确认最长 24 小时、等待最多 5 分钟且可取消。`matt-implement` invocation intent、`matt-implement-spec` invocation 或 `batch` 元数据本身都不构成授权；无 UI 且没有当前 session branch 可恢复的有效 batch capability 时拒绝。可信 batch 记录以独立 custom entry 保存，不与单票 grant 混用；`/skill:matt-implement-spec` 作为 batch 入口不撤销该 capability，其他 skill、tree navigation、new session/fork、取消或过期撤销，queued work 不得启动。
+`/skill:matt-implement-spec <spec-path>` 可读取同目录、未跟踪且受 ignore 保护的 `<spec-path>.dispatch.json`，但命令回调不是授权凭据。宿主展示精确信封并经真实 TUI/RPC 确认锁定计划；没有本地计划也走一次确认。`/matt-revoke` 使旧确认和未启动的派发失效，即便已交接 RPC，只要 writer 尚未取得启动标记也不能开跑。其他 skill、tree navigation、new session/fork 不继承授权。派发前复核 branch/HEAD、票据及工作区/index，批次同时复核锁定计划与依赖 frontier。文件越界由证据采集核验，这不是进程级沙箱。风险豁免始终单独确认且不能跳过失败的宿主校验。
 
 对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。当前 `implementation` 信封必须等于批准条目；undeclared ticket、额外文件/命令、语义变化、Parent/type/status/active path 不合法时拒绝，并提示提交新的显式 batch 确认。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding；只增 `allowedFiles` 或替换诊断清单仍需既有单票重新确认，batch 计划本身不扩张。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
 
@@ -83,7 +83,7 @@ writer 已合法 `COMPLETE`、但完整候选因信封越界被拒绝时，colle
 
 示例中的 ticket/scope/诊断清单/`preReviewCommands` 必须替换为原批准值；仅允许增加 `allowedFiles`，其余不变。`recollect` 不接收 laneTasks。新增权限复用既有单票 TUI/RPC 重新确认；无确认、仍有未声明路径、非最新派发、候选/index/Pack 漂移、writer 未完成、宿主校验失败、已有 reviewer 结果或其他类型的执行失败都拒绝。宿主在入队、启动和采集边界核验候选，不接受模型提供的 hash 或路径。
 
-确认后只运行固定 collector，不启动/恢复 writer、不运行 reviewer，也不重复执行原已结算的评审前命令。保留原基线、writer 结果及宿主校验证据、repair findings/计数和 batch binding；batch 计划不扩张。成功仅返回 `reviewPending=true` 与 `pi-x-matt.review-pending`，随后用新 dispatchId 显式 `review`（提供两轴 laneTasks）。仍须 fresh 双轴通过、父会话最终验证，以及原 batch candidate tree/commit parent/本地 tracker 校验，才能交付或推进下一票。
+确认后补跑因越界而跳过的评审前命令并运行固定 collector；已结算的命令不重复执行，不启动 writer 或 reviewer。保留原基线、writer 结果、repair findings/计数和 batch binding；batch 计划不扩张。成功仍只代表 `reviewPending=true`，随后用新 dispatchId 显式 `review`。最终验证及批次提交核验仍须通过。
 
 旧版本已经丢失 Pack 的失败没有可核验候选绑定，不能用此入口自动补认当前工作区；错误会明确说明缺证，不回退重跑 writer。需要保留原实现与失败证据，由用户另行决定。
 
@@ -130,11 +130,11 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 {"finalValidationRepair": {"dispatchId": "<最新双 PASS 派发>", "command": "<精确命令>", "expectedFailure": "<稳定的失败原文>"}}
 ```
 
-仍提供 `workflow=matt-tdd`、当前 `implementation` 与仅 `laneTasks.implement`，省略 `batch`。宿主另行取得用户对精确命令的真实确认，再从本票的提交前 HEAD（不是整批 fixed point）构建临时 checkout，先运行基线，再覆写已审候选运行同一命令。每次运行最多 5 分钟；命令必须是本地、确定性、只读、无敏感数据，且能在无 `.git`、无未跟踪本地配置和无自动复制的依赖目录的 checkout 中运行。临时 checkout 不是安全沙箱；需要时使用已明确批准的外部本地工具路径，不运行安装、生产访问或写入命令。基线必须退出 0，候选必须退出 1 且输出包含 `expectedFailure`；环境失败、命令写入 checkout、症状不符或候选/index 漂移均不授权续修。
+仍提供 `workflow=matt-tdd`、当前 `implementation` 与仅 `laneTasks.implement`，省略 `batch`。宿主仅对未在该票本地计划 `finalValidationCommands` 中预批的精确命令请求真实确认。之后从本票的提交前 HEAD（不是整批 fixed point）构建临时 checkout，先运行基线，再覆写已审候选运行同一命令。每次运行最多 5 分钟；命令必须是本地、确定性、只读、无敏感数据，且能在无 `.git`、无未跟踪本地配置和无自动复制的依赖目录的 checkout 中运行。临时 checkout 不是安全沙箱；需要时使用已明确批准的外部本地工具路径，不运行安装、生产访问或写入命令。基线必须退出 0，候选必须退出 1 且输出包含 `expectedFailure`；环境失败、命令写入 checkout、症状不符或候选/index 漂移均不授权续修。
 
 宿主仅持久化退出状态和输出摘要，绑定原批次、当前票和已审快照。证实回归便阻止旧候选交付，即使原 writer 不可用、派发取消或 reload 也不能恢复旧 PASS。只续跑原 writer，不伪造 reviewer finding，不改变已批准的行为或文件范围；确需新增文件或变更其他获批命令仍须另行确认。修复成功仅为 `reviewPending`。以最新 dispatchId 调用 `review` 时，宿主先对新候选运行所有已登记的最终验证；任一失败不启动 reviewers。通过后仍须 fresh 双轴 PASS，再按原 commit/tree/parent 和 tracker 门禁推进。
 
-当前命令仍复现相同失败时，可对最新待审修复使用 `finalValidationRepair: {dispatchId}`，仅复用当前命令，不能替换它。已登记的验证全部通过且最新候选再次双 PASS 后，若父会话发现另一条回归，可带最新 dispatchId、不同的命令和失败原文再次登记，重新取得用户确认并核验基线和失败候选；旧证据与已登记命令保留。每票总计最多两次续修，登记新命令不重置预算，不另起 initial/worker，不用风险接受绕过。未登记的其余父会话最终验证仍由父会话负责。
+当前命令仍复现相同失败时，可对最新待审修复使用 `finalValidationRepair: {dispatchId}`，仅复用当前命令，不能替换它。已登记的验证全部通过且最新候选再次双 PASS 后，若父会话发现另一条回归，可带最新 dispatchId、不同的命令和失败原文再次登记；按同一预批/确认规则核验基线和失败候选，旧证据与已登记命令保留。每票总计最多两次续修，登记新命令不重置预算，不另起 initial/worker，不用风险接受绕过。未登记的其余父会话最终验证仍由父会话负责。
 
 ### 失败 repair 的 writer 执行恢复
 

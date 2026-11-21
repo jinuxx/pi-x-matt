@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
+import { collectReviewEvidence } from "../lib/review-evidence.mjs";
 import { prepareTddEvidence } from "../lib/review-workflow.mjs";
 
 const exec = promisify(execFile);
@@ -23,10 +24,12 @@ async function repo(run) {
     for (const args of [["init", "-q"], ["config", "user.email", "test@example.invalid"],
       ["config", "user.name", "Test"], ["add", "."], ["commit", "-qm", "baseline"]]) await exec("git", args, { cwd });
     let count = 0;
-    const gate = async (preReviewCommands, digest = sha256(JSON.stringify(preReviewCommands))) => {
+    const baseline = await collectReviewEvidence(cwd);
+    const gate = async (preReviewCommands, digest) => {
       const baselinePath = join(artifacts, `baseline-${count++}.json`);
-      await writeFile(baselinePath, JSON.stringify({ baseline: {}, control: { preReviewCommands } }));
-      const { stdout } = await exec(process.execPath, [RUNNER, baselinePath, digest], { cwd });
+      const sealed = JSON.stringify({ baseline, control: { preReviewCommands, allowedFiles: ["tracked.txt"] } });
+      await writeFile(baselinePath, sealed);
+      const { stdout } = await exec(process.execPath, [RUNNER, baselinePath, digest ?? sha256(sealed)], { cwd });
       assert.ok(Buffer.byteLength(stdout) < 4096, "the gate must fit the host-step stdout preview");
       return JSON.parse(stdout);
     };
@@ -78,17 +81,27 @@ test("pre-review runner executes only the commands sealed into its authorized co
   await repo(async ({ cwd, gate }) => {
     await assert.rejects(() => gate(["echo swapped > tracked.txt"], sha256(JSON.stringify(["true"]))),
       /differ from the approved envelope/);
-    await assert.rejects(() => gate([]), /differ from the approved envelope/);
+    await assert.rejects(() => gate([]), /No approved pre-review commands/);
     assert.equal(await readFile(join(cwd, "tracked.txt"), "utf8"), "original\n", "a mismatched control file runs nothing");
 
     const evidence = await prepareTddEvidence(cwd, ROOT, { allowedFiles: ["tracked.txt"], preReviewCommands: ["true"] });
     try {
-      assert.match(evidence.preReviewCommand, new RegExp(`run-pre-review\\.mjs' '.*baseline\\.json' '${sha256(JSON.stringify(["true"]))}'$`));
+      assert.match(evidence.preReviewCommand, new RegExp(`run-pre-review\\.mjs' '.*baseline\\.json' '${evidence.baselineDigest}'$`));
       const { stdout } = await exec("/bin/sh", ["-c", evidence.preReviewCommand], { cwd });
       assert.equal(JSON.parse(stdout).ok, true);
       assert.equal("preReviewCommand" in await prepareTddEvidence(cwd, ROOT, { allowedFiles: ["tracked.txt"] }), false);
     } finally {
       await rm(join(evidence.path, ".."), { recursive: true, force: true });
     }
+  });
+});
+
+test("pre-review commands do not run against an out-of-envelope candidate", async () => {
+  await repo(async ({ cwd, gate }) => {
+    await writeFile(join(cwd, "out-of-scope.txt"), "unapproved\n");
+    const result = await gate(["printf ran > tracked.txt"]);
+    assert.equal(result.skipped, "envelope-violation");
+    assert.equal(result.ok, false);
+    assert.equal(await readFile(join(cwd, "tracked.txt"), "utf8"), "original\n");
   });
 });

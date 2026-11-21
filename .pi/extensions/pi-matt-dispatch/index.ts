@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -48,8 +49,37 @@ export default function (pi: ExtensionAPI) {
     unsubscribe = [];
   });
   pi.on("session_tree", () => runtime.revoke("session-tree-changed"));
-  pi.on("input", event => runtime.input(event));
+  pi.on("input", (event, ctx) => {
+    if ((event.source === "interactive" && ctx.mode !== "tui") ||
+        (event.source === "rpc" && ctx.mode !== "rpc")) return;
+    runtime.input(event);
+  });
   pi.on("turn_end", () => runtime.flush());
+
+  pi.registerCommand("skill:matt-implement-spec", {
+    description: "Start or resume a spec batch",
+    handler: async (args, ctx) => {
+      const location = resolve(PACKAGE_ROOT, ".pi", "skills", "matt-implement-spec", "SKILL.md");
+      const body = (await readFile(location, "utf8")).replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").trim();
+      const batch = await runtime.beginBatchCommand(args, ctx);
+      if (batch) {
+        ctx.ui.notify(`Batch: ${batch.spec.path} · ${batch.tickets.length} tickets · ${batch.fixedPoint}\n` +
+          "Use /matt-revoke to cancel unlaunched dispatches.", "info");
+      }
+      pi.sendUserMessage(
+        `<skill name="matt-implement-spec" location="${location}">\nReferences are relative to ${dirname(location)}.\n\n${body}\n</skill>\n\n${args}`,
+        { expandPromptTemplates: false },
+      );
+    },
+  });
+  pi.registerCommand("matt-revoke", {
+    description: "Revoke implementation authorization and cancel queued dispatches",
+    handler: (args, ctx) => {
+      if (args.trim() || !["tui", "rpc"].includes(ctx.mode)) throw new Error("Usage: /matt-revoke (TUI/RPC)");
+      runtime.revoke("user-cancelled");
+      ctx.ui.notify("Implementation authorization revoked. Writers that already claimed their start require /subagents-stop.", "info");
+    },
+  });
 
   pi.registerTool({
     name: "pi_matt_dispatch",
@@ -59,12 +89,12 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
       "Initial matt-tdd and matt-code-review require complete laneTasks; follow-ups need only tasks for lanes actually run. Never cross writer/reviewer or Standards/Spec instructions.",
-      "For matt-tdd envelopeViolation with a persisted complete Pack and COMPLETE writer, add only the required allowedFiles and use recollect with the latest dispatchId after explicit reapproval. Omit laneTasks; recollect runs only the collector and remains pending review. Never recollect other failures, drift or failed host checks, or repeat initial implementation.",
+      "For matt-tdd envelopeViolation with a persisted complete Pack and COMPLETE writer, add only the required allowedFiles and use recollect with the latest dispatchId after explicit reapproval. Omit laneTasks. Recollect runs the collector and any original pre-review commands skipped due to the violation; it remains pending review. Never recollect other failures or repeat initial implementation.",
       "For an initial batch environment BLOCKED with a host-sealed snapshot, use blockedRecovery with the latest dispatchId only after the environment is fixed. Omit batch, keep the exact implementation envelope and provide all three laneTasks. The host requires explicit user confirmation and resumes only the original writer.",
-      "After a batch ticket's dual PASS, use finalValidationRepair for a regression found by the parent's final check. Omit batch; supply only laneTasks.implement. On first use supply the exact local command and literal failure text for real confirmation. The host checks the clean parent and reviewed candidate and invalidates delivery permission on proof; run explicit review on the repaired candidate.",
+      "After a batch ticket's dual PASS, use finalValidationRepair for a regression found by the parent's final check. Omit batch; supply only laneTasks.implement. Supply the exact local command and literal failure text; only commands pre-approved for this ticket in the local dispatch plan skip confirmation. The host checks the clean parent and reviewed candidate and invalidates delivery permission on proof; run explicit review on the repaired candidate.",
       "For matt-code-review, pass reviewScope {kind:'committed', fixedPoint} only when the review target is already-committed history. The host resolves F, verifies ancestry of the current HEAD and pins H; it captures one read-only Git-object Pack before both reviewers. Never pass your own hash, HEAD, path or command. Omit reviewScope for the existing manual worktree/files evidence path.",
       "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. A failed repair execution may use writerRecovery once with only the implement task, preserving the same writer, partial snapshot and repair contract; never replace a BLOCKED or unavailable writer. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
-      "Only matt-tdd accepts batch. One honest TUI/RPC confirmation seals the declared spec/tickets and exact envelopes (24h maximum); declared serial tickets then dispatch without extra prompts, but undeclared tickets, files or commands fail closed and need a new explicit batch confirmation. A batch ticket's commit must match the host-captured dual-PASS (or separately user-confirmed risk-accepted) candidate tree and parent, and the local tracker writeback including any Risk acceptance receipt must match it, before the next ticket. Passing batch metadata never self-authorizes.",
+      "Only matt-tdd accepts batch. A new batch requires one real confirmation of the host-sealed plan, then does not expire by time. The native command can load a local plan before confirming; never silently extend it. Changes pause. Each commit must match the host-reviewed candidate, required validation and tracker writeback before the next ticket.",
       "acceptRisk is a separate terminal delivery decision, not PASS: only all remaining ordinary standards P2 findings may be accepted, with a fresh real user confirmation bound to the exact candidate. Never waive acceptance, safety, integrity, P0/P1, missing reports or candidate drift; implementation/batch approval and task prose do not authorize risk acceptance. Record the host receipt alongside the exact implementation commit. Committed code-review recovery reuses its original Pack and only reruns failed axes once; omit reviewScope.",
     ],
     parameters: Type.Object({
@@ -110,10 +140,10 @@ export default function (pi: ExtensionAPI) {
         dispatchId: text(),
         command: Type.Optional(text()),
         expectedFailure: Type.Optional(text()),
-      }, { additionalProperties: false, description: "matt-tdd batch only. After dual PASS, confirm and reproduce a final regression by supplying one exact read-only command and literal failure text. Resume the retained writer only; review reruns the command before both axes. Retry a pending candidate with dispatchId only." })),
+      }, { additionalProperties: false, description: "matt-tdd batch only. After dual PASS, reproduce a final regression with the exact read-only command and literal failure text. Commands not pre-approved for this ticket need confirmation. Resume the retained writer only; review reruns the command before both axes. Retry a pending candidate with dispatchId only." })),
       recollect: Type.Optional(Type.Object({
         dispatchId: text(),
-      }, { additionalProperties: false, description: "matt-tdd only: recover the latest failed envelopeViolation with its complete persisted Pack and COMPLETE writer. Explicitly reapprove additive allowedFiles, keep the candidate, diagnostics and preReviewCommands unchanged, and run only the host collector. Omit laneTasks; success is pending review, not delivery approval." })),
+      }, { additionalProperties: false, description: "matt-tdd only: recover the latest failed envelopeViolation with its complete persisted Pack and COMPLETE writer. Explicitly reapprove additive allowedFiles and keep the candidate and commands unchanged. Omit laneTasks; no writer or reviewer runs, and success is pending review." })),
       batch: Type.Optional(Type.Object({
         spec: Type.String({ minLength: 1, description: "Exact active Local Markdown parent spec path (Type: spec, Status: spec-ready)." }),
         fixedPoint: Type.String({ minLength: 1, description: "Original full commit SHA; the host verifies it exists and is an ancestor of the approved starting HEAD." }),
@@ -125,7 +155,7 @@ export default function (pi: ExtensionAPI) {
           diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands." })),
           preReviewCommands: Type.Optional(Type.Array(text(), { maxItems: 6, description: "Exact approved deterministic checks the host runs after every writer run and before any review." })),
         }), { minItems: 1, description: "Declared serial ticket list; the host freezes each ticket's requirement content, Parent and Blocked by graph." }),
-      }, { description: "One-confirmation batch capability for declared serial matt-tdd tickets. The host reads actual spec/ticket digests; model-provided hashes or authorization are never accepted. No implicit batch from matt-implement-spec or a plain intent." })),
+      }, { description: "Batch for declared serial matt-tdd tickets. The host reads actual spec/ticket digests and requires a real confirmation of a new plan. Model-provided hashes or authorization are never accepted." })),
       review: Type.Optional(Type.Object({
         dispatchId: Type.String({ minLength: 1, description: "Latest completed repair, or a verified legacy COMPLETE dispatch stopped only by evidence-receipt JSON parsing. Review its unchanged host-bound Pack with both axes, without rerunning the writer or collector." }),
       })),

@@ -22,9 +22,9 @@ metadata:
 ## 调度前
 
 1. 复用 `matt-implement` 已核验的上下文，按 [Context Pack 契约](context-packs.md) 生成 Implementation Context Pack。必须获得 ticket、相关 spec 验收/decision/out-of-scope 与适用项目说明；已取得内容不重复读取。ticket、parent、blocker 或 manifest 规格来源只要位于 `.x-matt/work/shipped/` 就立即 fail closed，不读取、不调度任何 lane；归档内容即使被用户点名也只能作为历史依据，不能进入 TDD。相关源码、词汇与测试按精确 manifest 分级；架构全文、全部 ADR 和整个模块调用者仅按需读取。
-2. 写出建议测试的公开 **测试切入点**、每个测试切入点的 **interface** 与待验证行为，并给每个候选测试切入点附一行说明它能抓到什么、漏掉什么，供用户取舍。测试只能穿过公开 interface，不测试实现细节。
+2. 写出建议测试的公开 **测试切入点**、每个测试切入点的 **interface** 与待验证行为，并说明它能抓到什么、漏掉什么。测试只能穿过公开 interface，不测试实现细节。
 3. 对每个候选测试执行测试价值 gate：显式验收行为、缺陷回归、业务规则、分支/状态转换、权限/数据完整性或公开 contract 必须保留；仅重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、验证框架本身、不可达或规格明确排除的假设性边缘情况可以省略独立测试。代码行数少本身不是省略理由；多个紧密相关的简单断言可以合并进一个行为级测试。参数化案例按独立行为、字段映射和共享校验等价类选取：同一等价类保留一个代表输入，不默认生成字段×状态×错误值的全排列；只有该组合产生不同的可观察行为、状态转换或安全/数据完整性风险时才拆成独立案例。不设任意案例数上限，也不为降低统计数合并独立行为。记录保留项的代表输入、预计展开次数、昂贵准备成本以及省略项和理由，避免 worker 机械地为每个字段或边缘情况创建测试方法。
-4. 若用户尚未明确批准这些测试切入点与测试价值判断，使用 `ask_user_question` 请求一次聚焦确认。确认前不得调用 TDD workflow。
+4. 若已确认的 ticket 或单 slice 计划足以确定测试切入点与取舍，直接继续，不为范围内的常规测试方案再请求确认。只有测试方案涉及未决定的公开行为、架构或其他实质权衡，且现有验收无法确定时，才使用 `ask_user_question` 请求用户决定。
 5. 记录固定基线（优先当前 `HEAD`）和调度前工作区状态，避免把既有改动错误归因给 worker。
 6. 在 Pack 中给出 acceptance matrix、parent/blocker 核验结果、known code map、expected change points、fixed point/文件 hash、精确文件 manifest（关系、必须/按需读取）、允许修改范围、一次定向搜索的一层边界与停止条件。分别准备 Standards 的适用规范摘录和 Spec 的相关验收条款。TDD 固定 `reviewKind=worktree`：实现后由 workflow 独立生成 Review Evidence Pack，包含完整 combined diff、untracked 全文/hash 和 deleted/rename old/new；reviewer 不重复取证。把命令分成每轮 RED/GREEN、相关回归和 parent-only final validation；后者只由父会话保留与执行。没有明确 spec/验收行为、已核验 ticket/direct-slice handoff 或精确 manifest 时停止，不依赖 reviewer 补齐。缺少 artifact 时不得使用 `write`/`edit` 创建 spec 或 ticket 解阻。
 
@@ -37,7 +37,7 @@ metadata:
 - `task`: 只放三条 lane 都可安全读取的共享事实：需求/缺陷、已确认测试切入点与测试价值判断、省略测试的候选项及理由、固定基线、既有工作区改动、允许文件范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、module/package 搜索边界和停止条件。不得把仅适用于 implement 的 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等指令放入共享 task。
 - `laneTasks`: 初次必须同时提供 `implement`、`standards`、`spec` 三项完整替换，不自动继承 `task`。`implement` 包含 Implementation Context Pack、RED/GREEN 与相关回归命令，明确完整测试套件/全量 build/最终验证由父会话执行、worker 不得运行。`standards` 只需共同证据边界、适用工程规范与安全/正确性边界；`spec` 只需共同边界、ticket acceptance matrix 与 parent spec 相关条款。两者先消费 workflow 生成的 Review Evidence Pack，额外读取仅限已说明的缺口、一层直接依赖；不得要求 `status COMPLETE` 或用旧 transcript 代替 diff。follow-up 只提供实际执行的 lane task：repair 为 implement，review 为两轴，recovery/reconsider 为所选轴；不填未运行 lane 的占位文本。acceptRisk 不运行 lane，可省略 laneTasks。
 
-Dispatcher 将真实用户 invocation/运行时确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。相同范围的连续修复复用授权，不重复询问入口或已经批准的测试切入点/范围；同 ticket 仅增加 `allowedFiles` 或替换诊断清单/`preReviewCommands` 时需重新确认一次，并以最新 `implementation` 信封和显式旧 `dispatchId` 延续同一修复谱系，ticket/行为/ticket hash/branch/HEAD 与旧 `allowedFiles` 不可变。已有未取消派发后不得再发 initial，重新授权或重新 invocation 也不能重置基线、计数或 findings。新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消、未响应或过期时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
+Dispatcher 将真实用户确认绑定到 ticket 内容 hash、项目/branch/HEAD 与明确范围，从宿主可信记录恢复 reload。新签发的授权不按时间过期；同范围的连续修复复用授权。仅增加 `allowedFiles` 或替换诊断清单/`preReviewCommands` 时需重新确认一次，并以最新 `implementation` 信封和显式旧 `dispatchId` 延续同一修复谱系，ticket/行为/ticket hash/branch/HEAD 与旧 `allowedFiles` 不可变。已有未取消派发后不得再发 initial，重新授权也不能重置基线、计数或 findings。新 ticket、范围扩张、架构/破坏性决定仍须确认。无可靠授权且无 UI、取消或未响应时拒绝调度；模型文字不能授权，也不得绕过 `pi_matt_dispatch`。
 
 `matt-implement-spec` 的 batch 入口也必须先取得一次显式 TUI/RPC 确认，才形成可信 batch 能力；随后宿主按声明的 spec/ticket/`Blocked by` 图与精确信封为每张串行 ticket 签发新的 HEAD-bound 单票 grant，声明票之间不重复询问，也不接受模型提供的 digests、tree、commit 或授权文字。同票修复/送审省略 `batch` 元数据时仍保留宿主 binding；undeclared ticket、额外文件/命令/语义、内容或边漂移、未通过双轴 PASS 的候选、parent/tree/模式不符的提交、伪造 tracker 写回、额外提交、非原始 fixed-point ancestry、取消/过期/new session/fork 全部 fail closed。batch 不改变本 workflow 的唯一 writer、三项 laneTasks、双轴 PASS gate 或父会话最终验证；提交、push、PR、归档仍不属于 TDD。
 

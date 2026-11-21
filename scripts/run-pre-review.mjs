@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { collectReviewEvidence, indexChanges } from "../lib/review-evidence.mjs";
+import { collectReviewEvidence, envelopeViolation, indexChanges, repairDelta } from "../lib/review-evidence.mjs";
 
 // Fixed host command: arguments are an extension-owned artifact path and the digest of the
 // approved commands, never task text. The commands themselves come from the sealed control file.
@@ -10,12 +10,14 @@ const BUDGET_MS = 600_000;
 const RESULT_BYTES = 3500; // The host step keeps only a 4 KB stdout preview; the gate must stay parseable.
 const TAIL_CHARS = 1200;
 const [baselinePath, approvedDigest] = process.argv.slice(2);
-if (!baselinePath || !approvedDigest) throw new Error("Usage: run-pre-review.mjs <baseline.json> <commands-sha256>");
-const { control } = JSON.parse(await readFile(baselinePath, "utf8"));
-const commands = control.preReviewCommands ?? [];
-if (!commands.length || createHash("sha256").update(JSON.stringify(commands)).digest("hex") !== approvedDigest) {
-  throw new Error("Pre-review commands differ from the approved envelope");
+if (!baselinePath || !approvedDigest) throw new Error("Usage: run-pre-review.mjs <baseline.json> <baseline-sha256>");
+const sealed = await readFile(baselinePath);
+if (createHash("sha256").update(sealed).digest("hex") !== approvedDigest) {
+  throw new Error("Pre-review baseline or commands differ from the approved envelope");
 }
+const { baseline, control } = JSON.parse(sealed);
+const commands = control.preReviewCommands;
+if (!commands?.length) throw new Error("No approved pre-review commands");
 
 const run = (command, timeoutMs) => new Promise(resolve => {
   const started = Date.now();
@@ -52,7 +54,14 @@ const run = (command, timeoutMs) => new Promise(resolve => {
   child.once("close", (code, signal) => settle(code, signal));
 });
 
-const before = await collectReviewEvidence(process.cwd());
+const before = await collectReviewEvidence(process.cwd(), { baseline });
+const delta = repairDelta(baseline, before, { ...control, allowedFiles: undefined });
+const staged = indexChanges(control.recoveryIndex ?? baseline.index, before.index).map(path => ({ path }));
+if (envelopeViolation([...delta.changes, ...staged], control.allowedFiles)) {
+  console.log(JSON.stringify({ ok: false, skipped: "envelope-violation", results: [] }));
+  process.exit(0);
+}
+if (!before.complete) throw new Error("Pre-review evidence is incomplete; no command ran");
 const results = [];
 const deadline = Date.now() + BUDGET_MS;
 for (const command of commands) {
@@ -60,7 +69,7 @@ for (const command of commands) {
   // An exhausted budget is reported per command; it never silently counts as a pass.
   results.push(remaining > 0 ? await run(command, remaining) : { command, ok: false, skipped: "budget-exhausted" });
 }
-const after = await collectReviewEvidence(process.cwd());
+const after = await collectReviewEvidence(process.cwd(), { baseline });
 // A check that rewrites the candidate would make the following review judge a different tree.
 const drift = after.snapshotId !== before.snapshotId || indexChanges(before.index, after.index).length > 0;
 const gate = { ok: !drift && results.every(row => row.ok), drift, results };

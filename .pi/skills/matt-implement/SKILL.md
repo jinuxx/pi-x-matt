@@ -42,7 +42,7 @@ metadata:
 - `task`: 只包含三条 lane 都可安全读取的共享事实：单 ticket/当前会话 slice 的目标、验收行为、已确认测试切入点、fixed point、既有工作区改动、允许范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、reviewer 初始证据边界、module/package 搜索边界和停止条件。不得放入 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等 implement 专属指令。
 - `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换。`implement` 接收 Implementation Context Pack、RED/GREEN 与相关回归命令，明确不执行父会话最终验证；`standards` 接收适用工程规范摘录和安全/正确性边界；`spec` 接收 ticket acceptance matrix 与 parent spec 相关条款。两条 reviewer lane 先消费 workflow 独立采集的 Review Evidence Pack（完整 combined diff、新文件全文/hash、deleted/rename old/new），不再逐文件重复取证，不返回 implement schema，也不以旧 worker transcript 代替 diff。默认只读 manifest；仅在具体证据不足时定向补读一层直接依赖。
 
-`pi_matt_dispatch` 只在无法确认本次实现由你显式发起时才要求运行时确认：本 session 用 `/skill:matt-implement` 显式启动时直接放行一次，并绑定具体范围；运行时确认也保存为同一限定授权。后续同范围修复及 reload 从宿主当前 session branch 的可信记录恢复，不重复入口确认，不相信模型提供的“已授权”文字。同 ticket 增加 `allowedFiles` 或替换诊断清单时，用最新 `implementation` 信封重新确认一次，并以显式旧 `dispatchId` 延续谱系；已有派发后不得再发 initial，重新授权或重新 invocation 也不能重置基线、计数或 findings。新 ticket、范围扩张、架构选择或破坏性操作仍需新决定。取消、授权过期、无可靠记录且无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能改用其他调度入口绕过。
+宿主尚无有效授权时，对具体范围确认一次；`/skill:matt-implement` 只启动编排，不替代授权。ticket 或已确认计划足以确定的常规测试方案直接执行，不再单独确认。新签发的单票授权绑定范围后不设时间上限，同范围修复及 reload 从当前 session branch 的可信记录恢复，不相信模型提供的“已授权”文字。同 ticket 增加 `allowedFiles` 或替换诊断清单时，用最新 `implementation` 信封重新确认一次，并以显式旧 `dispatchId` 延续谱系；已有派发后不得再发 initial，重新授权也不能重置基线、计数或 findings。新 ticket、范围扩张、架构选择或破坏性操作仍需新决定。取消、无可信授权且无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能改用其他调度入口绕过。
 
 只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD 内置的 fresh Standards/Spec lanes 是本次实现默认且唯一的一轮独立 code review；lane task 应明确：只有存在有证据的验收遗漏、标准/正确性/安全/数据完整性问题或缺少必需测试时返回 `FAIL`，非阻断的可维护性建议写入 notes 并保持 `PASS`。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。初次实现的 receipt 带 `verification.ok=false`（宿主实测的评审前命令在一次同 writer 纠正后仍失败）时，即使两轴都 `PASS` 也不得提交：reviewer 报出 finding 则按下述 repair 修复并让宿主复检通过；两轴 `PASS` 而命令仍失败时停止，向用户报告失败命令并请其决定。若阻塞原因是缺少 Git baseline、spec、ticket、acceptance criteria 或其他规划 artifact，禁止父会话直接创建或改写 `.x-matt/work/` 来解阻；应停止并提示用户显式进入 `matt-to-spec`、`matt-to-tickets` 或修正已有 artifact。
 
@@ -64,7 +64,7 @@ TDD worker 是唯一写者。implement 父会话不直接与 worker 并行写入
 
 ### 2. 持续验证
 
-完整候选仅因 `envelopeViolation` 被拒绝时，按 [仅重采集契约](../matt-tdd/dispatch-contract.md#信封越界后的仅重采集) 保留原候选，补齐 `allowedFiles` 并真实重新确认，使用 `recollect` 仅运行 collector；不提供 laneTasks，不重跑 writer，不改变诊断清单或 `preReviewCommands`。成功仍待审，随后用最新 dispatchId 显式 `review`。其他失败、缺失 Pack、宿主校验失败或漂移不适用，不重发 initial 解阻。
+完整候选仅因 `envelopeViolation` 被拒绝时，按 [仅重采集契约](../matt-tdd/dispatch-contract.md#信封越界后的仅重采集) 保留原候选，补齐 `allowedFiles` 并真实重新确认，使用 `recollect` 重采集；如原评审前检查因越界未运行，先补跑原检查。不提供 laneTasks，不重跑 writer，不改变诊断清单或 `preReviewCommands`。成功仍待审，随后用最新 dispatchId 显式 `review`。其他失败、缺失 Pack、宿主校验失败或漂移不适用，不重发 initial 解阻。
 
 若 repair 因 writer 执行失败而未完成，不回退引用旧成功 dispatch，也不使用 reviewer `recovery`。仅在 [writer 执行恢复契约](../matt-tdd/dispatch-contract.md#失败-repair-的-writer-执行恢复) 满足时，可显式使用 `writerRecovery: {dispatchId: "<最新失败 repair>"}` 与 implement task，恢复同一 writer 一次；保留 partial 快照与原修复契约/计数。合法 BLOCKED、不可恢复/缺失 writer 或恢复再次失败仍停止，不另起 fresh writer；成功后继续使用最新 dispatchId 正式送审，不把恢复当成 PASS。
 

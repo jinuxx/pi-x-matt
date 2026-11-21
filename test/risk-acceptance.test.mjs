@@ -62,3 +62,11 @@ test("risk acceptance cannot be authorized by prose, omitted IDs, aliases or a r
     hasUI: true, ui: { confirm: async () => false },
   }), /not approved/);
 });
+
+test("a host verification failure blocks risk acceptance before any prompt", async () => {
+  const original = results();
+  original[0].hostVerification = { ok: false, preReview: { ok: false } };
+  await assert.rejects(() => confirmRiskAcceptance(request, original, record, {
+    hasUI: true, ui: { confirm: () => assert.fail("verification failure is not a review waiver") },
+  }), /failed host verification/);
+});

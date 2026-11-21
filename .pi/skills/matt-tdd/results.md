@@ -4,7 +4,9 @@
 
 默认交付要求双 PASS。唯一额外出口是宿主真实用户确认的 `acceptRisk`：工具直接返回 `state=accepted-risk` / `deliveryEligible=true` / `reviewPassed=false`，无新 child 或 async status；从该可信工具结果读取风险收据，原 workflow 的 FAIL 仍按下文读取且不得改写。这不是从普通 receipt 重建结构化评审结果。
 
-完整候选因 `envelopeViolation` 失败时，宿主保留 Pack 与越界路径，未启动的 reviewer 不算执行失败。按 [仅重采集](dispatch-contract.md#信封越界后的仅重采集) 扩信封真实确认后使用 `recollect`，不重跑 writer。其成功结果只携带原 implement（含原宿主校验证据），`reviewPending=true` 且 emits 含 `pi-x-matt.review-pending`；这表示证据已重新采集，尚未评审，不是一次新的 writer 执行或交付通过。后续使用新 dispatchId 正式 `review`。丢失 Pack、其他失败或漂移不适用。
+完整候选因 `envelopeViolation` 失败时，宿主保留 Pack 与越界路径，未启动的 reviewer 不算执行失败。按 [仅重采集](dispatch-contract.md#信封越界后的仅重采集) 扩信封真实确认后使用 `recollect`，不重跑 writer，只补跑因越界跳过的评审前检查。`reviewPending=true` 表示证据已重新采集，尚未评审或交付通过；随后用新 dispatchId 正式 `review`。丢失 Pack、其他失败或漂移不适用。
+
+批次配置了 `finalValidationCommands` 时，双轴通过后还要等同一 dispatch 的宿主 `required final validation PASS` 通知；workflow 的 `complete` 不是这份验证回执。失败不提交、不推进。
 
 所有执行型 parent 共用此契约。调度后交还控制权或处理独立工作，等待 runtime 的 completion；不得轮询等待。
 

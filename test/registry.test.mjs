@@ -243,13 +243,12 @@ test("implement-spec keeps serial ticket gates and a distinct whole-spec review"
   assert.match(skill, /Implementation commit.*git merge-base --is-ancestor/);
   assert.match(skill, /frontier.*编号.*路径/);
   assert.match(skill, /没有 frontier.*仍有未完成.*停止/);
-  assert.match(skill, /顶层 `batch`（与 `implementation` 并列/);
-  assert.match(skill, /一次真实确认/);
+  assert.match(skill, /顶层 `batch`/);
+  assert.match(skill, /宿主展示精确信封并确认一次/);
   assert.match(skill, /每张 ticket.*scope.*allowedFiles/s);
   assert.match(skill, /不重复询问/);
   assert.match(skill, /undeclared ticket.*额外文件\/命令/s);
-  assert.match(skill, /不授予.*整份 spec.*授权/);
-  assert.match(skill, /无 UI.*停止/);
+  assert.match(skill, /不是全局写入权限/);
   assert.match(skill, /不跨 ticket 复用.*dispatchId/);
   assert.match(skill, /提交成功.*tracker.*核验.*下一张/);
   assert.match(skill, /续跑.*fixed point.*缺失.*停止/);
@@ -261,7 +260,7 @@ test("implement-spec keeps serial ticket gates and a distinct whole-spec review"
 
   const batchContract = await readFile(join(ROOT, ".pi/skills/matt-tdd/dispatch-contract.md"), "utf8");
   assert.match(batchContract, /顶层 `batch`/);
-  assert.match(batchContract, /一次真实 TUI\/RPC 确认/);
+  assert.match(batchContract, /新确认的单票和批次授权不按时间过期/);
   assert.match(batchContract, /GIT_INDEX_FILE/);
   assert.match(batchContract, /GIT_OBJECT_DIRECTORY/);
   assert.match(batchContract, /parent.*tree|tree.*parent/s);
@@ -354,7 +353,9 @@ test("dispatcher extension binds the package root and session lifecycle to the r
   assert.match(extension, /createImplementationRuntime\(pi, PACKAGE_ROOT\)/);
   assert.match(extension, /registerWorkflowResource/);
   assert.match(extension, /pi\.on\("turn_end", \(\) => runtime\.flush\(\)\)/);
-  assert.match(extension, /pi\.on\("input", event => runtime\.input\(event\)\)/);
+  assert.match(extension, /pi\.on\("input", \(event, ctx\)/);
+  assert.match(extension, /ctx\.mode !== "tui"/);
+  assert.match(extension, /ctx\.mode !== "rpc"/);
   assert.match(extension, /runtime\.start\(ctx, event\.reason\)/);
   assert.match(extension, /runtime\.shutdown\(\)/);
 });
@@ -697,8 +698,8 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(implement, /依赖用户提供且不能安全压缩的事实、说明、样例或约束/);
   assert.match(implement, /材料类型不限于技术 contract/);
   assert.match(implement, /禁止父会话直接创建或改写 `\.x-matt\/work\/` 来解阻/);
-  assert.match(implement, /无法确认本次实现由你显式发起时才要求运行时确认/);
-  assert.match(implement, /本 session 用 `\/skill:matt-implement` 显式启动时直接放行/);
+  assert.match(implement, /宿主尚无有效授权时，对具体范围确认一次/);
+  assert.match(implement, /`\/skill:matt-implement` 只启动编排，不替代授权/);
   assert.match(implement, /无 UI 的 print\/JSON mode.*fail closed/);
   assert.match(implement, /ticket 路径、Parent 或任何待读取 blocker.*`\.x-matt\/work\/shipped\/`/);
   assert.match(implement, /已随 spec 归档/);
@@ -792,7 +793,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(tdd, /`matt-implement` 使用的内部执行 parent/);
   assert.match(tdd, /不得使用 `write`\/`edit` 创建 spec 或 ticket 解阻/);
   assert.match(tdd, /没有明确 spec\/验收行为.*时停止/);
-  assert.match(tdd, /真实用户 invocation\/运行时确认绑定到 ticket 内容 hash/);
+  assert.match(tdd, /真实用户确认绑定到 ticket 内容 hash/);
   assert.match(tdd, /从宿主可信记录恢复 reload/);
   assert.match(tdd, /无可靠授权且无 UI.*时拒绝调度/);
   assert.match(tdd, /位于 `\.x-matt\/work\/shipped\/` 就立即 fail closed/);
@@ -822,9 +823,9 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /shared understanding 确认后必须停止并把控制权交还给用户/);
   assert.match(readme, /`Reference Inputs`/);
   assert.match(readme, /TDD 使用内部 `workflow: "matt-tdd"`/);
-  assert.match(readme, /真实用户 invocation\/运行时确认绑定到 ticket\/hash/);
-  assert.match(readme, /同范围连续修复不重复入口确认/);
-  assert.match(readme, /取消、过期或无可信来源且无 UI 时 fail closed/);
+  assert.match(readme, /将授权绑定到实际票据、项目\/branch\/HEAD 和精确范围/);
+  assert.match(readme, /同一会话和范围内的修复不会重复询问/);
+  assert.match(readme, /原生命令回调与本地文件都不能替代真实确认/);
   const { version } = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
   const readmeTags = [...readme.matchAll(/pi (install -l|update) git:github\.com\/jinuxx\/pi-x-matt@v([^\s`]+)/g)];
   for (const command of ["install -l", "update"]) {

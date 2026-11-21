@@ -83,49 +83,22 @@ test("dispatcher parses explicit skill invocations like Pi does", () => {
   assert.equal(parseInvokedSkill(undefined), null);
 });
 
-test("dispatcher skips the matt-tdd prompt for a user-invoked implement session", async () => {
-  for (const source of ["interactive", "rpc"]) {
+test("dispatcher cannot grant from input, even in interactive or RPC mode", async () => {
+  for (const source of ["extension", "interactive", "rpc"]) {
     const authorization = createDispatchAuthorization();
-    let prompted = false;
-    authorization.observeInput("/skill:matt-implement 003-modular-python-worker", source);
-
-    const reason = await authorizeWorkflowDispatch("matt-tdd", undefined, {
-      hasUI: false,
-      ui: { confirm: async () => { prompted = true; return true; } },
-    }, authorization);
-
-    assert.equal(reason, "user-invoked-implement", source);
-    assert.equal(prompted, false, source);
+    authorization.observeInput("/skill:matt-implement", source);
+    await assert.rejects(() => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false }, authorization),
+      /requires explicit user authorization/);
   }
 });
 
-test("dispatcher still prompts when implement was not user-invoked", async () => {
-  const extensionInjected = createDispatchAuthorization();
-  extensionInjected.observeInput("/skill:matt-implement", "extension");
-  assert.equal(extensionInjected.userInvokedImplement(), false);
-
-  const otherSkill = createDispatchAuthorization();
-  otherSkill.observeInput("/skill:matt-implement", "interactive");
-  assert.equal(otherSkill.userInvokedImplement(), true);
-  otherSkill.observeInput("/skill:matt-grilling", "interactive");
-  assert.equal(otherSkill.userInvokedImplement(), false, "a later explicit skill invocation revokes the grant");
-
-  const plainText = createDispatchAuthorization();
-  plainText.observeInput("实现 ticket 003", "interactive");
-  assert.equal(plainText.userInvokedImplement(), false);
-
-  const reset = createDispatchAuthorization();
-  reset.observeInput("/skill:matt-implement", "interactive");
-  reset.reset();
-  assert.equal(reset.userInvokedImplement(), false);
-
-  let prompted = false;
-  const reason = await authorizeWorkflowDispatch("matt-tdd", undefined, {
-    hasUI: true,
-    ui: { confirm: async () => { prompted = true; return true; } },
-  }, extensionInjected);
-  assert.equal(reason, "user-confirmed");
-  assert.equal(prompted, true);
+test("a later skill revokes the current single-ticket grant", async () => {
+  const authorization = createDispatchAuthorization();
+  await authorizeWorkflowDispatch("matt-tdd", undefined, {
+    hasUI: true, ui: { confirm: async () => true },
+  }, authorization);
+  authorization.observeInput("/skill:matt-grilling", "interactive");
+  assert.equal(authorization.current().kind, "revoked");
 });
 
 test("dispatcher authorization fails closed for matt-tdd without UI or confirmation", async () => {
@@ -163,9 +136,6 @@ test("dispatcher authorization records an explicit matt-tdd confirmation", async
 
 test("implement-spec cannot turn one ticket approval into a batch grant", async () => {
   const authorization = createDispatchAuthorization();
-  authorization.observeInput("/skill:matt-implement", "interactive");
-  authorization.observeInput("/skill:matt-implement-spec .x-matt/work/demo/spec.md", "interactive");
-  assert.equal(authorization.userInvokedImplement(), false);
   const prompts = [];
   const ctx = {
     hasUI: true,

@@ -35,22 +35,57 @@ test("runtime confirmation is reusable across repairs and reload, not another ti
   assert.equal(prompts, 1);
 });
 
-test("explicit invocation binds once; revoke, fork, expiry and absent provenance fail closed", async () => {
+test("explicit scope confirmation binds once; revoke, fork and absent provenance fail closed", async () => {
   let now = 10;
   const { authorization, entries } = host(() => now);
   authorization.observeInput("/skill:matt-implement", "extension");
   await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
   authorization.observeInput("/skill:matt-implement", "interactive");
-  assert.equal(await authorize(authorization, { hasUI: false }), "user-invoked-implement");
+  await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
+  assert.equal(await authorize(authorization, { hasUI: true, ui: { confirm: async () => true } }), "user-confirmed");
   await assert.rejects(() => authorize(authorization, { hasUI: false }, { ...scope, scope: "expanded contract" }), /authorization/);
   now += AUTH_TTL_MS;
-  await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
+  assert.equal(await authorize(authorization, { hasUI: false }), "reused-implement-grant");
   authorization.revoke();
   authorization.start("session", entries);
   await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
   authorization.start("forked", entries, false);
   await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
   await assert.rejects(() => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false }, authorization, scope), /reliable host/);
+});
+
+test("a bound single-ticket confirmation survives 24h and reload without approving a changed envelope", async () => {
+  let now = 10;
+  const { authorization, entries } = host(() => now);
+  await authorize(authorization, { hasUI: true, ui: { confirm: async (_title, message) => {
+    assert.doesNotMatch(message, /24h/);
+    return true;
+  } } });
+  now += AUTH_TTL_MS + 1;
+  const restored = host(() => now).authorization;
+  restored.start("session", entries);
+  assert.equal(await authorize(restored, { hasUI: false }), "reused-implement-grant");
+  await assert.rejects(() => authorize(restored, { hasUI: false }, { ...scope, ticketDigest: "changed" }), /authorization/);
+  await assert.rejects(() => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false },
+    restored, scope, { ...identity, head: "changed" }), /authorization/);
+});
+
+test("legacy grants expire and old command-only grants cannot be restored", async () => {
+  let now = 10;
+  const { authorization: batch, entries } = host(() => now);
+  const approved = { ...normalizeImplementationScope(scope), ticketDigest: scope.ticketDigest };
+  batch.grant(identity, approved, "batch-plan");
+  const legacy = host(() => now).authorization;
+  legacy.start("session", [{ ...entries[0], data: { ...entries[0].data, version: 1, source: "user-confirmed",
+    expiresAt: now + AUTH_TTL_MS } }]);
+  assert.equal(await authorize(legacy, { hasUI: false }), "reused-implement-grant");
+  const command = host(() => now).authorization;
+  command.start("session", [{ ...entries[0], data: { ...entries[0].data, version: 2, source: "user-command-implement" } }]);
+  await assert.rejects(() => authorize(command, { hasUI: false }), /authorization/);
+  now += AUTH_TTL_MS;
+  for (const authorization of [batch, legacy]) {
+    await assert.rejects(() => authorize(authorization, { hasUI: false }), /authorization/);
+  }
 });
 
 test("cancelled or aborted confirmations never create a reusable grant", async () => {
@@ -138,19 +173,23 @@ test("the authorization dialog shows isolated diagnostic files and the grant bin
   await assert.rejects(() => authorize(restored, { hasUI: false }), /authorization/);
 });
 
-test("a late confirmation cannot grant or revoke authorization in a replacement session", async () => {
+test("a late confirmation cannot grant after revoke or overwrite a replacement session", async () => {
   const { authorization, entries } = host();
   let reply;
   const pending = authorize(authorization, { hasUI: true, ui: { confirm: () => new Promise(resolve => { reply = resolve; }) } });
   await Promise.resolve();
-  authorization.start("replacement", []);
-  authorization.observeInput("/skill:matt-implement", "interactive");
+  authorization.revoke();
   const count = entries.length;
   reply(true);
   await assert.rejects(() => pending, /lifecycle changed/);
   assert.equal(entries.length, count);
-  assert.equal(authorization.current().sessionId, "replacement");
-  assert.equal(authorization.current().kind, "intent");
+  assert.equal(authorization.current().kind, "revoked");
+  const replacing = authorize(authorization, { hasUI: true, ui: { confirm: () => new Promise(resolve => { reply = resolve; }) } });
+  await Promise.resolve();
+  authorization.start("replacement", []);
+  reply(true);
+  await assert.rejects(() => replacing, /lifecycle changed/);
+  assert.equal(authorization.current(), null);
 });
 
 function fakeClock() {
