@@ -280,7 +280,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.disableBuiltins, true);
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.deepEqual(settings.packages, [{
-    source: "npm:pi-subagents@0.88.1",
+    source: "npm:pi-subagents@0.89.2",
     autoload: false,
     extensions: ["+bundle/index.js"],
     skills: [],
@@ -338,7 +338,7 @@ test("package manifest exposes namespaced resources", async () => {
   assert.deepEqual(manifest.pi.subagents.agents, ["./.pi/agents"]);
   assert.equal(manifest.engines.node, ">=22.19.0");
   assert.equal(manifest.peerDependencies["@earendil-works/pi-coding-agent"], ">=1.2.0");
-  assert.equal(manifest.dependencies["pi-subagents"], "0.88.1");
+  assert.equal(manifest.dependencies["pi-subagents"], "0.89.2");
   assert.deepEqual(manifest.bundledDependencies, ["pi-subagents"]);
   assert.equal(manifest.peerDependencies["pi-subagents"], undefined);
   assert.equal(manifest.repository.url, "git+https://github.com/jinuxx/pi-x-matt.git");

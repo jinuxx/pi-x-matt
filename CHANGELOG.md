@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.47
+
+- 将 project-local runtime 与 bundled library 同步升级到 `pi-subagents@0.89.2`。此次上游未移除本插件使用的公开接口；继续使用 named resource、结构化结果和现有最小权限，不新增旧接口回退。
+- 为 workflow lane 使用固定的原生 `label`，在 Fleet 与会话标题中区分 writer、双轴 reviewer 和恢复步骤，不从任务正文取标题。
+- 直接采用上游的工具替换早失败、adapter v7 `openUi: false` 缓存匹配和失联 runner 终态对账。确认 runner 已退出仍不等于已观测退出；不触发自动重派或绕过交付门禁。
+
 ## 0.2.46
 
 - 显式运行 `/skill:matt-implement` 后，已确认范围内的常规测试方案直接执行；新签发并已绑定范围的单票授权不再因时间经过而过期。

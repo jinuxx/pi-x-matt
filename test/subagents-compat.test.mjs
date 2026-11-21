@@ -28,6 +28,7 @@ const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFi
 const { createCapacityResilientJsonWriter } = await import(pathToFileURL(join(SOURCE_DIR, "shared/capacity-resilient-json.js")));
 const { TRUNCATED_RESPONSE_ERROR } = await import(pathToFileURL(join(SOURCE_DIR, "shared/utils.js")));
 const { reconcileAsyncRun } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/stale-run-reconciler.js")));
+const { readProcessTerminal } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/process-terminal.js")));
 
 test("a live child keeps pending terminal proof between result and final status writes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-matt-terminal-race-"));
@@ -64,6 +65,36 @@ test("a live child keeps pending terminal proof between result and final status 
   }
 });
 
+test("an orphaned terminal child stops waiting without granting observed runner exit proof", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-matt-orphaned-runner-"));
+  try {
+    const runId = "matt-orphaned-runner", asyncDir = join(directory, runId), resultsDir = join(directory, "results");
+    const pending = { version: 1, state: "pending", runId, runnerProcessInstanceId: "orphaned-runner" };
+    await mkdir(asyncDir);
+    await mkdir(resultsDir);
+    const proofPath = join(asyncDir, "process-terminal.json");
+    await writeFile(proofPath, JSON.stringify(pending));
+    await writeFile(join(asyncDir, "status.json"), JSON.stringify({
+      lifecycleArtifactVersion: 3, runId, mode: "single", state: "complete", pid: 12345,
+      pidNamespaceScope: "test-scope", startedAt: 1000, lastUpdate: 1500, endedAt: 1500,
+      processTerminal: pending, steps: [{ agent: "matt-researcher", status: "completed" }],
+    }));
+    const options = { resultsDir, now: () => 2000, pidNamespaceScope: () => "test-scope" };
+    const gone = () => { throw Object.assign(new Error("No such process"), { code: "ESRCH" }); };
+    reconcileAsyncRun(asyncDir, { ...options, kill: () => true });
+    assert.deepEqual(readProcessTerminal(asyncDir, pending), pending, "a live runner may still report its exit");
+    reconcileAsyncRun(asyncDir, { ...options, kill: gone, pidNamespaceScope: () => "other-scope" });
+    assert.deepEqual(readProcessTerminal(asyncDir, pending), pending, "a different PID namespace cannot prove the runner is gone");
+    reconcileAsyncRun(asyncDir, { ...options, kill: gone });
+    const proof = readProcessTerminal(asyncDir, pending);
+    assert.equal(proof.state, "unknown");
+    assert.equal(proof.reason, "observer-unavailable");
+    assert.deepEqual(JSON.parse(await readFile(proofPath, "utf8")), pending, "the original observer can still write its proof");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("precise MCP grants exclude ambient tools and require the server's defining child extension", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-matt-mcp-grant-"));
   try {
@@ -89,6 +120,34 @@ test("precise MCP grants exclude ambient tools and require the server's defining
     execFileSync(process.execPath, ["--input-type=module", "-e", script], {
       cwd: directory, encoding: "utf8",
       env: { ...process.env, PI_CODING_AGENT_DIR: join(directory, "user") },
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("adapter v7 openUi=false cache resolves only the researcher's explicit tools", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-matt-mcp-adapter-cache-"));
+  try {
+    const server = { url: "https://example.invalid/mcp", openUi: false };
+    // Fixture from pi-mcp-adapter@7.0.1 computeServerHash(server), not the resolver under test.
+    const configHash = "3fee343b09fc76cc2dd18aaba4b23fb1e3260d9ec6c796bbadad34ec53b20263";
+    await writeFile(join(directory, "mcp-cache.json"), JSON.stringify({ version: 1, servers: {
+      exa: { configHash, cachedAt: Date.now(), tools: ["web_search_exa", "web_fetch_exa", "unapproved_write"].map(name => ({ name })) },
+    } }));
+    const script = `
+      import assert from "node:assert/strict";
+      import { resolveMcpDirectToolResolution } from
+        ${JSON.stringify(pathToFileURL(join(SOURCE_DIR, "runs/shared/mcp-direct-tool-allowlist.js")).href)};
+      const host = { getCommands: () => [{ name: "mcp-adapter" }] };
+      const grant = resolveMcpDirectToolResolution(["exa/web_search_exa", "exa/web_fetch_exa"], process.cwd(), host,
+        { mcpServers: { exa: ${JSON.stringify(server)} } });
+      assert.deepEqual(grant.unresolvedSelectors, []);
+      assert.deepEqual(grant.selections.map(selection => selection.selector), ["exa/web_search_exa", "exa/web_fetch_exa"]);
+    `;
+    execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: directory, encoding: "utf8",
+      env: { ...process.env, PI_CODING_AGENT_DIR: directory },
     });
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -796,7 +855,10 @@ test("all generated workflows validate and run in the installed sandbox with moc
     assert.equal(validation.ok, true, JSON.stringify(validation.errors));
     const result = await runWorkflowScript({
       script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-      launch: async key => successfulResult(plan, key),
+      launch: async (key, params) => {
+        assert.equal(params.label, `${workflow.name} / ${key}`);
+        return successfulResult(plan, key);
+      },
     });
     assert.deepEqual(result.value.map(result => result.key), plan.lanes.map(lane => lane.key), workflow.name);
   }
