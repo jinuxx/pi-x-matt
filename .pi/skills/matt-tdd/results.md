@@ -10,7 +10,9 @@
 
 所有执行型 parent 共用此契约。调度后交还控制权或处理独立工作，等待 runtime 的 completion；不得轮询等待。
 
-宿主通知区分 reviewer 的 `provider-limit` / `infrastructure` / `execution` 与有效 `review-fail`，不自动重试额度耗尽；先解决环境或额度，再走有界局部 recovery。writer 超时的通知明确 `settlement=pending|running|complete|failed|not-scheduled`（只报告实际观察状态，pending 不冒称已启动），保留 partial 变更，不另行 resume 或擅自丢弃；最终仍以完整结构化结果决定能否送审。
+宿主通知区分 reviewer 的 `provider-limit` / `infrastructure` / `execution` 与有效 `review-fail`，不自动重试额度耗尽；先解决环境或额度，再走有界局部 recovery。
+
+writer 超时的 `settlement=pending|running|complete|failed|not-scheduled` 只在 TUI/RPC 显示进度，不唤醒父会话。保留 partial 变更，不另行 resume 或擅自丢弃；最终仍以完整结构化结果决定能否送审。批次首次 writer 报告可恢复的环境阻塞时，宿主封存失败快照后只向用户提示一次 `blockedRecovery`，不排队发送延迟的恢复指令。已运行哪些测试以 writer 的实际证据为准。
 
 pi-subagents 0.88.0 的 `Response was truncated: the model reached its maximum output length.` 属于执行失败，不是有效评审 FAIL，也不是 timeout；不得从 partial `output` 补出结构化结果或自动追加 settlement。上游已经捕获合法 `structured_output` 时不因这一截断条件失败，仍须核对 `ok === true` 与 schema。lane timeout 与 settlement 数值是执行预算，supervisor 等待不计入，不能按 wall-clock 猜测终态。
 

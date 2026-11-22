@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.48
+
+- 修复 [#6](https://github.com/jinuxx/pi-x-matt/issues/6)：并发刷新同一派发时，宿主只在首次封存失败快照后提示一次 `blockedRecovery`。提示不再推断测试是否启动。
+- 恢复提示与 writer 结算进度在 TUI/RPC 即时显示，不排入父会话；恢复入队后不会再收到旧派发的恢复指令。授权、快照校验和评审门禁不变。
+
 ## 0.2.47
 
 - 将 project-local runtime 与 bundled library 同步升级到 `pi-subagents@0.89.2`。此次上游未移除本插件使用的公开接口；继续使用 named resource、结构化结果和现有最小权限，不新增旧接口回退。

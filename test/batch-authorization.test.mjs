@@ -83,13 +83,13 @@ async function batchFixture(run) {
   const ctx = {
     cwd, hasUI: true, mode: "tui", isIdle: () => true, isProjectTrusted: () => true,
     sessionManager: { getSessionId: () => "batch-session", getBranch: () => entries },
-    ui: { confirm: async (_title, text) => { prompts++; messages.push(text); return true; } },
+    ui: { notify() {}, confirm: async (_title, text) => { prompts++; messages.push(text); return true; } },
   };
   const pi = {
     appendEntry: (customType, data) => entries.push({ type: "custom", customType, data: structuredClone(data) }),
     events: { emit() {} }, sendUserMessage: text => notices.push(text),
   };
-  const reload = (reason = "reload") => {
+  const reload = (reason = "reload", overrides = {}) => {
     runtime = createImplementationRuntime(pi, ROOT, {
       now: () => clock,
       rpc: async (method, params) => {
@@ -102,6 +102,7 @@ async function batchFixture(run) {
         launches.push({ ...plan, runId, asyncDir });
         return { details: { runId, asyncDir } };
       },
+      ...overrides,
     });
     runtime.start(ctx, reason);
     return runtime;
@@ -333,6 +334,57 @@ test("initial environment BLOCKED resumes the original batch writer once without
     await resolveTicket(f.ctx.cwd, T1, await git(f.ctx.cwd, "rev-parse", "HEAD"));
     await f.runtime.dispatch(next, undefined, f.ctx);
     assert.equal(f.prompts, 2, "one batch approval and one explicit environment recovery approval");
+  });
+});
+
+test("overlapping completion and progress announce the sealed blocker once, never after recovery is queued", async () => {
+  await batchFixture(async f => {
+    const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    const first = await f.runtime.dispatch({ ...common, batch: batchParams(f.fixedPoint) }, undefined, f.ctx);
+    await f.runtime.flush();
+    const { runId, asyncDir } = f.launches[0];
+    const result = { key: "implement", ok: true, agent: "matt-worker", runId: `${runId}-writer`,
+      resumability: { state: "resumable" }, structuredOutput: { ...environmentBlocked, cycles: worker.cycles, commands: worker.commands,
+        environmentBlocker: { command: "node --test", evidence: "Full suite interrupted after parser tests passed" } } };
+    await writeFile(join(asyncDir, "status.json"), JSON.stringify({ runId, state: "failed", workflow: { emits: [
+      { type: "pi-x-matt.recovery", lane: "implement", state: "settled", result },
+      { type: "pi-x-matt.stage-results", version: 1, workflow: "matt-tdd", stage: 1, results: [result] },
+    ] } }));
+
+    const alerts = [];
+    f.ctx.ui.notify = text => {
+      if (text.includes("blockedRecovery")) {
+        const saved = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+        assert.equal(saved.id, first.details.dispatchId);
+        assert.equal(saved.state, "failed");
+        assert.ok(saved.initialBlocker.snapshotId, "seal before notifying");
+        assert.ok(!f.entries.some(entry => entry.data.blockedRecovery), "do not prompt for a superseded dispatch");
+      }
+      alerts.push(text);
+    };
+    // Both observers read the same failed status. Hold one evidence read across recovery admission.
+    const release = Promise.withResolvers();
+    let reads = 0;
+    f.reload("reload", { collectEvidence: async (...args) => {
+      if (++reads === 1) await release.promise;
+      return collectReviewEvidence(...args);
+    } });
+    const observers = [f.runtime.progress(), f.runtime.completion({ runId })];
+    try {
+      await Promise.race(observers);
+      await f.runtime.dispatch({ ...common, blockedRecovery: { dispatchId: first.details.dispatchId } }, undefined, f.ctx);
+    } finally {
+      release.resolve();
+      await Promise.all(observers);
+    }
+    await f.runtime.completion({ runId });
+    const blockers = [...alerts, ...f.notices].filter(text => text.includes("blockedRecovery"));
+    assert.equal(blockers.length, 1);
+    assert.match(blockers[0], /BLOCKED/);
+    assert.doesNotMatch(blockers[0], /before the test runner started/);
+    assert.equal(alerts.filter(text => text.includes("settlement=complete")).length, 1);
+    assert.deepEqual(f.notices, [], "progress and human recovery guidance must not enqueue parent turns");
   });
 });
 

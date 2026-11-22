@@ -10,7 +10,7 @@
 
 ```bash
 pi install -l npm:pi-subagents@0.89.2
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.47
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.48
 ```
 
 本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
@@ -47,10 +47,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.47
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.48
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.47`。
+已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.48`。
 
 ## 提示中的测试术语
 
