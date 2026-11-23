@@ -36,3 +36,5 @@ setup 写前确认同时展示本地入口、`.x-matt/agents/` 契约、exclude 
 提交后核对实际 commit 的 files、message/trailers 与元信息。若 hook/其他扩展追加了未授权工具归因或改变范围，停止、不 push，报告真实提交并让用户决定如何处理；不擅自 amend、不关闭团队 hook、不重写已发布历史。
 
 本契约不承诺抹去历史，也不能保证用户手动操作、第三方扩展、Git hook、远端日志或服务端策略完全无痕。发现这些范围的残留或强制归因时须明确报告，不能声称“绝对不会被发现”。
+
+业务项目不使用 pi-subagents 的 `share` 上传会话；secret Gist 是未列出，不是私有。使用 `0.90.0` 时，用户可在 `~/.pi/agent/extensions/subagent/config.json` 顶层 `disabledFeatures` 数组中合并 `"session-sharing"`，完整重启 Pi 后由原生 runtime 拒绝分享。该选项影响整套安装，`matt-setup` 不改用户级配置。

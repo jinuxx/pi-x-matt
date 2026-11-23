@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.50
+
+- 将 project-local runtime 与 bundled library 同步到 `pi-subagents@0.90.0`。上游未弃用本插件使用的公开接口；继续使用 named resource、RPC 和结构化结果，不加旧接口回退或重复的生命周期监听。
+- 已结束 workflow 可被上游回收；宿主报告缺失证据的 run ID 与路径，阻止缺证恢复。完成通知先于 `status.json` 终态落盘时同样不结算，不新增轮询或重派。
+- 文档推荐用上游 `disabledFeatures` 的 `session-sharing` 关闭 Gist 分享，不自动修改全局配置。
+
 ## 0.2.49
 
 - 同步 Matt Skills 上游 `abeeaf9`，采用严格 YAML frontmatter 校验，并从实验性 `software-factory` 吸收“先确定性检查、限制修复循环”的做法。未引入其调度体系。

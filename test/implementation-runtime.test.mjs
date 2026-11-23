@@ -73,7 +73,7 @@ async function fixture(run) {
   // `resolutions` replaces the compliant writer's accounting (null omits it); `correction` shapes the
   // host-requested correction turn: { value } rewrites parser.mjs, the rest overrides its result.
   const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
-    workerOverride, reviews, beforeEvidence, resolutions, correction = {}, receiptFailure = false } = {}) => {
+    workerOverride, reviews, beforeEvidence, resolutions, correction = {}, receiptFailure = false, notifyCompletion = true } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [], trace = [];
     // A compliant writer accounts for exactly the finding IDs its handoff names.
     const accounted = (task, rows) => {
@@ -130,7 +130,7 @@ async function fixture(run) {
       status.error = error.message;
     }
     await writeFile(join(launch.asyncDir, "status.json"), JSON.stringify(status));
-    await runtime.completion({ runId: launch.runId });
+    if (notifyCompletion) await runtime.completion({ runId: launch.runId });
     return { calls, status, itemsSeen };
   };
   try {
@@ -1125,6 +1125,46 @@ test("concurrent writer recovery admission queues and launches at most one workf
     assert.match(results.find(row => row.status === "rejected").reason.message, /latest host dispatch|still active/);
     await f.runtime.flush();
     assert.equal(f.launches.length, 3);
+  });
+});
+
+test("native completion before final status is persisted does not settle the workflow", async () => {
+  await fixture(async f => {
+    await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    const { runId } = f.launches[0];
+    const terminalPhases = () => f.entries.filter(entry => entry.customType === "pi-x-matt.dispatch-phase" &&
+      entry.data.phase === "workflow").map(entry => entry.data.state);
+    await f.runtime.completion({ runId: "writer", parentWorkflowRunId: runId, awaitedByWorkflow: true });
+    await assert.rejects(() => f.runtime.completion({ runId, mode: "workflow", state: "complete", success: true }),
+      error => error.message.includes(runId) && /status\.json.*still running/.test(error.message));
+    assert.deepEqual(terminalPhases(), []);
+    assert.equal(f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data.state, "running");
+    await assert.rejects(() => f.runtime.dispatch(f.params, undefined, f.ctx), /still active; do not repeat/);
+    const { status } = await f.settle({ notifyCompletion: false });
+    assert.equal(status.state, "complete");
+    await f.runtime.progress();
+    assert.equal(f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data.state, "complete");
+    assert.equal(f.launches.length, 1);
+  });
+});
+
+test("recovery stops with the native run ID when retention has removed its status", async () => {
+  await fixture(async f => {
+    const dispatch = await f.runtime.dispatch(f.params, undefined, f.ctx);
+    await f.runtime.flush();
+    const { status } = await f.settle({ executionFailure: true });
+    assert.equal(status.state, "failed");
+    const { asyncDir, runId } = f.launches[0];
+    const statusPath = join(asyncDir, "status.json");
+    await rm(asyncDir, { recursive: true });
+    await assert.rejects(() => f.runtime.dispatch({
+      ...f.params, laneTasks: { spec: "recover spec review" },
+      recovery: { dispatchId: dispatch.details.dispatchId, lanes: ["spec"] },
+    }, undefined, f.ctx), error => error.message.includes(runId) && error.message.includes(statusPath) &&
+      /retention.*do not redispatch/.test(error.message) && error.cause?.code === "ENOENT");
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1);
   });
 });
 

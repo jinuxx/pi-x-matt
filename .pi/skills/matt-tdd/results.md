@@ -23,6 +23,7 @@ workflow child 的超时结算与通知只依据公共 `terminalOutcome.reason =
    - `state === "complete"`：保持成功契约，从 `workflow.value` 的结果数组按 lane key 取 `structuredOutput`；缺少 `workflow.value` 仍须停止，不回退到阶段快照。
    - `state === "failed"`：脚本抛错时没有 `workflow.value` 是正常语义。从 `workflow.emits` 中选择**最后一个** `type === "pi-x-matt.stage-results"` 的对象，核对 `version === 1`、`workflow` 与本次调度名称一致、`stage` 属于本次 workflow，再从其 `results` 数组按 lane key 读取。不拼接多条 emit，不选取更早的通过快照，不把无此标识的 emit（例如 `reviewEvidencePath`）当作结果。
    - `running`、`paused`、`stopped` 等均不是成功；不得据阶段快照越过终态 gate。
+   - `0.90.0` 在 Windows 锁文件时可能先送达 completion，再写回终态。若文件仍是 `running`，本次不结算、不提交；只在上游写回后核验同一 run，不轮询或重派发。
 3. Dispatcher 在每阶段 `runs.all()` 及既有 settlement 结束后、任何结果校验或 gate 抛错前，通过 runtime 的 `emit(...)` 发布以下累积快照。runtime 将其完整保存在 `status.json → workflow.emits`，不依赖通知预览；成功仍正常 `return results`，失败仍抛错。
 
    ```json
@@ -41,6 +42,8 @@ workflow child 的超时结算与通知只依据公共 `terminalOutcome.reason =
    - `implement` 返回合法 `BLOCKED`：属于**实现受阻**；stage 1 快照不应含 reviewer，未启动的后续阶段不是复核不通过。实现执行失败、结果缺失或无效时同样禁止启动后续证据采集与复核。
 5. 不得从 `output`、`outputReference`、`outputArtifactPath`、文件扩展名、自然语言或 workflow receipt 重建结构化结果，也不从 `workflow-children.jsonl`、旧 transcript 或通知拼装结果。上述 `status.json` 字段是本项目所有 dispatcher workflow 的完整结果来源。
 6. 来源缺失、不可读或 JSON 无效，失败快照缺失/标识不符，或阶段结果不完整时 fail closed，报告准确的 workflow run ID、lane key 与路径；不得自动重派发、改变执行模式或回退到预览。已有的阶段结果可作诊断，但不授权继续执行或提交。
+
+`0.90.0` 起已结束 workflow 及其 child 可被上游保留策略回收，运行目录不是长期归档。需要后续会话使用的结论只按各工作流的本地隐私契约记录，不复制完整会话或恢复记录。尝试恢复时如果原证据已缺失，保留候选并停止，不重建 `status.json` 或另起 writer。
 
 **待审候选**的工具 receipt 有 `reviewPending=true`，emits 含 `pi-x-matt.review-pending`，成功结果只含 implement。它不是交付通过、也不是 reviewer 丢失；禁止提交和复用修复前 PASS。父会话核对实际改动和证据，按宿主契约用最新 ID 显式 `review`：`verified` 只结算验证，双轴档还需本次有效两轴结论。不能从单 lane `COMPLETE` 猜测策略或阶段。
 

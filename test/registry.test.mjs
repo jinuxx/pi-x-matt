@@ -290,7 +290,7 @@ test("project package filter keeps only the pi-subagents extension", async () =>
   assert.equal(settings.subagents.disableBuiltins, true);
   assert.equal(settings.subagents.projectRootResolution, "nearest");
   assert.deepEqual(settings.packages, [{
-    source: "npm:pi-subagents@0.89.2",
+    source: "npm:pi-subagents@0.90.0",
     autoload: false,
     extensions: ["+bundle/index.js"],
     skills: [],
@@ -348,7 +348,7 @@ test("package manifest exposes namespaced resources", async () => {
   assert.deepEqual(manifest.pi.subagents.agents, ["./.pi/agents"]);
   assert.equal(manifest.engines.node, ">=22.19.0");
   assert.equal(manifest.peerDependencies["@earendil-works/pi-coding-agent"], ">=1.2.0");
-  assert.equal(manifest.dependencies["pi-subagents"], "0.89.2");
+  assert.equal(manifest.dependencies["pi-subagents"], "0.90.0");
   assert.ok(manifest.dependencies.yaml, "runtime registry validation needs the production YAML parser");
   assert.deepEqual(manifest.bundledDependencies, ["pi-subagents", "yaml"]);
   assert.equal(manifest.peerDependencies["pi-subagents"], undefined);

@@ -6,11 +6,11 @@
 
 ## 安装
 
-要求已安装 Pi 1.2.0 或更高版本、Node.js 22.19.0 或更高版本。项目 runtime 与 bundled library 均固定为 `pi-subagents@0.89.2`；使用 named workflow resource / host step，不支持旧 `workflowScript` RPC。Pi host peer 仍为 `>=1.2.0`，Node 下限来自 bundled `undici@8.12.4`。在目标代码库中先安装子代理运行时，再安装本 package：
+要求 Pi 1.2.0+、Node.js 22.19.0+。project-local runtime 与 bundled library 同步固定为 `pi-subagents@0.90.0`；使用 named workflow resource / host step，不支持旧 `workflowScript` RPC。在目标项目中安装配套版本：
 
 ```bash
-pi install -l npm:pi-subagents@0.89.2
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.49
+pi install -l npm:pi-subagents@0.90.0
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.50
 ```
 
 本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
@@ -29,7 +29,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.49
 
 ```json
 {
-  "source": "npm:pi-subagents@0.89.2",
+  "source": "npm:pi-subagents@0.90.0",
   "autoload": false,
   "extensions": ["+bundle/index.js"],
   "skills": [],
@@ -47,10 +47,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.49
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.50
 ```
 
-已固定旧 tag 的项目需用上面的 `pi install -l` 切换版本；`pi update` 只同步原配置的 ref，不会把旧 tag 升到新 tag。若使用 package object 配置，请仅更新原条目的 `source`，保留已有资源过滤，再执行 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.49`。
+已固定旧版本的项目需用上面的 `pi install -l` 切换两个包的版本；`pi update` 不会改写原配置的 ref。若使用 package object，请只更新原条目的 `source`、保留资源过滤，再分别执行 `pi update npm:pi-subagents@0.90.0` 和 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.50`。
 
 ## 提示中的测试术语
 
@@ -89,7 +89,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.49
 {
   "packages": [
     {
-      "source": "npm:pi-subagents@0.89.2",
+      "source": "npm:pi-subagents@0.90.0",
       "autoload": false,
       "extensions": ["+bundle/index.js"],
       "skills": [],
@@ -114,6 +114,8 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.49
 
 这是影响所有项目的用户级设置，不是 `.pi/settings.json` 的 `subagents` 字段；package 安装不会自动修改它。TDD 另外在 writer 前使用宿主原子 claim，阻止同一脚本重放再次启动 writer，不依赖该全局设置。恢复前仍须核验中断状态与工作区，不得自动重派发写者。
 
+使用 `0.90.0` 时，业务项目建议在同一用户级 config 的 `disabledFeatures` 数组中合并 `"session-sharing"`。这是上游原生的 Gist 分享禁用项；也会拒绝恢复曾启用 `share` 的运行。不写在项目 settings，不覆盖已有选项，也不禁用 `workflow-scripts`。升级 runtime 后再设置并完整重启 Pi。
+
 因此本地开发配置不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。package manifest 只加载本 package 的 dispatcher，并只暴露四个 `matt-*` 自定义 agents；reviewer 默认继承用户当前模型，不要求 DeepSeek provider（可按角色覆盖，见[为子代理指定模型](#为子代理指定模型)）。`pi-subagents` 由上面的 project-local package 配置提供：
 
 | Agent | 权限 | 当前用途 |
@@ -127,18 +129,18 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.49
 
 若检索能力改由 MCP 提供，在本地 `subagents.agentOverrides.matt-researcher.tools` 中替换为 `["read", "mcp:<server>/<search-tool>", "mcp:<server>/<fetch-tool>"]`，使用实际 server/tool 名称，不改共享 agent 定义、不授予整台 MCP server 或 `tools: "inherit"`。Pi 原生 MCP 与 pi-mcp-adapter 均支持该 selector；adapter 的 metadata cache 首次建立后需重启 Pi。0.88.0 会跳过 adapter 中明确 `disabled: true` 的 server，但未知 server 或已启用而未匹配到工具仍失败，不能据父会话可用推断 child 可用。
 
-## 0.88.1 → 0.89.2 升级边界
+## 0.89.2 → 0.90.0 升级边界
 
-按 [官方 CHANGELOG](https://github.com/nicobailon/pi-subagents/blob/v0.89.2/CHANGELOG.md) 与 npm 发布源码核对，没有新的弃用或移除涉及本插件。`runs.all`、`runs.host`、`emit`、RPC `spawn`、named resource、`terminalOutcome` 和 agent 配置继续使用。
+按 [官方发布说明](https://github.com/nicobailon/pi-subagents/releases/tag/v0.90.0) 与 npm 发布源码核对，没有新的弃用或移除涉及本插件。保留 RPC `spawn`（`script` 或 `workflow` + `args`）、named resource、`runs.all`、`runs.host`、`emit`、原生异步事件和 `terminalOutcome`，不加旧接口回退。
 
 | 上游变化 | 本插件处理 |
 | --- | --- |
-| 0.89.0–0.89.1：显式工具被换成另一套工具时提前失败；有意保持 inactive 的工具不再误报。 | 保留 leaf allowlist 和 reviewer budget；不加工具、重试或自动放宽权限。 |
-| 0.89.0：原生进度提供 `workflowChildren[].sessionFile`；workflow `output` 仅在成功时写入。 | transcript 路径只用于原生观测，不进入自建收据、不作恢复凭证。失败证据仍读最后的 stage snapshot，不等待输出文件。 |
-| 0.89.2：`label` 用于 child 会话名、标题与 Fleet 行。 | dispatcher 设置固定的 `workflow / lane` 标签（含 settlement/correction），不使用任务正文。lane key、权限和执行分支不变。 |
-| 0.89.2：修复 MCP adapter v7 `openUi: false` 的缓存匹配；进程确认消失后终端对账不再永远 pending。 | Research 仍只授予精确 MCP selectors；`observer-unavailable` 不升级成已观测退出，也不授权自动重派。 |
+| 已完成 workflow 及其 child 可由上游回收（通常 30 天；可恢复运行等受原生保留规则保护）。 | `status.json` 是临时运行证据，不是归档。缺失时报告原 run ID 和路径，阻断缺证的恢复或交付，不复制会话、不重派 writer。 |
+| Windows 锁住 `status.json` 时，完成通知仍会送达，终态可能稍后写回。 | 不把通知当成终态。若文件仍显示运行中则提示证据未就绪；等上游写回后核验同一个 run，不加轮询。 |
+| `label` 扩到直接运行和内置 `parallel`，并新增前台 lifecycle 事件。 | 保留原有 `workflow / lane` 标签和异步事件；不读取任务正文作标题、不重复订阅前台事件。 |
+| 命名 workflow 支持顶层 `globalConcurrencyLimit`。 | 不使用无效的 `args.concurrency`，也不强制串行复核。保留原生限流和本项目的独立轴、lane key、权限与结构化结果。 |
 
-Herdr/Rex pane、Fleet 多行命令和 watchdog 的修复由原生 runtime 生效；本插件不要求 `machine` 放置，也不复制这些机制。
+Fleet 嵌套状态、前台 JSON 结果与 Pi 1.6 的适配由原生 runtime 提供。`fastServiceTier` 不由本插件配置，不改变已有模型、费率选择或超时预算。Gist 分享用上面的原生禁用项，不实现第二套分享控制。
 
 ## 0.84.0 → 0.88.1 历史升级边界
 
@@ -349,7 +351,7 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 `allowedFiles` 是精确权限清单，可包含尚未创建的文件。完整候选仅因越界失败时，宿主保留 `review.md/json` 和越界路径。保持候选不变，保留旧文件、补齐必需 `allowedFiles` 后，用 `recollect: {dispatchId: "<最新越界派发>"}` 复用单票重新确认（省略 laneTasks）。宿主补跑因越界跳过的评审前命令并重采集，不重跑 writer；已有校验结果不重复运行。成功仍须用新 dispatchId 显式 `review`。详见 [恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#信封越界后的仅重采集)。
 
-`0.89.2` 契约测试使用已安装 runtime 的脚本 sandbox、bundled resource 注册、原生 agent discovery、MCP 精确选择和终态写入对账。新增回归覆盖 lane 标签、adapter v7 `openUi: false` 缓存以及 orphaned runner 的 `unknown` 证明；child/model 与 PID liveness 使用 mock，不替代真实模型、runner 或 Fleet 交互验证。
+`0.90.0` 契约测试使用已安装 runtime 的脚本 sandbox、bundled resource 注册、原生 agent discovery 和 MCP 精确选择。宿主回归覆盖完成通知早于终态落盘、原结果被回收后的拒绝恢复，以及既有 lane 标签和 orphaned runner 的 `unknown` 证明；child/model 与 PID liveness 使用 mock，不替代真实模型、Windows 锁文件或 Fleet 交互验证。
 
 历史真实只读冒烟基于 `pi-subagents@0.88.1` + Pi `1.5.2`（本机 pi-fff 为 `override` 模式），运行 Research 与 Code Review 正/负例，共 5 个真实模型 child，全部 fresh context、模型匹配 override 映射、无 settlement 与自动重试，仓库与夹具在运行前后未变。`matt-reader` 和 TDD writer/repair 链未实跑。原生 completion notice 可唤醒空闲父会话；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
 
