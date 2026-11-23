@@ -70,7 +70,7 @@ Blocked by: <仓库相对 ticket 路径，或 None>
 - “Publish ticket”：按 blockers-first 创建单个 ticket 文件。
 - “Fetch spec/ticket”：读取用户给出的仓库相对路径；不得凭编号猜测其他 feature。
 - Comments 追加到 `## Comments`，不覆盖原正文。
-- `implement` 完成 TDD、完整验证和双轴 review 后，只提交允许范围内的实现、测试与必要共享文件。提交失败时 ticket 保持未完成；提交成功后，父会话才在本地把 ticket 改为 `Status: resolved`，在 `## Comments` 追加验证/review 摘要与 `Implementation commit: <完整 commit SHA>`，重新读取核验。不得把 ticket 加入提交。若本地写回失败，保留已成功的代码提交并报告“代码已提交、tracker 待修复”，不重复提交、不宣称 ticket 完成。
+- `implement` 通过 TDD、必要验证和该票获批门禁（普通票宿主实测，高风险票独立复核）后，只提交允许范围内的实现、测试与必要共享文件。提交失败时 ticket 保持未完成；提交成功后才在本地写回 `Status: resolved`，在 `## Comments` 追加验证摘要、适用的评审结果与 `Implementation commit: <完整 commit SHA>`，重新读取核验。不把 ticket 加入提交；写回失败则报告“代码已提交、tracker 待修复”，不重复提交、不宣称 ticket 完成。
 - `out-of-scope` ticket 必须在本地 Comments 记录排除理由；它不要求伪造实现提交。完成记录指向真实代码提交，而非 ticket 的 Git 历史。
 - 每次写入后重新读取目标文件，核对 Type、Parent、Status、Source session、Blocked by、Reference Inputs（spec）、正文和验收标准；核验失败时停止后续批量写入。
 

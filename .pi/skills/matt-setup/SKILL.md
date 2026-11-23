@@ -8,7 +8,7 @@ metadata:
   pi-dispatch: none
   pi-depends-on: ""
   pi-upstream-path: skills/engineering/setup-matt-pocock-skills/SKILL.md
-  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
+  pi-upstream-sha: abeeaf95660ba9e8b7c753eb38f441ca707a8823
 ---
 
 # Setup Matt Pocock Skills
@@ -50,7 +50,7 @@ metadata:
 
 即使 `triage` 尚未登记，也要写 `.x-matt/agents/triage-labels.md`，因为 `matt-to-spec`、`matt-to-tickets` 和 Local Markdown lifecycle 需要区分 `spec-ready`、`shipped`、`ready-for-agent`、`resolved` 与 `out-of-scope`。`spec-ready` / `shipped` 是 parent spec lifecycle，`resolved` / `out-of-scope` 是 ticket terminal 状态；`ready-for-agent` 是 canonical triage role，也是可实现 ticket 的入口状态。
 
-Local Markdown 的 tracker 与 triage-labels 的 `resolved` 定义必须一致：通过 TDD、验证和双轴 review，代码提交成功后才仅在本地写回，Comments 记录完整 `Implementation commit`；ticket 不暂存、不提交，其他 ticket 还须核验该实现提交属于当前 `HEAD` ancestry 才能解除 `Blocked by`，不能仅凭状态解锁。写后核验须覆盖这一定义，不能只核对状态名称。
+Local Markdown 的 tracker 与 triage-labels 的 `resolved` 定义必须一致：通过 TDD、必要验证和该票获批门禁（普通票宿主实测，高风险票独立复核），代码提交成功后才仅在本地写回，Comments 记录完整 `Implementation commit`；ticket 不暂存、不提交，其他 ticket 还须核验该实现提交属于当前 `HEAD` ancestry 才能解除 `Blocked by`，不能仅凭状态解锁。写后核验须覆盖这一定义，不能只核对状态名称。
 
 ### C. Domain docs
 

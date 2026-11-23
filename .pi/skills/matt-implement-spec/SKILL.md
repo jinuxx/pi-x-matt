@@ -1,6 +1,6 @@
 ---
 name: matt-implement-spec
-description: 在当前分支串行实现已有 Local Markdown spec 的 tickets，逐票复用 TDD、验证和提交，全部完成后做一次整份 spec 双轴评审。用于显式请求批量实现已拆票的 spec。
+description: 在当前分支串行实现已拆票的 Local Markdown spec，逐票验证后提交，整批只做一次独立集成评审。
 disable-model-invocation: true
 metadata:
   pi-scope: parent
@@ -8,12 +8,12 @@ metadata:
   pi-dispatch: none
   pi-depends-on: matt-implement
   pi-upstream-path: skills/engineering/implement-spec/SKILL.md
-  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
+  pi-upstream-sha: abeeaf95660ba9e8b7c753eb38f441ca707a8823
 ---
 
 # Implement Spec（串行轻量版）
 
-**交付策略例外**：双 PASS 仍为默认要求。若仅剩普通 Standards P2 且 Spec PASS，可按 [显式风险接受](../matt-tdd/dispatch-contract.md#显式风险接受与收尾) 对该精确候选取得用户新的真实确认。原 FAIL 不变，报告与本地 tracker 明确“带已知风险交付”和 `Risk acceptance: <宿主返回的 dispatchId>`；宿主仍核验 candidate tree、parent、commit 与 tracker 收据，batch 授权不接受风险。最终整份 spec committed 评审不继承单票风险接受，需要对该范围独立确认。验收、安全、完整性及 P0/P1 不豁免，不能自动降级或自行提交。
+**逐票验证，最后做集成评审。** 普通票以实测验收为门禁；高风险或关键验收无法充分自动验证的票，仍在提交前独立复核。风险分类和检查命令随整批计划一次确认。只有[显式风险接受](../matt-tdd/dispatch-contract.md#显式风险接受与收尾)允许用户针对普通 Standards P2 单独接受风险；整批评审不继承单票风险收据。
 
 这是用户显式调用的批量编排入口，留在同一父会话中逐张应用 [matt-implement](../matt-implement/SKILL.md)，不把整个 spec 作为一次 TDD implementation。它只支持已配置的 Local Markdown tracker 和已经发布的 spec/tickets；其他 tracker 停止并报告首版不支持，不自动切换或迁移。
 
@@ -35,7 +35,7 @@ metadata:
 3. 只枚举该 feature 的 `issues/`，读取全部 ticket 的 `Type: ticket`、`Parent`、status、`Blocked by` 和验收正文。每张 ticket 的 Parent 必须精确指向此 spec；不把 decision ticket、`Parent: None` 或其他 feature 混入图。没有 tickets 时提示先运行 `matt-to-tickets`，不创建缺失 artifact。
 4. 验证所有 blocker 都是本图中的真实 ticket，拒绝缺失引用、自依赖和循环依赖。未完成项只接受 `ready-for-agent`；已完成项只接受 `resolved` 或有明确用户批准排除理由的 `out-of-scope`。对每个 `resolved` 读取完整 `Implementation commit`，用 `git merge-base --is-ancestor <SHA> HEAD` 核验；失败时停止，不按残留状态跳过或重做实现。`out-of-scope` 不能解锁依赖它的 ticket，也不能冒充已实现的 spec 验收项。
 5. 固定当前 branch、HEAD 和整批评审 fixed point。新批次没有已完成 ticket 时默认以开始的实际 HEAD SHA 为 fixed point；用户提供基线时核验它存在且是 HEAD 的祖先。续跑有已完成 ticket 时必须恢复原始 fixed point，缺失则停止并请求准确基线，不能把当前 HEAD 当作基线隐藏之前的实现。每个已完成实现提交还必须位于 fixed point 之后；基线范围夹带无关提交时停止并澄清，不把无关代码归入本 spec。
-6. `git status` 必须干净（不含 ignored 本地资料）；存在已有 tracked/untracked 改动时停止并列出阻塞，不 stash、reset 或提交用户改动。展示 spec 标题、固定基线、已完成/排除项、依赖图和串行顺序。有 `spec.md.dispatch.json` 时，原生命令读取计划，由宿主展示精确信封并确认一次；本次 agent 不改写该计划。没有计划时将 spec、原始 fixed point 和各票信封通过顶层 `batch` 提交，走相同的一次确认。批次确认后不按时间过期，但不是全局写入权限；模型输入和 `batch` 参数不能自授权。用户可用 `/matt-revoke` 撤销。基线或计划漂移、范围扩张、恢复耗尽等需用户决定时，汇总阻塞、已完成票和建议的下一步，不重复询问。
+6. `git status` 必须干净（不含 ignored 本地资料）；有既有改动则列出阻塞，不 stash、reset 或提交用户改动。展示 spec、基线、终态票、依赖与串行顺序，以及每票的 `delivery` 和命令。新普通票用 `verified` 并声明覆盖验收的 `preReviewCommands`；高风险或缺充分自动证据用 `reviewed`。有 `spec.md.dispatch.json` 时，原生命令读取计划，由宿主展示精确信封并确认一次；agent 不改既有计划。未声明 `delivery` 的存量计划按原双轴门禁执行；若要升级，须由用户重新确认新计划，不能改变已派发票的策略。无本地计划时用顶层 `batch` 取得同等确认。授权不按时间过期，但不是全局写入权限；可用 `/matt-revoke` 撤销。
 
 ## 串行 frontier
 
@@ -45,20 +45,20 @@ frontier 仅包含 `ready-for-agent` 且全部 blockers 已 `resolved`、实现�
 
 1. 重新读取 spec、ticket 与 blockers，核验分支、基线 ancestry、图成员、原有验收与 edges 未漂移。ticket 集合或需求发生变化时停止并重新确认范围；既有完成说明与状态回写不算需求扩张。
 2. 完整应用 `matt-implement` 的单 ticket 流程：陈述标题，按已批准的验收确定测试切入点，记录各切入点能覆盖和不能覆盖的行为及测试取舍，再生成当前 ticket 的 Implementation Context Pack。批量确认已涵盖这些范围内的决定，不逐票询问测试方案或是否继续。不要把整个 spec 的未实现部分交给该票 Spec reviewer。
-3. 每张 ticket 提供与已确认 batch 条目完全一致的 `implementation.ticket`、`scope`、精确 `allowedFiles`、诊断清单、`preReviewCommands`（若声明）和完整 `implement` / `standards` / `spec` laneTasks，以 `pi_matt_dispatch` 的 `workflow: matt-tdd` 执行。原生命令已锁定本地计划时省略 `batch`；否则首票提交 `batch` 作确认，后续声明票可省略。`finalValidationCommands` 只由宿主读取，不进入工具信封。宿主按当前 session branch 的可信 batch 记录和声明的串行 frontier 签发新的 HEAD-bound 单票 grant，不重复询问。当前信封必须等于批准条目；undeclared ticket、额外文件/命令、语义扩张、Parent/type/status/active path 不合法或 `Blocked by` 图漂移时拒绝并要求新的显式 batch 确认。同票修复/送审即使省略 `batch` 也保留宿主 batch binding；只增文件或替换诊断清单属于新的单票信封，须显式重新确认一次，batch 计划本身不扩张。
+3. 每张 ticket 提供与已确认条目完全一致的 `implementation.ticket`、`scope`、精确 `allowedFiles`、`delivery` 和获批命令，以 `pi_matt_dispatch` 的 `matt-tdd` 执行。`verified` 只给 `laneTasks.implement`，`reviewed`（或旧计划）另给 `standards` / `spec`。已锁定本地计划时省略 `batch`；否则首票用 `batch` 取得真实确认，后续可省略。`finalValidationCommands` 由宿主读取，不进入工具信封。宿主签发 HEAD-bound grant，不重复询问；undeclared ticket、额外文件/命令、语义扩张和 tracker 图漂移都不静默执行。同票修复保留 batch binding，新增范围或命令变更仍须显式确认。
 4. 同票连续修复与 reviewer recovery 沿用原 dispatch lineage；不跨 ticket 复用 `dispatchId`、scope 或旧 Evidence Pack。`DIAGNOSIS_REQUIRED` 按既有受限诊断契约处理，未解除不得追加 writer。任何 BLOCKED、未恢复的失败或接受状态不明都暂停整批，不切到下一张来绕过。只有宿主保存了合格环境阻塞快照的首次 writer 可在环境修复后按 [blockedRecovery 契约](../matt-tdd/dispatch-contract.md#初次批次实现的环境阻塞恢复) 显式续跑。
-5. 等 TDD 和双轴 review 均成功，由父会话完成剩余验证并提交。如果本地计划声明了 `finalValidationCommands`，须等当前 dispatch 的宿主通知 `required final validation PASS`（或已通过这些验证的 `accepted-risk` 回执），不能把双轴 `PASS` 当成完整验证通过。`preReviewCommands` 仍失败时也不提交。batch 运行中宿主记录隔离 index/object store 算出的 candidate tree；提交必须只有一个 parent 等于采集时的 HEAD，且 tree 与证据一致，不能夹带无关文件、额外提交、amend、merge 或 history switch。只有提交成功、真实 commit 属于原始 fixed point ancestry、当前工作区干净，且本地 tracker `Status: resolved` 与 `Implementation commit` 写回均核验通过并匹配该 commit，才进入下一张；“代码已提交、tracker 待修复”必须暂停，不重新提交。
+5. 适用的交付门禁通过后，父会话核对 diff 与验收，补做该票尚未覆盖的必要验证。不逐票重复完整套件；项目硬要求或该票风险要求的验证不省略。声明了 `finalValidationCommands` 时须等宿主 `required final validation PASS` 或同时通过这些检查的风险收据。宿主记录隔离 index/object store 算出的 candidate tree；真实提交的单一 parent 必须是采集时 HEAD，tree 必须一致。提交成功、原始 fixed point ancestry、工作区干净和本地 tracker `Status: resolved` / `Implementation commit` 写回核验后才进入下一张；写回失败不重新提交。
 6. 保存该票标题、commit、dispatchId、验证结果和原始 fixed point；重读并计算下一轮 frontier。已提交实现属于当前 HEAD ancestry 才解锁后续工作，不依赖内存中的“done”标记。每张票执行完成后仅编排 parent 可以继续下一张，`matt-implement` 自身不批量循环。
 
-当前票双 PASS 后若父会话完整验证发现本票引入的回归，不提交、不推进，也不编造 reviewer finding。保持已审候选原样，按 [最终验证续修](../matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修) 提交实际失败命令；使用本地计划为该票预批的 `finalValidationCommands`，无需再次确认，未预批的命令仍须确认。宿主证实回归后续跑同一 writer。对修复结果显式 `review`，等宿主复验和 fresh 双轴 PASS，再完成其余父会话验证、提交和 tracker 核验。
+当前票通过实现门禁后若另有本票的最终验证回归，不提交、不推进，也不编造 reviewer finding。保持候选原样，按[最终验证续修](../matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修)提交失败命令。宿主证实后续跑同一 writer；对修复结果显式 `review`，`verified` 省略 `laneTasks`，只结算宿主复验；`reviewed`（或旧计划）在实测通过后做增量复核。最后再按原门禁提交。
 
 ## 整份 spec 评审与结束
 
-全部 tickets 均已达到核验过的终态，才进入整份 spec 评审；中途只做当前票的 TDD 双轴复核。parent spec 始终保持 `spec-ready`，已批准排除项须带原始依据，不能静默减少 spec 需求。
+全部 tickets 均已达到核验过的终态，才进入整份 spec 集成评审。parent spec 保持 `spec-ready`，已批准排除项带原始依据，不能静默减少验收。
 
-1. 确认当前 branch 未变、工作区干净，重新核验所有实现提交、ticket 终态、spec 内容和原始 fixed point。
-2. 调用一次 `pi_matt_dispatch` 的 `workflow: matt-code-review`，顶层传 `reviewScope: { kind: "committed", fixedPoint: <原始 fixed point SHA> }`（`reviewKind=committed`）。宿主解析并固定原始 fixed point 到当前 HEAD 的完整范围，只在两个 reviewer 前从 Git 对象采集一次 committed Pack，覆盖本 spec 的所有实现提交而不只最后一票；父会话不手写额外 committed Pack，也不传 caller hash/HEAD/path/command。Spec lane 明确接收完整 parent spec、全部声明 tickets 的聚合 acceptance matrix 与排除依据（文本声明，不是共享 API，也不复制给 Standards）；Standards lane 只接收适用工程规范与安全/正确性边界。两项完整 laneTasks 分开提供。
+1. 确认 branch、干净工作区、实现提交、ticket 终态、spec 及原始 fixed point。先跑一次尚未覆盖的完整测试套件和必要集成检查；失败不启动评审，不自动回滚、改票或报告整批完成。
+2. 调用一次 `pi_matt_dispatch` 的 `matt-code-review`，用 `reviewScope: { kind: "committed", fixedPoint: <原始 fixed point SHA> }`（`reviewKind=committed`）。宿主采集完整提交证据，不手写 Pack。Spec lane 提供完整 parent spec、声明 tickets 的聚合 acceptance matrix、已通过测试及排除依据，重点看跨票验收、遗漏与冲突。Standards lane 提供工程规范和关键风险，重点看集成回归、权限和数据完整性；不重新扫已经验证的命名、风格或等价测试。两项 laneTasks 独立，不把规格全文送 Standards。
 3. 读取完整结构化结果并核验双轴。committed 采集失败、范围无效、HEAD 漂移、FAIL、NO_EVIDENCE、执行失败或缺失结果都先停止整批并保留报告；供应商/网络失败解决后可用 `recovery: {dispatchId, lanes}` 做一次失败轴恢复，只提供该轴 task，省略 reviewScope，复用原 Pack 与另一轴结果。轻量版不自动创建修复 tickets、不重新打开已 resolved 的票，不反复启动广域 review/fix 循环。需要后续修复时交还用户明确范围；仅符合上述风险接受边界时可请求独立确认。
-4. 只有最终两轴 PASS、证据仍对应当前 HEAD 且所有逐票验证通过，才报告整批实现完成。报告分支、原始 fixed point、每票 commit、排除项、最终 review 和剩余风险；暂停也输出基线、已完成提交、阻塞票和续跑入口，不回滚已成功提交。
+4. 只有集成检查通过、两轴 PASS（或有合格的独立风险收据）、证据仍对应当前 HEAD，才报告整批交付。报告验证命令、每票 commit、排除项、最终 review 和剩余风险；暂停也报告基线和已完成提交，不回滚。
 
 不自动写 `shipped`，不调用 `matt-archive`，不改 parent spec，不归档、不暂存或提交 tracker。不 push、不开 PR、不改历史。归档必须由用户之后另行显式调用 `matt-archive`。

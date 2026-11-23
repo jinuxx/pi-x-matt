@@ -1,6 +1,6 @@
 ---
 name: matt-implement
-description: 根据已确认的 ticket 或当前会话单 slice 计划实现一个工作切片，执行带双轴复核的 TDD、父会话验证，并提交当前分支。
+description: 根据已确认的 ticket 或单 slice 计划实现一个工作切片，先做确定性验收，高风险改动独立复核，再提交当前分支。
 disable-model-invocation: true
 metadata:
   pi-scope: parent
@@ -8,14 +8,14 @@ metadata:
   pi-dispatch: none
   pi-depends-on: matt-domain-modeling
   pi-upstream-path: skills/engineering/implement/SKILL.md
-  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
+  pi-upstream-sha: abeeaf95660ba9e8b7c753eb38f441ca707a8823
 ---
 
 由 `matt-implement-spec` 串行调度时，本单票步骤不变；宿主已确认的 batch 能力只按声明的 spec/ticket/envelope 为该票签发 HEAD-bound grant，声明票之间不重复 TUI 确认。同票修复/送审即使省略顶层 `batch` 元数据也保留宿主 batch binding；增加文件或替换诊断清单仍须显式单票重新确认，batch 计划本身不扩张。提交前宿主已有 trusted collector 的 candidate tree 证明时，父会话必须让真实 commit 的 parent 和 tree 精确匹配，并在 tracker 写回后由宿主核验下一票前置；batch 不授予 push、PR、merge、committer 或归档权限。
 
 # Implement
 
-**交付策略**：下文双 PASS 为默认要求；唯一额外出口是 [宿主显式风险接受](../matt-tdd/dispatch-contract.md#显式风险接受与收尾)。仅全部剩余 finding 都是普通 Standards P2 且 Spec PASS 时，可调用 `acceptRisk` 让用户对具体候选再次真实确认。保留原 FAIL，完成报告明确“带已知风险交付”；完整验证、提交完整性与隐私要求不变，本地 Comments 还须写 `Risk acceptance: <宿主返回的 dispatchId>`。没有正式收据不能提交，不自动按严重度或轮数放行，验收/安全/完整性/P0/P1 不豁免。
+**交付策略**：先确定验收怎么验证，再决定是否需要独立 reviewer。默认普通票以宿主实测为门禁；权限、项目/租户隔离、数据完整性、不可逆迁移等高风险改动，或关键验收不能充分自动验证时，提交前还要做独立复核。风险分类随精确信封向用户确认，不能在失败后切换策略。
 
 本 skill 把已经决定的一个工作切片变成当前分支上的提交。它不重新 grill，不改变计划/ticket 的目标，不批量处理多个 tickets，也不平行写共享工作区。每次 invocation 只处理一个 ticket；没有已发布 ticket 时，只接受用户在先前 transition handoff 中明确选择“直接实现”、可在一个 session 完成且尚未发布为 `Type: spec`/`Status: spec-ready` 的单 slice 计划。缺少 ticket 本身不构成 direct-slice 授权。`spec-ready` parent spec 必须先进入 `matt-to-tickets`，不能直接实现。
 
@@ -33,61 +33,28 @@ metadata:
 
 ## 执行顺序
 
-### 1. TDD
+### 1. 实现并验证候选
 
-调用 `pi_matt_dispatch`：
+按 [TDD](../matt-tdd/SKILL.md) 调用 `pi_matt_dispatch`（`workflow`: `matt-tdd`），保存宿主 `dispatchId`。`/skill:matt-implement` 只启动编排，不替代授权；宿主尚无有效授权时，对具体范围确认一次。信封绑定 ticket、精确允许路径与命令；无可信授权且无 UI 的 print/JSON mode 仍须 fail closed。增加文件或替换命令须真实重新确认，不重开 initial、不重置发现或基线。
 
-- `workflow`: `matt-tdd`
-- `implementation`：按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 提供当前 ticket/direct-slice、稳定 scope、精确 allowedFiles 与获批的本地 diagnosticCommands。项目有能在几分钟内完成、在基线上通过且不写入工作区的确定性检查（聚焦 typecheck、lint、相关测试）时，把精确命令列入可选的 `preReviewCommands`（最多 6 条）：宿主在每次 writer 之后、任何评审之前原样执行，把可机械检出的问题拦在双轴之前；没有合适命令时省略，不要编造，也不要把耗时的完整套件或会生成文件的命令放进来。修复与送审期间复用同一范围；同 ticket 只增 `allowedFiles` 或替换诊断清单/`preReviewCommands` 时按契约重新确认一次，保留全部旧文件并以显式最新 `dispatchId` 延续同一谱系；保存每次返回的宿主 `dispatchId`。
-- `task`: 只包含三条 lane 都可安全读取的共享事实：单 ticket/当前会话 slice 的目标、验收行为、已确认测试切入点、fixed point、既有工作区改动、允许范围、`reviewKind=worktree`、标准文件、当前 ticket/parent spec、reviewer 初始证据边界、module/package 搜索边界和停止条件。不得放入 report-only、旧 transcript、禁止 diff、`status COMPLETE` 等 implement 专属指令。
-- `laneTasks`: 必须同时提供 `implement`、`standards`、`spec` 三项完整替换。`implement` 接收 Implementation Context Pack、RED/GREEN 与相关回归命令，明确不执行父会话最终验证；`standards` 接收适用工程规范摘录和安全/正确性边界；`spec` 接收 ticket acceptance matrix 与 parent spec 相关条款。两条 reviewer lane 先消费 workflow 独立采集的 Review Evidence Pack（完整 combined diff、新文件全文/hash、deleted/rename old/new），不再逐文件重复取证，不返回 implement schema，也不以旧 worker transcript 代替 diff。默认只读 manifest；仅在具体证据不足时定向补读一层直接依赖。
+| 当前票 | `implementation.delivery` | 候选门禁 |
+| --- | --- | --- |
+| 普通票，有可执行的确定性验收 | `verified`（默认选择） | 只传 `laneTasks.implement`；必须登记覆盖变更行为的 `preReviewCommands`。writer 做真实 RED→GREEN，宿主对同一候选实测并取得完整 Pack；不启动 reviewer，不声称双 PASS。 |
+| 高风险或自动检查无法充分证明关键验收 | `reviewed` | 提供 `implement`、`standards`、`spec`；有合适的命令就登记并先跑，通过后独立评审该票验收和关键风险。初审后最多一次修复（包括最终验证续修）和一次增量复核。 |
 
-宿主尚无有效授权时，对具体范围确认一次；`/skill:matt-implement` 只启动编排，不替代授权。ticket 或已确认计划足以确定的常规测试方案直接执行，不再单独确认。新签发的单票授权绑定范围后不设时间上限，同范围修复及 reload 从当前 session branch 的可信记录恢复，不相信模型提供的“已授权”文字。同 ticket 增加 `allowedFiles` 或替换诊断清单时，用最新 `implementation` 信封重新确认一次，并以显式旧 `dispatchId` 延续谱系；已有派发后不得再发 initial，重新授权也不能重置基线、计数或 findings。新 ticket、范围扩张、架构选择或破坏性操作仍需新决定。取消、无可信授权且无 UI 的 print/JSON mode 或未响应授权时都必须 fail closed，不能改用其他调度入口绕过。
+只选可在基线上运行并通过、本地确定性、不改写工作区的聚焦命令，不用无关检查充当验收。`task` 只放公共目标和证据边界，`reviewKind=worktree`；writer 与 reviewer 用各自 lane task。存量信封未声明 `delivery` 时仍走原双轴契约，不升级既有授权。任何档都要有真实 TDD 证据；宿主检查一次纠正后仍不通过则停下，不送审、不提交。缺少基线、验收、ticket 或规划材料时停止，提示进入对应上游流程；禁止父会话直接创建或改写 `.x-matt/work/` 来解阻。
 
-只有 TDD 返回完整 `COMPLETE`，且每个批准 slice 都有真实 RED、GREEN、changed files 和 commands 证据时才继续。TDD 内置的 fresh Standards/Spec lanes 是本次实现默认且唯一的一轮独立 code review；lane task 应明确：只有存在有证据的验收遗漏、标准/正确性/安全/数据完整性问题或缺少必需测试时返回 `FAIL`，非阻断的可维护性建议写入 notes 并保持 `PASS`。TDD reviewer 失败、缺少结构化结果或 gate 未满足时停止，不自行补实现。初次实现的 receipt 带 `verification.ok=false`（宿主实测的评审前命令在一次同 writer 纠正后仍失败）时，即使两轴都 `PASS` 也不得提交：reviewer 报出 finding 则按下述 repair 修复并让宿主复检通过；两轴 `PASS` 而命令仍失败时停止，向用户报告失败命令并请其决定。若阻塞原因是缺少 Git baseline、spec、ticket、acceptance criteria 或其他规划 artifact，禁止父会话直接创建或改写 `.x-matt/work/` 来解阻；应停止并提示用户显式进入 `matt-to-spec`、`matt-to-tickets` 或修正已有 artifact。
+### 2. 只处理真实阻断
 
-两个 reviewer 都完成后，先合并报告同一轮全部 findings，按共享根因归组但保留 Standards/Spec 各自结论。reviewer 须完成限定范围检查，一次报告全部有证据的阻断项，不因首个 finding 提前结束。在已批准的连续修复范围内，不再次询问同一范围；只有新增范围或实质决定时才请求一次用户决定，不逐条或逐 lane 询问。
+`reviewed` 只让已证实的验收失败、可达回归、关键工程约束、安全/数据完整性问题或必要验收证据缺口阻断；命名、非关键规范、重构偏好、等价测试建议进 `notes`。按共享根因合并全部 blocker，一次 `repair` 续跑原 writer，先跑回归再用最新 `dispatchId` 一次 `review`。只复核原问题、累计修复直接影响的行为和有证据的新安全/完整性风险；不重新扫全票。若仍失败或宿主验证没通过，保留候选和证据，停下交用户决定，不自动开始新一轮。
 
-聚焦 `matt-tdd` 必须提供结构化 `repair`：引用最近宿主 dispatchId、全部获批 finding IDs，并说明不变量、校验/归一化顺序、共享调用路径、必要正反例与回归；重新确认后的修复仍引用同一 ticket 的最新 `dispatchId`，不以 initial 重开。**repair 只运行 writer 与证据采集，不自动启动双轴。** 宿主 resume 最近的可恢复 writer，保留原模型、工具与上下文；不可恢复则停止，不暗中换 fresh writer。writer 只处理获批 findings，并运行 RED/GREEN 与相关回归，不把父会话最终验证移交给 worker。writer 须在 `findingResolutions` 中逐条交代每个获批 finding；宿主在评审前校验交代完整并重跑获批的 `preReviewCommands`，未通过时让同一 writer 在本次 workflow 内纠正一次（见 [宿主确定性校验](../matt-tdd/dispatch-contract.md#宿主确定性校验)）。
+特殊情况按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 处理：`recovery` 只恢复失败轴，`reconsider` 只裁决有证据的异议，`recollect` 仅修复获批文件信封的越界收集，`writerRecovery` 仅恢复同一个符合条件的失败 writer。都不能抹掉有效 FAIL 或绕过宿主验证。只剩普通 Standards P2 且 Spec PASS 时，可按[显式风险接受](../matt-tdd/dispatch-contract.md#显式风险接受与收尾) 让用户确认精确候选，保留原 FAIL 并在本地 Comments 记录 `Risk acceptance: <宿主返回的 dispatchId>`；验收、安全、完整性、P0/P1 和失败检查不豁免。
 
-修复返回后，父会话先看 receipt 的 `verification`：`ok=false` 时该候选不能正式送审，`review` 会被宿主拒绝；以相同获批 findings 继续 `repair`，在 implement task 中指出宿主测得的失败命令或未交代的 finding，不要绕过。失败命令确与本次变更无关时停止并请用户决定：只有用户重新确认一份不含该命令的信封才可送审，父会话不得自行删减命令。`findingResolutions` 是 writer 自述，不能代替下面的核对。随后核对实际 diff、逐项 findings 和验证证据：仍有同范围且证据支持的修复时，引用最新 dispatchId 继续 `repair`；缺少依据或实质决定时停止。原 findings 与根因计数跨修复保留，不通过拆轮绕过诊断。候选代码已准备好时才发送 `review: {dispatchId: "<最新已完成 repair>"}`，只提供两轴 laneTasks；它只启动 fresh Standards/Spec，不重跑 writer 或重复采集证据。repair 只需 implement task，recovery/reconsider 只需所选轴 task。修复的 `state=complete`、`implement.status=COMPLETE` 或 `reviewPending=true` 都不代表交付通过。
+### 3. 父会话收尾
 
-父会话不能以文字或重新实现抹掉有效 FAIL。若具体 finding 与已确认验收/标准冲突，逐项带 reason/evidence 使用 `reconsider: {dispatchId, findings}`；只运行受影响轴，由 fresh reviewer 独立决定 `uphold`/`withdraw`，未 challenge finding 与另一轴原样保留，任一保留/upheld blocker 仍是有效 FAIL。每个候选快照每轴最多一次 reconsider；后续 repair 只处理 effective remaining findings。reviewer 报告契约错误（含无效 reconsider 决定）走与执行恢复分开的 report correction，每轴每候选最多两次，不自动变成 PASS；合法 FAIL 仍只能 reconsider 或按 effective findings 修复。
+核对结构化终态、TDD 证据、实际 diff、候选快照和验收条款；`verified` 还要有宿主 `verification.ok=true`，`reviewed` 要有该候选的两轴 PASS（或合格的用户风险接受）。`reviewPending`、单一 writer COMPLETE、过期 Pack 都不能交付。运行项目要求且尚未覆盖的相关验证；单票完整测试套件由父会话运行，批次按 [matt-implement-spec](../matt-implement-spec/SKILL.md) 去重。失败保留未提交候选。已验候选不得再改代码、测试或配置；不为同一个候选追加 standalone review，用户需要深审时可显式调用 `matt-code-review`。
 
-正式复审检查自最近一次正式评审以来的**累计修复增量**、原 findings 及必要的一层直接依赖，不只检查最后一次补丁；不得重新扫描或重新裁决已经 PASS 且未变化、无依赖影响的其他文件，真实新安全/完整性问题除外。该次双轴 `PASS` 取代此前失败结果，不再追加 standalone code review。
-
-合法 reconsider 的 workflow complete 仅表示决定已应用，不表示实现通过；必须继续检查 effective 双轴及 `reviewPassed`，按 `remainingFindingIds` 修复。旧宿主误判且已耗尽纠错预算的完整 `review-evidence` 报告，升级后可用原 recovery 入口原地重校验，不重跑模型、不重置预算或根因计数；真实 FAIL 仍须修复，schema/执行失败不能豁免。宿主提供的另一轴 causal IDs 仅可用于有变化影响证据的 regression，不允许混用验收/标准或替另一轴裁决。
-
-同一根因两次修复仍失败，第三次 writer 前由 dispatcher 强制 `DIAGNOSIS_REQUIRED`；修复经正式评审后，验收/安全/完整性类 finding 仍以原问题或同一根因复发时，下一次 writer 前即触发，相关修复回归同样立即触发（纯工程规范类复发仍按次数）。按 [Dispatch Lifecycle](../matt-tdd/dispatch-contract.md) 在当前 ticket 内做受限诊断，提交真实 repro 与根因契约后再继续；不是取消 review、限制必要测试数或重新设计模块。执行失败/结果缺失不计作根因修复轮次，使用有界 reviewer `recovery`，不得重做已完成实现。
-
-TDD worker 是唯一写者。implement 父会话不直接与 worker 并行写入，也不允许另一个 worker 同时处理同一工作区。
-
-### 2. 持续验证
-
-完整候选仅因 `envelopeViolation` 被拒绝时，按 [仅重采集契约](../matt-tdd/dispatch-contract.md#信封越界后的仅重采集) 保留原候选，补齐 `allowedFiles` 并真实重新确认，使用 `recollect` 重采集；如原评审前检查因越界未运行，先补跑原检查。不提供 laneTasks，不重跑 writer，不改变诊断清单或 `preReviewCommands`。成功仍待审，随后用最新 dispatchId 显式 `review`。其他失败、缺失 Pack、宿主校验失败或漂移不适用，不重发 initial 解阻。
-
-若 repair 因 writer 执行失败而未完成，不回退引用旧成功 dispatch，也不使用 reviewer `recovery`。仅在 [writer 执行恢复契约](../matt-tdd/dispatch-contract.md#失败-repair-的-writer-执行恢复) 满足时，可显式使用 `writerRecovery: {dispatchId: "<最新失败 repair>"}` 与 implement task，恢复同一 writer 一次；保留 partial 快照与原修复契约/计数。合法 BLOCKED、不可恢复/缺失 writer 或恢复再次失败仍停止，不另起 fresh writer；成功后继续使用最新 dispatchId 正式送审，不把恢复当成 PASS。
-
-TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成后运行一次相关回归命令；只有明确属于当前 slice 的聚焦 typecheck 才交给 worker。TDD 完成后，父会话再运行必要的 ticket 相关复核、typecheck（若有）和一次完整测试套件。完整测试套件不得消耗 TDD worker 的 workflow runtime。任何失败都保持未提交状态，报告命令、失败证据和阻塞原因。
-
-### 3. 复用 TDD 双轴复核
-
-提交前默认复用最后一次成功 `matt-tdd` 中 fresh Standards/Spec reviewer 的结构化 `PASS`，不要再调用 `matt-code-review` 重复评审同一 worktree。父会话必须核对该结果对应当前 fixed point 和 changed files，且 TDD 完成后除测试生成物清理、Local Markdown ticket 状态与完成说明外，没有代码、测试、配置、迁移或业务文档变化。
-
-只有以下任一条件成立时才额外调用 `matt-code-review`：
-
-- 用户明确要求 standalone code review；
-- TDD 的任一 reviewer 结果缺失、schema 无效或无法对应当前工作区；
-- TDD 结束后代码、测试、配置、迁移或业务文档又发生变化；
-- 当前实现不是由包含 fresh Standards/Spec lanes 的 `matt-tdd` 产生。
-
-`repair` 有意暂缓 reviewer 不属于“结果缺失”，必须使用上面的 `review` 完成送审，不能因此追加 standalone review 或沿用修复前的 PASS。
-
-额外 review 若确有必要，使用 `workflow`: `matt-code-review`，提供当前 Review Evidence Pack 或精确取证范围：`reviewKind`、fixed point、完整 changed-file manifest、完整 combined diff/新文件内容与 hash、lane-specific ticket/spec/标准条款及一层搜索边界。任一轴失败时合并报告全部 findings；已有连续修复授权覆盖时不重新确认，只有新增范围/决定时取得一次授权。不得让 reviewer 修复，也不得逐 finding 启动完整工作区复审。
-
-### 4. 提交
-
-只有 TDD、完整验证和最终双轴复核全部通过后，父会话才可以提交：
+只有该票适用的门禁全部通过，父会话才可以提交：
 
 1. 再次读取 `git status` 和 diff，确认待提交范围只包含当前 ticket/slice 的实现、测试与已批准共享文件改动，不包含 tracker、用户既有改动和生成物。
 2. Local Markdown ticket 此时保持未完成。不得在 implement 中把 parent spec 改为 `shipped` 或移动目录；用户必须在之后的独立步骤显式运行 `matt-archive`。
@@ -104,12 +71,12 @@ TDD 期间由 worker 按 slice 运行最小单测，并在全部 slices 完成�
 
 - 一个且仅一个 ticket 或未发布的当前会话 slice 已实现；
 - 所有批准行为均有公开测试切入点上的 TDD RED→GREEN 证据；
-- 相关测试、typecheck（若有）和完整测试套件通过；
-- 最后一次成功 `matt-tdd` 内置的 Standards 与 Spec review 均为 `PASS`，或满足额外 review 条件时 standalone review 也通过；声明了 `preReviewCommands` 时宿主校验通过（receipt `verification.ok` 不为 `false`，或失败命令已由用户重新确认撤回）；
+- 相关验收、typecheck（若有）和本票所需验证通过；
+- 本候选通过已批准的交付门禁，宿主检查（若声明）通过，无有效遗漏、失败或过期证据；
 - 当前 branch 产生一个可核验提交；
 - Local Markdown ticket 在代码提交成功后仅于本地变为 `resolved`，完成说明记录可核验的 `Implementation commit`；tracker 未被暂存或提交，remote tracker 未关闭或修改；
 - 未推送远端，除非任务明确要求。
 
-完成后报告 commit、实现行为、TDD 证据摘要、review verdict、验证命令和 residual risks。独立调用时，下一个 ticket 必须在新的 implement session 中处理；不要在当前会话继续批量实现。
+完成后报告 commit、实现行为、TDD 证据、验证命令、已运行的评审结果和剩余风险。普通票说明未调用独立 reviewer。独立调用只执行这一票。
 
-唯一批量编排例外：用户显式调用 [matt-implement-spec](../matt-implement-spec/SKILL.md) 时，本 skill 每次仍只执行一个 ticket；完成后交回该 parent，由 `matt-implement-spec` 在同一父会话串行选择下一张。每票重新核验 handoff、测试切入点、范围与宿主授权，单写者、逐票完整验证、双轴 PASS 和提交/本地状态写回条件不变；这不授予独立 implement 自动扩张到下一票的能力。
+唯一批量编排例外：用户显式调用 [matt-implement-spec](../matt-implement-spec/SKILL.md) 时，本 skill 每次仍只执行一个 ticket；完成后交回该 parent，由 `matt-implement-spec` 在同一父会话串行选择下一张。逐票核验已批准的门禁、候选提交和本地状态写回；这不授予独立 implement 自动扩张到下一票的能力。

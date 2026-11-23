@@ -763,6 +763,86 @@ const repairGroups = [{ id: "parser", findingIds: ["spec:parse"], contract: "val
   preserve: ["valid text"], validationOrder: "validate -> normalize -> parse",
   callPath: ["public -> parser"], examples: ["null rejects"] }];
 
+test("verified delivery requires host checks on the exact captured candidate and never starts reviewers", async () => {
+  await fixture(async f => {
+    const request = { ...f.params, laneTasks: { implement: "implement parser" },
+      implementation: { ...f.params.implementation, delivery: "verified" } };
+    await assert.rejects(() => f.runtime.dispatch(request, undefined, f.ctx), /requires approved deterministic/);
+    assert.equal(f.prompts, 0);
+    request.implementation.preReviewCommands = ["grep -Eq '^(original|patched)$' parser.mjs"];
+    const initial = await f.runtime.dispatch(request, undefined, f.ctx);
+    assert.equal(initial.details.reviewPending, false);
+    assert.deepEqual(initial.details.lanes.map(lane => lane.key), ["implement"]);
+    await f.runtime.flush();
+    const { status, calls } = await f.settle({
+      beforeEvidence: () => writeFile(join(f.ctx.cwd, "parser.mjs"), "changed after the host check\n"),
+    });
+    assert.deepEqual(calls, ["claim", "implement", "pre-review", "evidence"]);
+    assert.equal(status.state, "failed");
+    assert.match(status.error, /not pass on this exact candidate/);
+  });
+});
+
+test("reviewed delivery runs checks before reviewers and stops when the bounded correction still fails", async () => {
+  await fixture(async f => {
+    const request = { ...f.params, implementation: {
+      ...f.params.implementation, delivery: "reviewed", preReviewCommands: ["grep -Eq '^(original|fixed)$' parser.mjs"],
+    } };
+    await f.runtime.dispatch(request, undefined, f.ctx);
+    await f.runtime.flush();
+    const { status, calls } = await f.settle();
+    assert.equal(status.state, "failed");
+    assert.deepEqual(calls, ["claim", "implement", "pre-review", "implement-correction", "pre-review-recheck", "evidence"]);
+    assert.match(status.error, /do not commit or launch reviewers/);
+  });
+});
+
+test("verified delivery can finish a scope-approved recollection without a writer or reviewer rerun", async () => {
+  await fixture(async f => {
+    const request = { ...f.params, laneTasks: { implement: "implement parser" },
+      implementation: { ...f.params.implementation, delivery: "verified",
+        preReviewCommands: ["grep -Eq '^(original|patched)$' parser.mjs"] } };
+    const { dispatch } = await failedEnvelope(f, request);
+    const recollected = await f.runtime.dispatch({ ...request, laneTasks: {},
+      implementation: { ...request.implementation, allowedFiles: ["parser.mjs", "response.mjs"] },
+      recollect: { dispatchId: dispatch.details.dispatchId },
+    }, undefined, f.ctx);
+    assert.equal(recollected.details.reviewPending, false);
+    await f.runtime.flush();
+    const { status, calls } = await f.settle();
+    assert.deepEqual(calls, ["pre-review", "evidence"]);
+    assert.equal(status.state, "complete");
+    assert.equal(status.workflow.value[0].hostVerification.ok, true);
+    assert.equal(f.prompts, 2);
+  });
+});
+
+test("reviewed delivery permits one grouped repair and stops after a failed incremental review even after reload", async () => {
+  await fixture(async f => {
+    const request = { ...f.params, implementation: { ...f.params.implementation, delivery: "reviewed" } };
+    const repair = previousDispatchId => ({ ...request, repair: { previousDispatchId, groups: repairGroups } });
+    const initial = await f.runtime.dispatch(request, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.deepEqual((await f.settle({ fail: true })).calls, ["claim", "implement", "evidence", "standards", "spec"]);
+    const changed = { ...repair(initial.details.dispatchId), implementation: f.params.implementation };
+    await assert.rejects(() => f.runtime.dispatch(changed, undefined, f.ctx), /Delivery policy cannot change/);
+    const fixed = await f.runtime.dispatch(repair(initial.details.dispatchId), undefined, f.ctx);
+    await f.runtime.flush();
+    assert.deepEqual((await f.settle({ value: "fixed\n" })).calls, ["claim", "implement", "evidence"]);
+    const reviewDispatch = await f.runtime.dispatch({ ...request, review: { dispatchId: fixed.details.dispatchId } },
+      undefined, f.ctx);
+    await f.runtime.flush();
+    const reviewed = await f.settle({ fail: true, findingOverride: { ...finding, relatedFindingIds: ["spec:parse"] } });
+    assert.deepEqual(reviewed.calls, ["standards", "spec"]);
+    assert.equal(reviewed.status.state, "failed");
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch(repair(reviewDispatch.details.dispatchId), undefined, f.ctx),
+      /Post-review repair budget exhausted/);
+    assert.equal(f.runtime.plans.size, 0);
+    assert.equal(f.prompts, 1);
+  });
+});
+
 test("several repairs precede one review, preserving cumulative evidence, latest writer and diagnosis counts", async () => {
   await fixture(async f => {
     const initial = await f.runtime.dispatch(f.params, undefined, f.ctx);

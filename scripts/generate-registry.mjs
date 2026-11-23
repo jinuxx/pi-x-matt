@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseDocument } from "yaml";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(SCRIPT_DIR, "..");
@@ -21,18 +22,6 @@ function sha256(content) {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function unquote(value) {
-  const trimmed = value.trim();
-  if (
-    trimmed.length >= 2 &&
-    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'")))
-  ) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
 export function parseSkillFrontmatter(content, sourcePath = "SKILL.md") {
   const normalized = content.replaceAll("\r\n", "\n");
   if (!normalized.startsWith("---\n")) {
@@ -42,32 +31,16 @@ export function parseSkillFrontmatter(content, sourcePath = "SKILL.md") {
   const end = normalized.indexOf("\n---\n", 4);
   if (end < 0) throw new Error(`${sourcePath}: unterminated YAML frontmatter`);
 
-  const lines = normalized.slice(4, end).split("\n");
-  const root = {};
-  const metadata = {};
-  let section = "root";
-
-  for (const line of lines) {
-    if (!line.trim() || line.trimStart().startsWith("#")) continue;
-    const indent = line.length - line.trimStart().length;
-    const match = line.trim().match(/^([a-zA-Z0-9-]+):(?:\s*(.*))?$/);
-    if (!match) throw new Error(`${sourcePath}: unsupported frontmatter line: ${line}`);
-
-    const [, key, rawValue = ""] = match;
-    if (indent === 0) {
-      section = key === "metadata" ? "metadata" : "root";
-      if (key !== "metadata") root[key] = unquote(rawValue);
-      continue;
-    }
-
-    if (indent === 2 && section === "metadata") {
-      metadata[key] = unquote(rawValue);
-      continue;
-    }
-
-    throw new Error(`${sourcePath}: only scalar root fields and two-space metadata fields are supported`);
+  const document = parseDocument(normalized.slice(4, end), { strict: true, uniqueKeys: true });
+  if (document.errors.length) {
+    throw new Error(`${sourcePath}: invalid YAML frontmatter: ${document.errors[0].message.split("\n")[0]}`);
   }
-
+  const data = document.toJS({ maxAliasCount: 0 });
+  if (!isObject(data)) throw new Error(`${sourcePath}: YAML frontmatter must be a mapping`);
+  const { metadata = {}, ...root } = data;
+  if (!isObject(metadata) || Object.values(metadata).some(value => typeof value !== "string")) {
+    throw new Error(`${sourcePath}: metadata must be a mapping of strings`);
+  }
   return { ...root, metadata };
 }
 
@@ -278,7 +251,7 @@ async function loadAgentRouting(root) {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
     const path = join(agentDir, entry.name);
     const parsed = parseSkillFrontmatter(await readFile(path, "utf8"), assertProjectPath(root, path, "Agent path"));
-    if (!parsed.name) throw new Error(`${path}: missing agent name`);
+    if (typeof parsed.name !== "string" || !parsed.name.trim()) throw new Error(`${path}: missing agent name`);
     if (parsed.acceptanceRole !== "writer" && parsed.acceptanceRole !== "read-only") {
       throw new Error(`${path}: acceptanceRole must be 'writer' or 'read-only'`);
     }
@@ -324,7 +297,10 @@ export async function buildRegistry(root = DEFAULT_ROOT) {
       const parsed = parseSkillFrontmatter(content, sourcePath);
       const metadata = parsed.metadata;
 
-      if (!parsed.name || !parsed.description) throw new Error(`${sourcePath}: name and description are required`);
+      if (typeof parsed.name !== "string" || !parsed.name.trim() ||
+          typeof parsed.description !== "string" || !parsed.description.trim()) {
+        throw new Error(`${sourcePath}: name and description must be non-empty strings`);
+      }
       if (RESERVED_SKILL_NAMES.has(parsed.name)) throw new Error(`${sourcePath}: '${parsed.name}' is reserved`);
       for (const key of COMMON_METADATA) {
         if (!(key in metadata)) throw new Error(`${sourcePath}: metadata.${key} is required`);

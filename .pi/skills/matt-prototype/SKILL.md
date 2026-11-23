@@ -5,7 +5,7 @@ metadata:
   pi-scope: parent
   pi-class: orchestration
   pi-upstream-path: skills/engineering/prototype/SKILL.md
-  pi-upstream-sha: a496f5513d4a4cf889bc48e189e579f4b0bdf6aa
+  pi-upstream-sha: abeeaf95660ba9e8b7c753eb38f441ca707a8823
 ---
 
 # Prototype

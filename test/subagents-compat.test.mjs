@@ -414,6 +414,35 @@ test("TDD PASS remains readable from persisted workflow.value", async () => {
     });
 });
 
+test("verified TDD settles one writer and a checked candidate in the pinned native sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const evidence = { command: "trusted-collector", path: "/tmp/verified-review.md",
+    controlled: true, preReviewCommand: "trusted-check" };
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT,
+    { implement: "Implement and test" }, evidence, undefined, { delivery: "verified", verification: {} });
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const calls = [];
+  const candidate = { snapshotId: "snapshot", indexId: "index", boundary: { incremental: false } };
+  const result = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async key => {
+      calls.push(key);
+      assert.equal(key, "implement");
+      return implementResult(plan);
+    },
+    host: async key => {
+      calls.push(key);
+      const payload = key === "pre-review" ? { ...candidate, ok: true, results: [] } : candidate;
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
+        stdout: JSON.stringify(payload), stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 };
+    },
+  });
+  assert.deepEqual(result.value.map(row => row.key), ["implement"]);
+  assert.equal(result.value[0].hostVerification.ok, true);
+  assert.deepEqual(calls, ["implement", "pre-review", "review-evidence"]);
+  assert.ok(!result.emits.some(row => row.type === "pi-x-matt.review-pending"));
+});
+
 test("controlled incremental review and selective recovery run in the pinned native sandbox", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md", controlled: true };

@@ -1,6 +1,6 @@
 {
   "name": "pi-x-matt",
-  "version": "0.2.48",
+  "version": "0.2.49",
   "private": true,
   "description": "Pi-native Matt Pocock engineering workflows with guarded subagents",
   "type": "module",
@@ -38,9 +38,10 @@
     "typebox": "*"
   },
   "dependencies": {
-    "pi-subagents": "0.89.2"
+    "pi-subagents": "0.89.2",
+    "yaml": "2.8.3"
   },
-  "bundledDependencies": ["pi-subagents"],
+  "bundledDependencies": ["pi-subagents", "yaml"],
   "pi": {
     "extensions": ["./.pi/extensions/pi-matt-dispatch/index.ts"],
     "skills": [

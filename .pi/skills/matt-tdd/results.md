@@ -2,11 +2,11 @@
 
 旧版若 collector 已成功、writer 已合法 COMPLETE，却仅在回执 JSON 解析处失败且 reviewer 尚未启动，可按 [限定回执恢复](dispatch-contract.md) 显式 `review`。这不依赖 pending 标记猜测成功：宿主必须验证原授权、完整 Pack 与候选绑定后才接受；原失败保留，不重跑 writer/collector，缺证或漂移仍停止。
 
-默认交付要求双 PASS。唯一额外出口是宿主真实用户确认的 `acceptRisk`：工具直接返回 `state=accepted-risk` / `deliveryEligible=true` / `reviewPassed=false`，无新 child 或 async status；从该可信工具结果读取风险收据，原 workflow 的 FAIL 仍按下文读取且不得改写。这不是从普通 receipt 重建结构化评审结果。
+按获批信封确定预期结果。`verified` 只返回 implement 和宿主实测，要求 workflow `complete`、结构化 `COMPLETE`、`hostVerification.ok=true` 且候选 Pack 新鲜；没有两轴结果是正常的。`reviewed` 和旧信封还需有效双 PASS。`acceptRisk` 是双轴路径的用户真实确认，直接返回 `state=accepted-risk` / `deliveryEligible=true` / `reviewPassed=false`，不运行 child，不改写原 FAIL。
 
-完整候选因 `envelopeViolation` 失败时，宿主保留 Pack 与越界路径，未启动的 reviewer 不算执行失败。按 [仅重采集](dispatch-contract.md#信封越界后的仅重采集) 扩信封真实确认后使用 `recollect`，不重跑 writer，只补跑因越界跳过的评审前检查。`reviewPending=true` 表示证据已重新采集，尚未评审或交付通过；随后用新 dispatchId 正式 `review`。丢失 Pack、其他失败或漂移不适用。
+完整候选因 `envelopeViolation` 失败时，按[仅重采集](dispatch-contract.md#信封越界后的仅重采集)扩大信封并真实确认后用 `recollect`，不重跑 writer。`verified` 宿主检查通过即可结算非待审候选；`reviewPending=true` 时仍用新 dispatchId `review`，不得提交。丢失 Pack、其他失败或漂移不适用。
 
-批次配置了 `finalValidationCommands` 时，双轴通过后还要等同一 dispatch 的宿主 `required final validation PASS` 通知；workflow 的 `complete` 不是这份验证回执。失败不提交、不推进。
+批次配置了 `finalValidationCommands` 时，还要等同一候选的宿主 `required final validation PASS`；workflow `complete` 不是这份回执。失败不提交、不推进。
 
 所有执行型 parent 共用此契约。调度后交还控制权或处理独立工作，等待 runtime 的 completion；不得轮询等待。
 
@@ -42,9 +42,9 @@ workflow child 的超时结算与通知只依据公共 `terminalOutcome.reason =
 5. 不得从 `output`、`outputReference`、`outputArtifactPath`、文件扩展名、自然语言或 workflow receipt 重建结构化结果，也不从 `workflow-children.jsonl`、旧 transcript 或通知拼装结果。上述 `status.json` 字段是本项目所有 dispatcher workflow 的完整结果来源。
 6. 来源缺失、不可读或 JSON 无效，失败快照缺失/标识不符，或阶段结果不完整时 fail closed，报告准确的 workflow run ID、lane key 与路径；不得自动重派发、改变执行模式或回退到预览。已有的阶段结果可作诊断，但不授权继续执行或提交。
 
-`matt-tdd` 的 **repair-only** 是明确的阶段边界：工具 receipt 的 `reviewPending=true`，成功结果只含 implement，且 emits 含 `pi-x-matt.review-pending`。这是“修复完成、尚未评审”，不是完整 TDD 成功，也不是 reviewer 丢失；禁止提交或复用修复前 PASS。核对本次 writer 证据与实际改动后，父会话选择继续同范围 repair 或显式 `review`。review 结果复用最近 implement，并包含本次 fresh Standards/Spec；只有当前候选的两轴 PASS 才能进入最终验证。缺少 pending 标记或预期结果时仍 fail closed，不凭单 lane `COMPLETE` 猜测模式。
+**待审候选**的工具 receipt 有 `reviewPending=true`，emits 含 `pi-x-matt.review-pending`，成功结果只含 implement。它不是交付通过、也不是 reviewer 丢失；禁止提交和复用修复前 PASS。父会话核对实际改动和证据，按宿主契约用最新 ID 显式 `review`：`verified` 只结算验证，双轴档还需本次有效两轴结论。不能从单 lane `COMPLETE` 猜测策略或阶段。
 
-启用 [宿主确定性校验](dispatch-contract.md#宿主确定性校验) 的 writer 派发，在 implement 结果上附带宿主实测的 `hostVerification`（finding 交代的 `accounting`、评审前命令的 `preReview`、可能的 `correction`/`waived`），emits 含 `pi-x-matt.host-verification`（`correcting`/`settled`，只是过程标记，不是结果来源）；工具 receipt 的 `verification` 是其摘要。它是宿主测得的事实，不是 worker 自述，也不是 reviewer 结论：`ok=false` 不改变 lane 的 `COMPLETE` 或两轴 verdict，但该候选不可交付——repair 候选须继续 repair 直至通过才能正式送审，initial 候选即使双 PASS 也停止并请用户决定。`findingResolutions` 是 writer 的自述交代，宿主只核对其完整性，不能当作已修复的证据。被同 writer 纠正替换的结果保留在 implement 的 `correctionHistory`。
+启用[宿主确定性校验](dispatch-contract.md#宿主确定性校验)时，implement 有实测 `hostVerification`，`pi-x-matt.host-verification` emit 只是过程标记。`ok=false` 不改写 writer `COMPLETE`，但不能交付。`verification` 是摘要；`findingResolutions` 只证明交代完整，不能代替修复证据。被纠正替换的结果保留在 `correctionHistory`。
 
 失败 repair 可以按 [writer 执行恢复契约](dispatch-contract.md#失败-repair-的-writer-执行恢复) 显式使用一次 `writerRecovery`；原失败及 settlement history 保留于新 implement 的 `recoveryHistory`。成功仍按上述 repair-only 读取，必须用恢复返回的最新 dispatchId 正式送审。恢复失败、合法 BLOCKED 或不可恢复 writer 均不能以旧 COMPLETE 或 fresh writer 替代；reviewer `recovery` 仍不运行 implement。
 

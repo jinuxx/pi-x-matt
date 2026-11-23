@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { collectCandidateTreeProof } from "../lib/batch-authorization.mjs";
 import { collectReviewEvidence, envelopeViolation, envelopeViolationMessage, indexChanges, repairDelta, writeReviewEvidence } from "../lib/review-evidence.mjs";
@@ -28,6 +29,7 @@ if (violation) throw new Error(
 );
 const result = {
   path: outputPath, head: pack.head, snapshotId: pack.snapshotId, diffSha256: pack.diffSha256, complete: pack.complete,
+  indexId: createHash("sha256").update(pack.index).digest("hex"),
   ...(candidate ? { candidate } : {}),
   boundary: {
     incremental: Boolean(control.previousSnapshotId),

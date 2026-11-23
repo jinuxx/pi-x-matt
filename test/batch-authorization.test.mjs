@@ -740,6 +740,82 @@ test("preapproved final regression revokes old PASS without prompting and resume
   });
 });
 
+test("verified batch ticket advances only after passing host checks and committing the exact candidate", async () => {
+  for (const passing of [true, false]) await batchFixture(async f => {
+    const plan = batchParams(f.fixedPoint);
+    Object.assign(plan.tickets[0], {
+      delivery: "verified",
+      preReviewCommands: ["grep -Eq '^(original|first slice)$' parser.mjs"],
+    });
+    const common = { workflow: "matt-tdd", task: "shared", implementation: plan.tickets[0],
+      laneTasks: { implement: "implement" } };
+    await f.runtime.dispatch({ ...common, batch: plan }, undefined, f.ctx);
+    assert.match(f.messages[0], /Delivery: host checks, no automatic reviewers/);
+    await f.runtime.flush();
+    const { calls, status } = await f.settle({ value: passing ? "first slice\n" : "invalid\n" });
+    assert.deepEqual(calls, passing ? ["claim", "implement", "pre-review", "evidence"]
+      : ["claim", "implement", "pre-review", "implement-correction", "pre-review-recheck", "evidence"]);
+    assert.equal(status.state, passing ? "complete" : "failed");
+    const record = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(record.batchOutcome.complete, passing);
+    assert.deepEqual(record.batchOutcome.verdicts, { standards: null, spec: null });
+    const next = { ...common, implementation: plan.tickets[1], laneTasks: { implement: "next", standards: "standards", spec: "spec" } };
+    await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /must be resolved/);
+    const { cwd } = f.ctx;
+    await git(cwd, "add", "parser.mjs");
+    await git(cwd, "commit", "-qm", "candidate");
+    await resolveTicket(cwd, T1, await git(cwd, "rev-parse", "HEAD"));
+    if (passing) await f.runtime.dispatch(next, undefined, f.ctx);
+    else await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /no completed implementation with passing host checks/);
+    assert.equal(f.prompts, 1);
+  });
+});
+
+for (const delivery of ["verified", "reviewed"]) test(`${delivery} batch final regression follows its approved delivery gate`, async () => {
+  await batchFixture(async f => {
+    const command = "if grep -qx 'first slice' parser.mjs; then echo 'final regression'; exit 1; fi";
+    const plan = batchParams(f.fixedPoint);
+    const scope = { ...plan.tickets[0], delivery,
+      preReviewCommands: ["grep -Eq '^(original|first slice|fixed)$' parser.mjs"] };
+    plan.tickets[0] = { ...scope, finalValidationCommands: [command] };
+    await writeFile(join(f.ctx.cwd, `${SPEC}.dispatch.json`), JSON.stringify({ tickets: plan.tickets }));
+    await f.runtime.beginBatchCommand(SPEC, f.ctx);
+    const common = { workflow: "matt-tdd", task: "shared", implementation: scope };
+    const reviewers = delivery === "reviewed" ? { standards: "standards", spec: "spec" } : undefined;
+    const initial = await f.runtime.dispatch({ ...common, laneTasks: { implement: "implement", ...reviewers } }, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.equal((await f.settle()).status.state, "complete");
+    const latest = () => f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
+    assert.equal(latest().batchOutcome.resultsValid, true);
+    assert.equal(latest().batchOutcome.complete, false);
+    assert.equal(latest().requiredValidation.ok, false);
+    const pending = await f.runtime.dispatch({ ...common, laneTasks: { implement: "fix the regression" }, finalValidationRepair: {
+      dispatchId: initial.details.dispatchId, command, expectedFailure: "final regression",
+    } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: "fixed\n" });
+    assert.deepEqual(repaired.calls, ["claim", "implement", "pre-review", "evidence"]);
+    assert.equal(repaired.itemsSeen[0].resume, "run-0-writer");
+    assert.equal(latest().batchOutcome.complete, false);
+    const settledDispatch = await f.runtime.dispatch({ ...common, laneTasks: reviewers,
+      review: { dispatchId: pending.details.dispatchId } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const settled = await f.settle();
+    assert.equal(settled.status.state, "complete");
+    assert.deepEqual(settled.calls, Object.keys(reviewers ?? {}));
+    assert.equal(latest().batchOutcome.complete, true);
+    assert.equal(latest().finalValidationPass.snapshotId, latest().snapshotId);
+    assert.equal(f.prompts, 1);
+    if (delivery === "reviewed") {
+      f.reload();
+      await assert.rejects(() => f.runtime.dispatch({ ...common, laneTasks: { implement: "another repair" },
+        finalValidationRepair: { dispatchId: settledDispatch.details.dispatchId, command: "false", expectedFailure: "regression" },
+      }, undefined, f.ctx), /Post-review repair budget exhausted/);
+      assert.equal(f.prompts, 1);
+    }
+  });
+});
+
 for (const reintroduceFirst of [false, true]) {
   test(`a second final check after fresh dual PASS ${reintroduceFirst ? "cannot regress the first check" : "preserves the first check and shared repair budget"}`, async () => {
     await batchFixture(async f => {

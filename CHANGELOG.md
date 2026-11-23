@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.49
+
+- 同步 Matt Skills 上游 `abeeaf9`，采用严格 YAML frontmatter 校验，并从实验性 `software-factory` 吸收“先确定性检查、限制修复循环”的做法。未引入其调度体系。
+- 新实现按风险确定交付门禁：普通票通过绑定候选的宿主检查后不启动 reviewer；高风险票独立双轴复核，初审后最多修复一次。批次普通票不逐票重复跑完整测试，全部票完成后统一做集成检查和一次独立评审。
+- 旧信封未声明 `delivery` 时仍按原双轴规则。批次授权、精确提交校验、tracker 和隐私边界不变。需要完整重启 Pi 才能载入 runtime 更新。
+
 ## 0.2.48
 
 - 修复 [#6](https://github.com/jinuxx/pi-x-matt/issues/6)：并发刷新同一派发时，宿主只在首次封存失败快照后提示一次 `blockedRecovery`。提示不再推断测试是否启动。

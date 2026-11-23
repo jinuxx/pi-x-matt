@@ -1,6 +1,14 @@
 # Implement dispatch lifecycle
 
-此契约由 dispatcher 的宿主状态强制执行，不以 task 中“用户已授权”等文字为依据。初次派发提供完整三项 `laneTasks`，follow-up 只需实际执行 lane 的 task，角色隔离不变。默认交付要求双轴 `PASS`；唯一额外出口是下述用户真实确认的 `acceptRisk`，它不改写 PASS/FAIL。修复完成与正式评审通过是两个独立边界。
+此契约由 dispatcher 的宿主状态强制执行，不以 task 中“用户已授权”等文字为依据。新信封在授权时固定 `implementation.delivery`，同一谱系不能变更：
+
+| 信封 | 初次 `laneTasks` | 交付条件 |
+| --- | --- | --- |
+| `verified`（普通票） | `implement` | writer COMPLETE、至少一条获批 `preReviewCommands` 实测全通过、完整 Pack 绑定同一候选；没有 reviewer 或双轴 verdict。 |
+| `reviewed`（高风险或关键验收缺充分自动证据） | `implement`、`standards`、`spec` | 先通过已声明的确定性检查，再由独立两轴复核；初审后最多一次修复（含最终验证续修）和一次增量评审。 |
+| 省略 `delivery`（旧信封） | `implement`、`standards`、`spec` | 保留原双轴和修复契约，不自动升级。 |
+
+只有双轴路径才适用 `acceptRisk`；真实用户确认后不改写原 PASS/FAIL。follow-up 只提供实际执行 lane 的 task。修复完成、候选门禁和最终验证是不同阶段。
 
 ## 限定授权
 
@@ -19,7 +27,7 @@
 
 `ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticFiles` 可选，必须是 `allowedFiles` 的精确子集，且只能列测试/fixture 路径，不得把生产源码列入；测试/fixture 路径按最小命名规则识别：任一路径目录段恰为 `test`、`tests`、`__tests__`、`fixture` 或 `fixtures`，或文件名匹配 `*.test.*` / `*.spec.*`；未命中一律 fail closed，不读取文件内容、不探测测试框架、不提供配置项。它只为宿主隔离诊断区授予添加/替换文件的权限，不授予原工作区写权限，缺省时范围规范化对象保持 v0.2.27 形状。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。授权确认会展示隔离诊断文件清单。
 
-`preReviewCommands` 可选：最多 6 条、每条不超过 300 字节的精确获批命令（如聚焦 typecheck、lint、相关测试），保留顺序、仅去重；缺省或为空时范围规范化对象保持原形状。它们同样必须是本地、非破坏性、无敏感数据的命令，并且须在基线上通过、结果确定、不写入工作区。授权确认会展示这份清单；用途与边界见 [宿主确定性校验](#宿主确定性校验)。
+`preReviewCommands` 在 `verified` 必填，在其他信封可选：最多 6 条、每条不超过 300 字节的精确命令，保留顺序、仅去重。应覆盖该票验收且在基线上通过、本地、结果确定、无敏感数据、不改写工作区。授权确认展示策略与命令；见 [宿主确定性校验](#宿主确定性校验)。
 
 `/skill:matt-implement` 只启动编排。宿主缺少有效授权时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands`/`preReviewCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。把相对的 `.venv/bin/python` 改为项目内绝对解释器路径同样是 `diagnosticCommands` 替换，必须由用户显式确认新命令；确认后仍保留同一修复谱系，宿主不会自行发现或替换解释器。宿主以非模型上下文 custom entry 保存确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
 
@@ -54,9 +62,9 @@
 
 对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。当前 `implementation` 信封必须等于批准条目；undeclared ticket、额外文件/命令、语义变化、Parent/type/status/active path 不合法时拒绝，并提示提交新的显式 batch 确认。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding；只增 `allowedFiles` 或替换诊断清单仍需既有单票重新确认，batch 计划本身不扩张。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
 
-batch-bound 证据采集额外在受信任 collector 中生成 candidate tree 证明：宿主使用 OS temp 的 `GIT_INDEX_FILE`、临时 `GIT_OBJECT_DIRECTORY`，把原 object store 作为只读 alternate，只把本次已审项目路径 stage 到隔离 index 并 `write-tree`；真实 index、HEAD、object store 与工作区不被写入。tree、采集时 HEAD 与 Review Evidence snapshot 通过宿主只读完整回执、有界帧与 workflow emit 绑定到宿主记录，至少包含完整双轴 `PASS` 与 `implement.status=COMPLETE` 才算 terminal candidate；该票声明了 `preReviewCommands` 且宿主实测未通过（未被用户撤回）时，即使双轴 `PASS` 也不构成 terminal candidate，不能推进下一票。
+batch-bound collector 用 OS temp 的 `GIT_INDEX_FILE` 和 `GIT_OBJECT_DIRECTORY` 隔离 index 与 object store，不写入真实 index、HEAD、object store 或工作区。tree、采集时 HEAD 与 Review Evidence snapshot 绑定到宿主记录。只有 writer `COMPLETE`、当前票交付策略通过（`verified` 的精确候选实测，或双轴通过/有效风险收据）且已登记最终检查通过，才是 terminal candidate。已声明宿主检查失败不能被 reviewer PASS 代替。
 
-进入下一票前，宿主必须对前一票核验：真实 commit 只有一个 parent 且等于 candidate 采集时的 HEAD；commit tree 等于 candidate tree（因此内容、文件类型、可执行位和新文件都绑定）；commit 位于原始 fixed point ancestry；当前 HEAD 正好是该 commit，没有额外/无关提交、amend、merge 或 history switch；工作区干净；tracker 为 `resolved` 且 `Implementation commit` 精确等于该 commit。伪造 Comments、仅 branch 名称相同、部分 candidate、未 review 的 commit 或无法安全核验的 prerequisite 都停止，不接受“父会话说已提交”。全部 tickets 达到核验终态后才允许整份 spec 的 committed 双轴评审；不自动归档、改 spec 状态、push、开 PR 或合并。
+进入下一票前，宿主核验前一票真实 commit 的单一 parent 是采集时 HEAD，tree 精确一致（含文件类型、可执行位和新文件），属于原始 fixed point ancestry；当前 HEAD 正好是该 commit，工作区干净，tracker 为 `resolved` 且 `Implementation commit` 精确匹配。未通过适用门禁、部分 candidate、额外提交或伪造 Comments 都不能推进。全部 tickets 达到核验终态后才做整份 spec 的 committed 集成评审；不自动归档、改 spec 状态、push、开 PR 或合并。
 
 风险接受的 batch 候选也必须匹配原宿主 candidate tree、parent 与 snapshot；tracker 除 `Status: resolved`、`Implementation commit` 外还必须在 `## Comments` 记录 `Risk acceptance: <acceptRisk 返回的 dispatchId>`。缺失/不匹配的风险收据不能推进下一票；普通 batch 确认本身不接受任何风险。
 
@@ -83,7 +91,7 @@ writer 已合法 `COMPLETE`、但完整候选因信封越界被拒绝时，colle
 
 示例中的 ticket/scope/诊断清单/`preReviewCommands` 必须替换为原批准值；仅允许增加 `allowedFiles`，其余不变。`recollect` 不接收 laneTasks。新增权限复用既有单票 TUI/RPC 重新确认；无确认、仍有未声明路径、非最新派发、候选/index/Pack 漂移、writer 未完成、宿主校验失败、已有 reviewer 结果或其他类型的执行失败都拒绝。宿主在入队、启动和采集边界核验候选，不接受模型提供的 hash 或路径。
 
-确认后补跑因越界而跳过的评审前命令并运行固定 collector；已结算的命令不重复执行，不启动 writer 或 reviewer。保留原基线、writer 结果、repair findings/计数和 batch binding；batch 计划不扩张。成功仍只代表 `reviewPending=true`，随后用新 dispatchId 显式 `review`。最终验证及批次提交核验仍须通过。
+确认后补跑因越界而跳过的评审前命令并运行固定 collector；不启动 writer 或 reviewer。保留原基线、writer 结果、repair findings/计数和 batch binding；batch 计划不扩张。`verified` 实测通过即可结算普通候选；若已有待复验的最终验证续修，仍用最新 dispatchId 显式 `review` 且不传 laneTasks。双轴信封仍为 `reviewPending=true` 并按原策略评审。提交门禁不变。
 
 旧版本已经丢失 Pack 的失败没有可核验候选绑定，不能用此入口自动补认当前工作区；错误会明确说明缺证，不回退重跑 writer。需要保留原实现与失败证据，由用户另行决定。
 
@@ -91,7 +99,7 @@ writer 已合法 `COMPLETE`、但完整候选因信封越界被拒绝时，colle
 
 保存工具返回的 `dispatchId`。只要同一 session/project/ticket 已有未取消派发（不按当前授权 invocationId 过滤），就不能再次发送无 `repair/review/recovery` 的初始实现；重新确认授权、显式重新 invocation 或替换诊断清单都不能把谱系重置为 initial。只有排队后未启动即被取消的派发不构成该阻断。任何运行中或接受状态不明的 writer 都阻止同项目再次派发。workflow 在 writer 前执行宿主原子 claim；同一脚本被上游 autoResume 重放也会在 writer 前停止，不依赖改动全局 autoResume 配置。
 
-两个 reviewer 完成限定检查后一次返回全部有证据的阻断项，不因首个 finding 提前结束。父会话一次收集两轴全部 findings，按真实共享根因分组，保留两个轴各自 verdict。只要仍在已批准的连续修复范围内，报告后直接聚焦修复，不再次询问相同范围。只有新增决定/权限/范围时才询问一次。
+两个 reviewer 一次返回限定范围内全部有证据的阻断项，低价值建议进 notes。父会话按共享根因分组，保留各自 verdict，续跑同一个 writer。`reviewed` 的初审后修复预算是一次，宿主跨 reload 保留；修复或增量复核仍失败就暂停，不因更换信封或再次调用 skill 重开。其余根因诊断及连续 repair 规则适用于旧信封；执行恢复不新建 writer。
 
 ```json
 {
@@ -118,23 +126,23 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 ### 初次批次实现的环境阻塞恢复
 
-仅当批次当前票的首次 writer 在聚焦测试未启动时以 `BLOCKED` 返回 `environmentBlocker: { command, evidence }`，且宿主保存了失败快照，才能在修复外部环境后显式使用 `blockedRecovery: { dispatchId: "<最新失败派发>" }`。提供原 `implementation` 和完整 `implement` / `standards` / `spec` laneTasks，省略 `batch`。宿主核验原批次授权、需求、工单、分支、HEAD、信封、工作区和 index，并要求用户确认环境已修复。`command` 仅用于展示诊断，不由宿主执行。
+仅当批次当前票的首次 writer 在聚焦测试未启动时以 `BLOCKED` 返回 `environmentBlocker: { command, evidence }`，且宿主保存失败快照，才能在修复外部环境后显式用 `blockedRecovery: { dispatchId: "<最新失败派发>" }`。提供原 `implementation` 和初次 laneTasks（`verified` 仅 implement），省略 `batch`。宿主核验原批次、信封、候选与 index，并要求用户确认环境已修复；不执行诊断 `command`。
 
-只续跑原 writer 一次，保留草稿和原 `BLOCKED` 结果。未启动的测试不算 RED；续跑返回完整 `COMPLETE` 后，原宿主检查、候选采集、双轴评审及批次提交门禁照常执行。业务阻塞、不可恢复的 writer、旧版本未保存快照的派发或再次失败仍须停止：保留草稿和失败派发 ID，由用户决定是否另存草稿为本地补丁、另行规划工作，不在原批次重发 initial 或跳票。
+只续跑原 writer 一次，保留草稿和原 `BLOCKED`。未启动的测试不算 RED；续跑完成后按原交付策略检查。业务阻塞、不可恢复、缺失快照或再次失败都停止，不另发 initial 或跳票。
 
 ### 双 PASS 后的最终验证续修
 
-仅用于原有效批次当前票的最新双 PASS：父会话发现完整验证中的本票回归，尚未提交或修改已审候选。
+仅用于原有效批次当前票的最新合格候选：`verified` 宿主检查已通过，其他信封已双 PASS；父会话发现本票最终验证回归，尚未提交或改动候选。本节标题保留原链接。
 
 ```json
-{"finalValidationRepair": {"dispatchId": "<最新双 PASS 派发>", "command": "<精确命令>", "expectedFailure": "<稳定的失败原文>"}}
+{"finalValidationRepair": {"dispatchId": "<最新合格候选的派发>", "command": "<精确命令>", "expectedFailure": "<稳定的失败原文>"}}
 ```
 
 仍提供 `workflow=matt-tdd`、当前 `implementation` 与仅 `laneTasks.implement`，省略 `batch`。宿主仅对未在该票本地计划 `finalValidationCommands` 中预批的精确命令请求真实确认。之后从本票的提交前 HEAD（不是整批 fixed point）构建临时 checkout，先运行基线，再覆写已审候选运行同一命令。每次运行最多 5 分钟；命令必须是本地、确定性、只读、无敏感数据，且能在无 `.git`、无未跟踪本地配置和无自动复制的依赖目录的 checkout 中运行。临时 checkout 不是安全沙箱；需要时使用已明确批准的外部本地工具路径，不运行安装、生产访问或写入命令。基线必须退出 0，候选必须退出 1 且输出包含 `expectedFailure`；环境失败、命令写入 checkout、症状不符或候选/index 漂移均不授权续修。
 
-宿主仅持久化退出状态和输出摘要，绑定原批次、当前票和已审快照。证实回归便阻止旧候选交付，即使原 writer 不可用、派发取消或 reload 也不能恢复旧 PASS。只续跑原 writer，不伪造 reviewer finding，不改变已批准的行为或文件范围；确需新增文件或变更其他获批命令仍须另行确认。修复成功仅为 `reviewPending`。以最新 dispatchId 调用 `review` 时，宿主先对新候选运行所有已登记的最终验证；任一失败不启动 reviewers。通过后仍须 fresh 双轴 PASS，再按原 commit/tree/parent 和 tracker 门禁推进。
+宿主持久化退出状态与输出摘要，绑定原批次、当前票和快照。回归一经证实就锁住旧候选，取消或 reload 也不复活。只续跑原 writer，不伪造 findings。修复成功仅 `reviewPending`。以最新 dispatchId 调用 `review` 时，宿主先对新候选运行所有登记的最终验证；失败不启动 reviewers。`verified` 省略 laneTasks，只结算验证；其他信封复用新候选做增量两轴评审。之后按原 commit/tree/parent 和 tracker 门禁推进。
 
-当前命令仍复现相同失败时，可对最新待审修复使用 `finalValidationRepair: {dispatchId}`，仅复用当前命令，不能替换它。已登记的验证全部通过且最新候选再次双 PASS 后，若父会话发现另一条回归，可带最新 dispatchId、不同的命令和失败原文再次登记；按同一预批/确认规则核验基线和失败候选，旧证据与已登记命令保留。每票总计最多两次续修，登记新命令不重置预算，不另起 initial/worker，不用风险接受绕过。未登记的其余父会话最终验证仍由父会话负责。
+`reviewed` 的最终验证续修占用同一个初审后修复名额；如果该名额已用完，或续修仍失败，则暂停。`verified` 与旧信封最多两次最终验证续修，可对最新待审修复用 `finalValidationRepair: {dispatchId}` 复用原命令；再次交付通过后如发现另一条回归，也可登记新命令，保留旧证据。新命令不重置预算，不另起 writer，不用风险接受绕过。
 
 ### 失败 repair 的 writer 执行恢复
 
@@ -156,7 +164,7 @@ pi-subagents 0.85.0 起只信任 run 目录外保存的恢复记录，升级前�
 
 宿主将最新候选 `snapshotId` 与本次调度基线绑定；每次修复都必须从精确候选开始，且不能越过 `allowedFiles`。同时保存最近一次正式评审的来源，计算从该已审快照到本次候选的**累计修复增量**，保留两端内容/hash、原获批 finding IDs 与根因契约，不只计算最后一次补丁。正式复审仍不重新裁决未变化且无依赖影响的已审内容。
 
-修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不是 TDD 全流程通过，不授权提交。writer 须在结构化结果的 `findingResolutions` 中对每条获批 finding 逐条交代，宿主在采集证据前校验其完整性并运行获批的 `preReviewCommands`（见 [宿主确定性校验](#宿主确定性校验)）；receipt 的 `verification.ok=false` 表示该候选尚不能正式送审。父会话核对逐项 findings、真实 diff 和聚焦验证证据；仍有证据支持的同范围下一步时，可引用最新 dispatchId 再次 repair。原 findings、根因 ID 与计数跨修复保留，不因未评审而清零，不通过拆轮绕过诊断；不重复实现已完成的 slices 或人为制造旧 RED。
+修复成功返回 `reviewPending=true`，结果只有 implement lane，并发布 `pi-x-matt.review-pending`。`state=complete` 仅表示本次修复结束，不授权提交。writer 逐条填 `findingResolutions`；宿主核对完整性和精确候选的获批命令，`verification.ok=false` 时按[宿主确定性校验](#宿主确定性校验)处理。父会话核对 findings、实际 diff 和回归证据。只有旧信封允许按根因契约继续 `repair`；不清空计数、重复实现或制造旧 RED。
 
 collector 的 stdout 在 `pi-subagents@0.89.2` 中只是 4 KiB 预览，不能承载任意大小的 JSON。完整回执另存为宿主目录中的只读 `review-result.json`；3500 字节以内保持原回执形状，较大结果分为最多 24 帧，每帧在 4 KiB 以下。后续帧只由绑定该文件和固定序号的精确 host command 读取，逐帧核对序号、总数、长度和同一结果的 SHA-256，再无损还原 candidate 与全部 changedPaths。它不是重试或重新取证；加上 claim、校验和采集仍低于上游 32 次 host call 上限。超限或损坏时停止，不裁剪 proof，不从合流且有 1 MiB 上限的 `outputPath` 日志重建 JSON。
 
@@ -168,7 +176,7 @@ collector 的 stdout 在 `pi-subagents@0.89.2` 中只是 4 KiB 预览，不能�
 
 旧版回执解析失败是一个限定例外：最新旧派发必须处于 `failed`，仅保留合法 COMPLETE implement，原生 trace 最后一步是成功的 `review-evidence`，错误明确属于 JSON 解析，且尚无新版结果通道或任何 reviewer。此时可以用同一 `review` 入口和两个 reviewer task 续评审，不使用 `writerRecovery`。宿主重新核对原授权/谱系、当前 HEAD/工作区/index、密封原基线与累计增量、完整 Pack 与确定性 Markdown 内容；batch 还核验原 candidate 的真实 tree 绑定。仅做新鲜度与完整性验证，不重新执行 collector 或 writer；原失败和 reviewer 预算保留，排队后再次核验候选及 artifact 摘要。缺失或损坏的证据、真实 collector 失败、BLOCKED/失败 writer、已运行的 reviewer、漂移或失效授权都不能借此继续。通过后仍必须取得当前候选两轴 PASS，才能交付。
 
-仍使用 `workflow=matt-tdd`、最新 `implementation` 信封（同 ticket 可含新增文件或替换后的诊断清单）和 `laneTasks.standards` / `laneTasks.spec`；重新确认不重置待审候选、计数或原 findings。宿主只启动 fresh Standards/Spec，复用最近 implement 结果和只读 Evidence Pack，不重跑 writer、不重复采集；必须确认候选快照未漂移且证据完整。结果保留 implement 并加入本次两轴结果，默认二者 PASS 才能进入最终验证。repair/review/recovery 互斥；除上述旧回执恢复例外外，尚无待审修复时不接受 review，待审修复也不能借 recovery 跳过正式送审。待审修复的宿主校验仍未通过且可由 writer 纠正时，review 被拒绝（`Formal review refused`），须先继续 repair，见 [宿主确定性校验](#宿主确定性校验)。
+仍用 `workflow=matt-tdd`、最新 `implementation` 信封；`verified` 不给 laneTasks，仅结算最终验证或重采集候选，其他信封给 `standards` / `spec` 两轴。复用最近 writer 与完整 Evidence Pack，不重跑 writer、不重复取证；核对实时快照。`reviewed` 复核时只看原 findings、累计增量影响范围和有证据的新安全/完整性风险。重新确认不重置候选、计数或原 findings。尚无待审候选不接受 `review`（旧回执恢复例外）；宿主检查失败时按下节处理。
 
 父会话不能凭 prose 抹掉有效 FAIL。若认为某条已记录的有效 blocking finding 与已确认验收/标准冲突，使用唯一的结构化复核路径：
 
@@ -211,13 +219,15 @@ writer 返回完整 `COMPLETE` 后、证据采集与任何 reviewer 之前，宿
 
 任一项未通过且属于 writer 可纠正的情形（不是 runner 自身错误、不是 `drift`，且原 writer 可恢复）时，宿主在同一 workflow 内 resume **同一 writer 一次**（`implement-correction`，10 分钟，同一授权范围），随后重跑两项检查（`pre-review-recheck`）。纠正返回完整 `COMPLETE` 则替换 implement 结果，被替换的结果保留在 `correctionHistory`；纠正返回 `BLOCKED`、不完整或执行失败时保留原 `COMPLETE` 结果并记录 `correction.state=rejected` 及原因，只沿用更新后的可恢复句柄。此纠正不计入根因修复轮次，每次 writer 派发至多一次，不追加 settlement。
 
-校验本身从不使 workflow 失败，后果在准入处体现：
+`verified` / `reviewed` 检查仍不通过时，初次实现保留已结算结果和已有 Pack，workflow 失败且不启动 reviewer。`verified` 还必须有与采集候选绑定的实测通过结果；缺失或过期实测不是通过。待审候选检查失败时拒绝 `review`（不因 writer 不可恢复而放行）；`reviewed` 的合并 repair 预算已用完就停。不能靠删掉失败检查转成 PASS。
+
+为兼容旧信封，省略 `delivery` 时保留原准入规则：
 
 - **initial**：照常进入双轴。真实命令失败（非 runner 错误/`drift`/已撤回）时两个 reviewer 都会收到宿主实测失败的说明：除非 Pack 证据表明失败与本次变更无关，Standards 应报告为 `basis.kind=integrity` 的阻断 finding，Spec 仅在它证明某条验收未满足时报告。即使双轴 `PASS`，`verification.ok=false` 的候选也不可交付：父会话停止并请用户决定，不提交；batch 不推进。
 - **repair / writerRecovery**：`hostVerification.ok=false` 且原因仍可纠正（失败命令仍在当前获批 `preReviewCommands` 中，或仍有未交代的获批 finding）并且原 writer 可恢复时，`review` 被拒绝；用相同获批 findings 再次 `repair`，让同一 writer 修掉它。不得绕过已知失败送审。
 - **两个出口**：原 writer 已不可恢复时允许送审（由 reviewer 裁决，不另起 fresh writer）；命令失败与本次变更无关时停止并请用户决定，只有用户重新确认一份**不含该命令**的信封后才允许送审，结果标记 `hostVerification.waived="pre-review-command-withdrawn"`。父会话不能自行删减命令或以文字声明“与本次无关”。
 
-receipt 只携带宿主实测摘要 `verification: {ok, unresolvedFindingIds?, preReviewOk?, correction?, waived?}`，不回显命令输出；首次变为 `ok=false` 时宿主向父会话发送一次通知。失败命令的输出尾部会进入 writer 纠正 task 与 reviewer 可见的阶段结果，因此 `preReviewCommands` 不得打印凭据或敏感数据。该校验只能发现获批命令能检出的问题，不替代双轴评审，也不替代父会话的最终完整验证。
+receipt 的 `verification: {ok, unresolvedFindingIds?, preReviewOk?, correction?, waived?}` 只摘要，不回显命令输出；失败输出尾部可能进入 writer 纠正 task 和阶段结果，禁止命令输出敏感数据。实测只证明获批命令能覆盖的行为，不免除父会话验收、最终验证或高风险独立评审。
 
 ## 根因未收敛
 

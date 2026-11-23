@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { buildRegistry, serializeRegistry } from "../scripts/generate-registry.mjs";
+import { buildRegistry, parseSkillFrontmatter, serializeRegistry } from "../scripts/generate-registry.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -36,6 +36,16 @@ test("checked-in registry is deterministic and current", async () => {
   const expected = serializeRegistry(await buildRegistry(ROOT));
   const current = await readFile(join(ROOT, "config", "skill-registry.json"), "utf8");
   assert.equal(current, expected);
+});
+
+test("registry uses strict YAML frontmatter like Pi skill discovery", () => {
+  const skill = fields => `---\nname: example\n${fields}\n---\n\nBody\n`;
+  assert.equal(parseSkillFrontmatter(skill('description: "Review code: find regressions"')).description,
+    "Review code: find regressions");
+  for (const fields of ["description: Review code: find regressions", "description: first\ndescription: second"]) {
+    assert.throws(() => parseSkillFrontmatter(skill(fields), "broken/SKILL.md"),
+      /broken\/SKILL\.md: invalid YAML frontmatter/);
+  }
 });
 
 test("workflow guidance uses Chinese testing terms without renaming the result protocol", async () => {
@@ -339,7 +349,8 @@ test("package manifest exposes namespaced resources", async () => {
   assert.equal(manifest.engines.node, ">=22.19.0");
   assert.equal(manifest.peerDependencies["@earendil-works/pi-coding-agent"], ">=1.2.0");
   assert.equal(manifest.dependencies["pi-subagents"], "0.89.2");
-  assert.deepEqual(manifest.bundledDependencies, ["pi-subagents"]);
+  assert.ok(manifest.dependencies.yaml, "runtime registry validation needs the production YAML parser");
+  assert.deepEqual(manifest.bundledDependencies, ["pi-subagents", "yaml"]);
   assert.equal(manifest.peerDependencies["pi-subagents"], undefined);
   assert.equal(manifest.repository.url, "git+https://github.com/jinuxx/pi-x-matt.git");
   assert.ok(manifest.files.includes(".pi/skills"));
@@ -491,7 +502,7 @@ test("canonical resolved clauses agree on local completion and commit ancestry",
     const content = await readFile(join(ROOT, path), "utf8");
     const clause = content.split("\n").find((line) => line.startsWith(prefix));
     assert.ok(clause, `${path}: resolved definition is required`);
-    assert.match(clause, /通过 TDD、验证和双轴 review.*代码提交成功后才仅在本地写回/, path);
+    assert.match(clause, /通过 TDD、必要验证和该票获批门禁（普通票宿主实测，高风险票独立复核）.*代码提交成功后才仅在本地写回/, path);
     assert.match(clause, /Comments 记录.*`Implementation commit/, path);
     assert.match(clause, /ticket 不暂存、不提交/, path);
     assert.match(clause, /核验该实现提交属于当前 `HEAD` ancestry.*解除 `Blocked by`/, path);
@@ -668,13 +679,10 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   const implement = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
   assert.match(implement, /一个 ticket/);
   assert.match(implement, /workflow`: `matt-tdd`/);
-  assert.match(implement, /不要再调用 `matt-code-review` 重复评审同一 worktree/);
-  assert.match(implement, /只有以下任一条件成立时才额外调用 `matt-code-review`/);
-  assert.match(implement, /同一轮全部 findings/);
-  assert.match(implement, /聚焦 `matt-tdd`/);
-  assert.match(implement, /不再追加 standalone code review/);
-  assert.match(implement, /`laneTasks`: 必须同时提供 `implement`、`standards`、`spec`/);
-  assert.match(implement, /旧 worker transcript 代替 diff/);
+  assert.match(implement, /`verified`.*`laneTasks\.implement`.*`preReviewCommands`.*不启动 reviewer/);
+  assert.match(implement, /`reviewed`.*`implement`、`standards`、`spec`.*初审后最多一次修复/);
+  assert.match(implement, /合并全部 blocker.*累计修复直接影响的行为/);
+  assert.match(implement, /不为同一个候选追加 standalone review/);
   assert.match(implement, /当前 branch/);
   assert.match(implement, /不 push/);
   assert.match(implement, /只处理一个 ticket/);
@@ -792,10 +800,10 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(tdd, /disable-model-invocation:\s*true/);
   assert.match(tdd, /`matt-implement` 使用的内部执行 parent/);
   assert.match(tdd, /不得使用 `write`\/`edit` 创建 spec 或 ticket 解阻/);
-  assert.match(tdd, /没有明确 spec\/验收行为.*时停止/);
+  assert.match(tdd, /缺少.*明确验收.*时停止/);
   assert.match(tdd, /真实用户确认绑定到 ticket 内容 hash/);
   assert.match(tdd, /从宿主可信记录恢复 reload/);
-  assert.match(tdd, /无可靠授权且无 UI.*时拒绝调度/);
+  assert.match(tdd, /无有效授权且无 UI.*时拒绝调度/);
   assert.match(tdd, /位于 `\.x-matt\/work\/shipped\/` 就立即 fail closed/);
 
   const research = await readFile(join(ROOT, ".pi", "skills", "matt-research", "SKILL.md"), "utf8");
@@ -810,7 +818,7 @@ test("interactive parent skills preserve HITL and document boundaries", async ()
   assert.match(readme, /首次使用发布链前运行 `matt-setup`/);
   assert.match(readme, /spec-ready.*ready-for-agent.*resolved/);
   assert.match(readme, /interaction parent 本身不定义 `workflow\.json`/);
-  assert.match(readme, /`matt-implement`.*调用 `matt-tdd` 和 `matt-code-review`/);
+  assert.match(readme, /`matt-implement` 调用 `matt-tdd` 实现一票/);
   assert.match(readme, /model-invoked 的 `matt-diagnosing-bugs`/);
   assert.match(readme, /red-capable command/);
   assert.match(readme, /交给 `matt-implement`/);
@@ -864,9 +872,9 @@ test("reviewers stay inside a bounded evidence envelope", async () => {
   const implementParent = await readFile(join(ROOT, ".pi", "skills", "matt-implement", "SKILL.md"), "utf8");
   assert.match(implementParent, /`reviewKind=worktree`/);
   assert.match(implementParent, /Implementation Context Pack/);
-  assert.match(implementParent, /新文件全文\/hash/);
   const tddParent = await readFile(join(ROOT, ".pi", "skills", "matt-tdd", "SKILL.md"), "utf8");
   assert.match(tddParent, /TDD 固定 `reviewKind=worktree`/);
+  assert.match(tddParent, /新文件全文\/hash/);
   assert.match(tddParent, /deleted\/rename old\/new/);
   assert.match(tddParent, /独立采集完整 Git Review Evidence Pack/);
 
@@ -1054,7 +1062,7 @@ test("registry generation rejects dependency cycles and upstream SHA mismatch", 
 
   await withTempProject(async (temp) => {
     const path = join(temp, "skillpacks", "leaf", "research-executor", "SKILL.md");
-    await replace(path, /pi-upstream-sha: [0-9a-f]{40}/.exec(await readFile(path, "utf8"))[0], `pi-upstream-sha: ${"0".repeat(40)}`);
+    await replace(path, /pi-upstream-sha: [0-9a-f]{40}/.exec(await readFile(path, "utf8"))[0], `pi-upstream-sha: ${"a".repeat(40)}`);
     await assert.rejects(() => buildRegistry(temp), /pi-upstream-sha does not match/);
   });
 });

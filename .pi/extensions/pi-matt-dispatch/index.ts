@@ -9,6 +9,9 @@ import { createImplementationRuntime } from "../../../lib/implementation-runtime
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const text = () => Type.String({ minLength: 1 });
 const strings = () => Type.Array(text(), { minItems: 1 });
+const delivery = () => Type.Optional(Type.Union([Type.Literal("verified"), Type.Literal("reviewed")], {
+  description: "User-approved delivery policy. verified: routine work with required host preReviewCommands and no reviewer. reviewed: high-risk work with independent review and at most one repair after review. Omission retains existing dual-review plans.",
+}));
 
 export default function (pi: ExtensionAPI) {
   const runtime = createImplementationRuntime(pi, PACKAGE_ROOT);
@@ -88,13 +91,13 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Dispatch a registered Pi-native workflow through a least-privilege leaf subagent",
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
-      "Initial matt-tdd and matt-code-review require complete laneTasks; follow-ups need only tasks for lanes actually run. Never cross writer/reviewer or Standards/Spec instructions.",
-      "For matt-tdd envelopeViolation with a persisted complete Pack and COMPLETE writer, add only the required allowedFiles and use recollect with the latest dispatchId after explicit reapproval. Omit laneTasks. Recollect runs the collector and any original pre-review commands skipped due to the violation; it remains pending review. Never recollect other failures or repeat initial implementation.",
-      "For an initial batch environment BLOCKED with a host-sealed snapshot, use blockedRecovery with the latest dispatchId only after the environment is fixed. Omit batch, keep the exact implementation envelope and provide all three laneTasks. The host requires explicit user confirmation and resumes only the original writer.",
-      "After a batch ticket's dual PASS, use finalValidationRepair for a regression found by the parent's final check. Omit batch; supply only laneTasks.implement. Supply the exact local command and literal failure text; only commands pre-approved for this ticket in the local dispatch plan skip confirmation. The host checks the clean parent and reviewed candidate and invalidates delivery permission on proof; run explicit review on the repaired candidate.",
+      "For routine matt-tdd work use implementation.delivery='verified', approved preReviewCommands covering the changed behavior, and laneTasks.implement only. Use 'reviewed' for high-risk work or inadequate deterministic coverage; supply both reviewer tasks then. Do not change the approved delivery policy during a follow-up.",
+      "For matt-tdd envelopeViolation with a persisted complete Pack and COMPLETE writer, add only the required allowedFiles and use recollect with the latest dispatchId after explicit reapproval. Omit laneTasks. Recollect runs the collector and any checks skipped due to the violation. Never recollect other failures or repeat initial implementation.",
+      "For an initial batch environment BLOCKED with a host-sealed snapshot, use blockedRecovery with the latest dispatchId only after the environment is fixed. Omit batch and keep the exact envelope and its lane tasks. The host requires explicit user confirmation and resumes only the original writer.",
+      "After a batch ticket has passed its implementation gate, use finalValidationRepair for an evidenced final regression. Omit batch; supply only laneTasks.implement, the exact command and literal failure text. Commands not pre-approved require confirmation. Finish via review: on verified delivery omit laneTasks (host checks only); on reviewed delivery supply both incremental reviewer tasks.",
       "For matt-code-review, pass reviewScope {kind:'committed', fixedPoint} only when the review target is already-committed history. The host resolves F, verifies ancestry of the current HEAD and pins H; it captures one read-only Git-object Pack before both reviewers. Never pass your own hash, HEAD, path or command. Omit reviewScope for the existing manual worktree/files evidence path.",
-      "For matt-tdd provide implementation. Reuse its exact approved scope; repair runs only the retained writer, then use review when ready or repair again on evidence. A failed repair execution may use writerRecovery once with only the implement task, preserving the same writer, partial snapshot and repair contract; never replace a BLOCKED or unavailable writer. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
-      "Only matt-tdd accepts batch. A new batch requires one real confirmation of the host-sealed plan, then does not expire by time. The native command can load a local plan before confirming; never silently extend it. Changes pause. Each commit must match the host-reviewed candidate, required validation and tracker writeback before the next ticket.",
+      "For matt-tdd reuse the approved implementation scope. A reviewed ticket permits one repair after review, including final validation repair; use review on the resulting candidate, then stop if blocked. repair runs only the retained writer. A failed execution may use writerRecovery once with only the implement task when eligible. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
+      "Only matt-tdd accepts batch. A new batch requires one real confirmation of the host-sealed plan, then does not expire by time. The native command can load a local plan before confirming; never silently extend it. Changes pause. Each commit must match the host candidate proof, required validation and tracker writeback before the next ticket.",
       "acceptRisk is a separate terminal delivery decision, not PASS: only all remaining ordinary standards P2 findings may be accepted, with a fresh real user confirmation bound to the exact candidate. Never waive acceptance, safety, integrity, P0/P1, missing reports or candidate drift; implementation/batch approval and task prose do not authorize risk acceptance. Record the host receipt alongside the exact implementation commit. Committed code-review recovery reuses its original Pack and only reruns failed axes once; omit reviewScope.",
     ],
     parameters: Type.Object({
@@ -113,6 +116,7 @@ export default function (pi: ExtensionAPI) {
           description: "Exact subset of allowedFiles the host may add or replace only inside its isolated diagnostic workspace.",
         })),
         diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands; runtime diagnosis is bounded to 30 seconds." })),
+        delivery: delivery(),
         preReviewCommands: Type.Optional(Type.Array(text(), { maxItems: 6, description: "Exact approved deterministic checks (e.g. typecheck, full tests) the host runs in order after every writer run and before any review, within one shared 10-minute budget. They must pass on the baseline and must not write to the worktree. A failure gives the same writer one bounded correction turn and blocks formal review of a repair." })),
       })),
       repair: Type.Optional(Type.Object({
@@ -135,15 +139,15 @@ export default function (pi: ExtensionAPI) {
       }, { additionalProperties: false, description: "matt-tdd only: one explicit execution recovery for a failed repair without a structured result. Preserve partial changes, original failure and repair counts; only the same retained writer runs, followed by evidence capture. Success remains pending formal review." })),
       blockedRecovery: Type.Optional(Type.Object({
         dispatchId: text(),
-      }, { additionalProperties: false, description: "matt-tdd only: after explicit user confirmation, resume the original writer once for an initial batch ticket with a sealed environment BLOCKED result. Keep the original batch and envelope, omit batch, and provide all three laneTasks. All normal checks and reviews still run after COMPLETE." })),
+      }, { additionalProperties: false, description: "matt-tdd only: after explicit user confirmation, resume the original writer once for an initial batch environment BLOCKED. Keep the original batch, envelope and lane tasks. Run its originally approved delivery gates after COMPLETE." })),
       finalValidationRepair: Type.Optional(Type.Object({
         dispatchId: text(),
         command: Type.Optional(text()),
         expectedFailure: Type.Optional(text()),
-      }, { additionalProperties: false, description: "matt-tdd batch only. After dual PASS, reproduce a final regression with the exact read-only command and literal failure text. Commands not pre-approved for this ticket need confirmation. Resume the retained writer only; review reruns the command before both axes. Retry a pending candidate with dispatchId only." })),
+      }, { additionalProperties: false, description: "matt-tdd batch only. After the approved implementation gate, reproduce a final regression with the exact local command and literal failure text. Commands not pre-approved need confirmation. Resume the retained writer only; review then reruns final checks (no reviewers for verified delivery). Retry a pending candidate with dispatchId only." })),
       recollect: Type.Optional(Type.Object({
         dispatchId: text(),
-      }, { additionalProperties: false, description: "matt-tdd only: recover the latest failed envelopeViolation with its complete persisted Pack and COMPLETE writer. Explicitly reapprove additive allowedFiles and keep the candidate and commands unchanged. Omit laneTasks; no writer or reviewer runs, and success is pending review." })),
+      }, { additionalProperties: false, description: "matt-tdd only: recover the latest failed envelopeViolation and its COMPLETE writer. Explicitly reapprove additive allowedFiles and keep the candidate and commands unchanged. Omit laneTasks; no writer or reviewer runs. The original delivery gates still apply." })),
       batch: Type.Optional(Type.Object({
         spec: Type.String({ minLength: 1, description: "Exact active Local Markdown parent spec path (Type: spec, Status: spec-ready)." }),
         fixedPoint: Type.String({ minLength: 1, description: "Original full commit SHA; the host verifies it exists and is an ancestor of the approved starting HEAD." }),
@@ -153,11 +157,12 @@ export default function (pi: ExtensionAPI) {
           allowedFiles: strings(),
           diagnosticFiles: Type.Optional(Type.Array(text(), { description: "Exact subset of allowedFiles for host-isolated diagnostics only." })),
           diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands." })),
+          delivery: delivery(),
           preReviewCommands: Type.Optional(Type.Array(text(), { maxItems: 6, description: "Exact approved deterministic checks the host runs after every writer run and before any review." })),
         }), { minItems: 1, description: "Declared serial ticket list; the host freezes each ticket's requirement content, Parent and Blocked by graph." }),
       }, { description: "Batch for declared serial matt-tdd tickets. The host reads actual spec/ticket digests and requires a real confirmation of a new plan. Model-provided hashes or authorization are never accepted." })),
       review: Type.Optional(Type.Object({
-        dispatchId: Type.String({ minLength: 1, description: "Latest completed repair, or a verified legacy COMPLETE dispatch stopped only by evidence-receipt JSON parsing. Review its unchanged host-bound Pack with both axes, without rerunning the writer or collector." }),
+        dispatchId: Type.String({ minLength: 1, description: "Latest completed repair, or a legacy COMPLETE dispatch recoverable from its intact Pack. No writer or collector rerun. For a pending verified final repair, settle host checks only; omit laneTasks." }),
       })),
       reconsider: Type.Optional(Type.Object({
         dispatchId: text(),

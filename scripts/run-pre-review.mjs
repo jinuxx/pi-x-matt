@@ -72,7 +72,8 @@ for (const command of commands) {
 const after = await collectReviewEvidence(process.cwd(), { baseline });
 // A check that rewrites the candidate would make the following review judge a different tree.
 const drift = after.snapshotId !== before.snapshotId || indexChanges(before.index, after.index).length > 0;
-const gate = { ok: !drift && results.every(row => row.ok), drift, results };
+const gate = { ok: !drift && results.every(row => row.ok), drift, results,
+  snapshotId: before.snapshotId, indexId: createHash("sha256").update(before.index).digest("hex") };
 const size = () => Buffer.byteLength(JSON.stringify(gate));
 while (size() > RESULT_BYTES) {
   const longest = results.filter(row => row.tail).sort((a, b) => b.tail.length - a.tail.length)[0];
