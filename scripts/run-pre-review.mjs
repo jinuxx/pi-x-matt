@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { collectReviewEvidence, envelopeViolation, indexChanges, repairDelta } from "../lib/review-evidence.mjs";
+import { assertWriterTimeoutSnapshot, collectReviewEvidence, envelopeViolation, indexChanges, repairDelta } from "../lib/review-evidence.mjs";
 
 // Fixed host command: arguments are an extension-owned artifact path and the digest of the
 // approved commands, never task text. The commands themselves come from the sealed control file.
@@ -55,6 +55,7 @@ const run = (command, timeoutMs) => new Promise(resolve => {
 });
 
 const before = await collectReviewEvidence(process.cwd(), { baseline });
+if (control.timeoutSnapshot) assertWriterTimeoutSnapshot(before, control.timeoutSnapshot);
 const delta = repairDelta(baseline, before, { ...control, allowedFiles: undefined });
 const staged = indexChanges(control.recoveryIndex ?? baseline.index, before.index).map(path => ({ path }));
 if (envelopeViolation([...delta.changes, ...staged], control.allowedFiles)) {

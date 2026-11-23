@@ -107,7 +107,7 @@ async function batchFixture(run) {
     runtime.start(ctx, reason);
     return runtime;
   };
-  const settle = async ({ value = "first slice\n", files = {}, reviews, workerOverride } = {}) => {
+  const settle = async ({ value = "first slice\n", files = {}, reviews, workerOverride, settlement, beforeCompletion } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
     const runs = {
       all: async items => {
@@ -128,6 +128,10 @@ async function batchFixture(run) {
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
               structuredOutput: findingResolutions.length ? { ...worker, findingResolutions } : worker,
               ...workerOverride });
+          } else if (item.key === "implement-settlement") {
+            assert.ok(settlement, "unexpected writer settlement");
+            results.push({ key: item.key, ok: true, agent: "matt-worker",
+              runId: `${launch.runId}-settlement`, resumability: { state: "resumable" }, ...settlement });
           } else if (reviews?.[item.key]) {
             results.push({ key: item.key, ok: true, artifactPaths: [], ...reviews[item.key] });
           } else results.push(review(item.key));
@@ -135,7 +139,7 @@ async function batchFixture(run) {
         return results;
       },
       host: async (key, options) => {
-        calls.push(key === "implement-claim" ? "claim" : key.startsWith("pre-review") ? key : "evidence");
+        calls.push(key === "implement-claim" ? "claim" : key === "review-evidence" || key.startsWith("review-result-") ? "evidence" : key);
         return exec("/bin/sh", ["-c", options.command], { cwd });
       },
     };
@@ -149,6 +153,7 @@ async function batchFixture(run) {
       status.error = error.message;
     }
     await writeFile(join(launch.asyncDir, "status.json"), JSON.stringify(status));
+    await beforeCompletion?.(status);
     await runtime.completion({ runId: launch.runId });
     return { calls, status, itemsSeen };
   };
@@ -425,6 +430,167 @@ test("initial environment BLOCKED recovery refuses unproven, changed, or unappro
       undefined, f.ctx), /no sealed environment blocker/i);
     assert.equal(f.launches.length, 1);
   });
+});
+
+const timeoutWorker = {
+  ok: false, structuredOutput: undefined, terminalOutcome: { state: "partial", reason: "timeout" },
+};
+const timeoutSettlement = { structuredOutput: { ...worker, status: "BLOCKED", summary: "Final regression did not return", residualRisks: [] } };
+const timeoutFollowUp = dispatchId => ({ workflow: "matt-tdd", task: "Continue the timed-out writer",
+  timeoutRecovery: { dispatchId } });
+
+async function startTimeoutBatch(f, delivery = "reviewed") {
+  const batch = batchParams(f.fixedPoint);
+  const approved = { delivery, allowedFiles: ["parser.mjs", "parser.test.mjs"],
+    preReviewCommands: ["node -e 'process.exit(0)'"] };
+  Object.assign(batch.tickets[0], approved);
+  const params = { workflow: "matt-tdd", task: "shared", batch, implementation: { ...implementation(T1), ...approved },
+    laneTasks: { implement: "implement",
+      ...(delivery === "reviewed" ? { standards: "original standards task", spec: "original spec task" } : {}) } };
+  const first = await f.runtime.dispatch(params, undefined, f.ctx);
+  await f.runtime.flush();
+  return first.details.dispatchId;
+}
+
+test("initial batch writer timeout after BLOCKED settlement automatically resumes once for 20 minutes", async () => {
+  await batchFixture(async f => {
+    const dispatchId = await startTimeoutBatch(f);
+    const failed = await f.settle({ workerOverride: timeoutWorker, settlement: timeoutSettlement,
+      files: { "parser.test.mjs": "new focused test\n" },
+      beforeCompletion: ({ runId }) => Promise.all([f.runtime.completion({ runId }), f.runtime.progress()]),
+    });
+    assert.equal(failed.status.state, "failed");
+    assert.deepEqual(failed.calls, ["claim", "implement", "seal-writer-timeout", "implement-settlement"]);
+    assert.equal(failed.itemsSeen[0].timeoutMs, 1_200_000);
+    assert.equal(failed.itemsSeen[1].timeoutMs, 300_000);
+    assert.equal(f.prompts, 1, "only the original batch approval");
+    assert.equal(f.launches.length, 2, "only one automatic continuation despite overlapping observers");
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(dispatchId), undefined, f.ctx), /active|latest/);
+
+    const recovered = await f.settle();
+    assert.equal(recovered.status.state, "complete");
+    assert.deepEqual(recovered.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end",
+      "pre-review", "evidence", "standards", "spec"]);
+    assert.equal(recovered.itemsSeen[0].resume, "run-0-settlement");
+    assert.equal(recovered.itemsSeen[0].timeoutMs, 1_200_000);
+    assert.equal(recovered.itemsSeen[0].agent, undefined);
+    assert.match(recovered.itemsSeen.find(item => item.key === "spec").task, /original spec task/);
+    assert.deepEqual(recovered.status.workflow.value[0].recoveryHistory.map(row =>
+      row.terminalOutcome?.reason ?? row.structuredOutput.status), ["timeout", "BLOCKED"]);
+
+    const next = { workflow: "matt-tdd", task: "shared", implementation: implementation(T2),
+      laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
+    await assert.rejects(() => f.runtime.dispatch(next, undefined, f.ctx), /must be resolved/);
+    await git(f.ctx.cwd, "add", "--", "parser.mjs", "parser.test.mjs");
+    await git(f.ctx.cwd, "commit", "-qm", "verified first slice");
+    await resolveTicket(f.ctx.cwd, T1, await git(f.ctx.cwd, "rev-parse", "HEAD"));
+    await f.runtime.dispatch(next, undefined, f.ctx);
+  });
+});
+
+test("second batch writer continuation requires confirmation after two 20-minute timeouts", async () => {
+  await batchFixture(async f => {
+    await startTimeoutBatch(f);
+    await f.settle({ workerOverride: timeoutWorker, settlement: timeoutSettlement });
+    assert.equal(f.launches.length, 2);
+    const second = await f.settle({ workerOverride: timeoutWorker });
+    assert.deepEqual(second.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end"]);
+    assert.equal(second.status.state, "failed");
+    assert.equal(f.launches.length, 2);
+    assert.equal(f.prompts, 1);
+
+    f.reload();
+    const failed = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const resume = timeoutFollowUp(failed.id);
+    f.ctx.hasUI = false;
+    await assert.rejects(() => f.runtime.dispatch(resume, undefined, f.ctx), /explicit user confirmation/);
+    f.ctx.hasUI = true;
+    const confirm = f.ctx.ui.confirm;
+    f.ctx.ui.confirm = async () => false;
+    await assert.rejects(() => f.runtime.dispatch(resume, undefined, f.ctx), /not approved/);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+    f.ctx.ui.confirm = confirm;
+
+    const third = await f.runtime.dispatch(resume, undefined, f.ctx);
+    await f.runtime.flush();
+    const exhausted = await f.settle({ workerOverride: timeoutWorker });
+    assert.equal(f.launches.length, 3);
+    assert.equal(f.prompts, 2);
+    assert.match(f.messages.at(-1), /40 minutes/);
+    assert.equal(exhausted.itemsSeen[0].resume, "run-1-writer");
+    assert.equal(exhausted.itemsSeen[0].timeoutMs, 1_200_000);
+    assert.equal(exhausted.status.state, "failed");
+    assert.deepEqual(exhausted.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end"]);
+    f.reload();
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(third.details.dispatchId), undefined, f.ctx), /exhausted/);
+  });
+});
+
+test("batch timeout recovery rejects candidate drift before admission and after resume", async () => {
+  await batchFixture(async f => {
+    const dispatchId = await startTimeoutBatch(f);
+    await f.settle({ workerOverride: timeoutWorker, settlement: timeoutSettlement,
+      files: { "parser.test.mjs": "new test\n" },
+      // The workflow has already sealed its candidate, even though its completion has not been observed yet.
+      beforeCompletion: () => writeFile(join(f.ctx.cwd, "parser.test.mjs"), "drifted untracked test\n"),
+    });
+    assert.equal(f.launches.length, 1);
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(dispatchId), undefined, f.ctx), /snapshot.*stale/);
+  });
+  await batchFixture(async f => {
+    await startTimeoutBatch(f);
+    await f.settle({ workerOverride: timeoutWorker, settlement: timeoutSettlement });
+    const drifted = await f.settle({ value: "different candidate\n" });
+    assert.equal(drifted.status.state, "failed");
+    assert.match(drifted.status.error, /candidate.*stale/i);
+    assert.ok(!drifted.calls.some(call => call === "standards" || call === "spec" || call === "implement-correction"));
+  });
+});
+
+test("timeout confirmation is bound to the same index, and verified delivery still skips reviewers", async () => {
+  await batchFixture(async f => {
+    await startTimeoutBatch(f, "verified");
+    await f.settle({ workerOverride: timeoutWorker, settlement: timeoutSettlement });
+    await f.settle({ workerOverride: timeoutWorker });
+    const source = f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+    const resume = timeoutFollowUp(source.id);
+    await f.runtime.dispatch(resume, undefined, f.ctx);
+    await git(f.ctx.cwd, "add", "--", "parser.mjs");
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2, "staging after confirmation must cancel the queued writer");
+    assert.match(f.notices.at(-1), /snapshot is stale/);
+
+    await git(f.ctx.cwd, "restore", "--staged", "--", "parser.mjs");
+    await f.runtime.dispatch(resume, undefined, f.ctx);
+    await f.runtime.flush();
+    const completed = await f.settle();
+    assert.equal(completed.status.state, "complete");
+    assert.deepEqual(completed.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end",
+      "pre-review", "evidence"]);
+    assert.deepEqual(completed.status.workflow.value[0].recoveryHistory.map(row => row.runId),
+      ["run-0-writer", "run-0-settlement", "run-1-writer"]);
+  });
+});
+
+test("initial BLOCKED without a trusted timeout, descriptor, or snapshot never launches a continuation", async () => {
+  for (const [options, reason] of [
+    [{ workerOverride: timeoutSettlement }, /no eligible resumable writer timeout/i],
+    [{ workerOverride: timeoutWorker,
+      settlement: { ...timeoutSettlement, resumability: { state: "not-resumable", reason: "missing descriptor" } }
+    }, /retained writer is unavailable: missing descriptor/i],
+    [{ workerOverride: timeoutWorker, settlement: timeoutSettlement,
+      files: { "parser.test.mjs": Buffer.from([0, 1]) }
+    }, /no trusted writer timeout snapshot/i],
+  ]) {
+    await batchFixture(async f => {
+      const dispatchId = await startTimeoutBatch(f);
+      assert.equal((await f.settle(options)).status.state, "failed");
+      assert.equal(f.launches.length, 1);
+      assert.equal(f.prompts, 1);
+      await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(dispatchId), undefined, f.ctx), reason);
+    });
+  }
 });
 
 test("a risk-accepted batch candidate needs its exact commit and tracker acceptance receipt before advancing", async () => {

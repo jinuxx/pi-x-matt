@@ -232,6 +232,40 @@ test("envelope recollection runs in the pinned sandbox with only a collector cap
   assert.ok(emits.some(row => row.type === "pi-x-matt.review-pending"));
 });
 
+test("pinned workflow sandbox saves the initial writer timeout snapshot before report settlement", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Timeout probe", ROOT,
+    { implement: "implementation", standards: "standards", spec: "AC1" },
+    { writerTimeoutCommand: "trusted-snapshot", command: "unused-collector" }, undefined, { sealWriterTimeout: true });
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const snapshot = { snapshotId: "a".repeat(64), indexId: "b".repeat(64) };
+  const retained = { agent: "matt-worker", resumability: { state: "resumable" } };
+  const calls = [], emits = [];
+  await assert.rejects(() => runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    onEmit: values => { emits.splice(0, emits.length, ...values); },
+    launch: async (key, params) => {
+      calls.push(key);
+      if (key === "implement") return { ...retained, key, ok: false, runId: "writer", output: "",
+        terminalOutcome: { state: "partial", reason: "timeout" }, artifactPaths: [] };
+      assert.equal(key, "implement-settlement");
+      assert.equal(params.resume, "writer");
+      return { ...implementResult(plan), ...retained, key, runId: "settled", structuredOutput: { status: "BLOCKED" } };
+    },
+    host: async (key, params) => {
+      calls.push(key);
+      assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
+        outputPath: "/tmp/mock-timeout-snapshot.log", durationMs: 1, stdout: JSON.stringify(snapshot) };
+    },
+  }), /implement\.status/);
+  assert.deepEqual(calls, ["implement", "seal-writer-timeout", "implement-settlement"]);
+  assert.deepEqual(emits.find(row => row.type === "pi-x-matt.writer-timeout-snapshot")?.snapshot, snapshot);
+  const writer = emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0];
+  assert.equal(writer.runId, "settled");
+  assert.equal(writer.recoveryHistory[0].terminalOutcome.reason, "timeout");
+});
+
 test("large evidence receipt survives the real host preview before both reviewers", async () => {
   const directory = await mkdtemp(join(tmpdir(), "matt-large-receipt-"));
   let evidence;

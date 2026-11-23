@@ -8,11 +8,11 @@
 | `reviewed`（高风险或关键验收缺充分自动证据） | `implement`、`standards`、`spec` | 先通过已声明的确定性检查，再由独立两轴复核；初审后最多一次修复（含最终验证续修）和一次增量评审。 |
 | 省略 `delivery`（旧信封） | `implement`、`standards`、`spec` | 保留原双轴和修复契约，不自动升级。 |
 
-只有双轴路径才适用 `acceptRisk`；真实用户确认后不改写原 PASS/FAIL。follow-up 只提供实际执行 lane 的 task。修复完成、候选门禁和最终验证是不同阶段。
+只有双轴路径才适用 `acceptRisk`；真实用户确认后不改写原 PASS/FAIL。follow-up 只提供实际执行 lane 的 task；`timeoutRecovery` 直接沿用原任务。修复完成、候选门禁和最终验证是不同阶段。
 
 ## 限定授权
 
-每次 `matt-tdd` 都提供相同的 `implementation`：
+`matt-tdd` 使用相同的 `implementation`（`timeoutRecovery` 由宿主复用原信封，不传此字段）：
 
 ```json
 {
@@ -129,6 +129,20 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 仅当批次当前票的首次 writer 在聚焦测试未启动时以 `BLOCKED` 返回 `environmentBlocker: { command, evidence }`，且宿主保存失败快照，才能在修复外部环境后显式用 `blockedRecovery: { dispatchId: "<最新失败派发>" }`。提供原 `implementation` 和初次 laneTasks（`verified` 仅 implement），省略 `batch`。宿主核验原批次、信封、候选与 index，并要求用户确认环境已修复；不执行诊断 `command`。
 
 只续跑原 writer 一次，保留草稿和原 `BLOCKED`。未启动的测试不算 RED；续跑完成后按原交付策略检查。业务阻塞、不可恢复、缺失快照或再次失败都停止，不另发 initial 或跳票。
+
+### 初次批次实现的 writer 超时续跑
+
+批次当前票的首次 writer 有 20 分钟执行预算。没有结构化结果且原生 `terminalOutcome.reason === "timeout"` 时，宿主在只补交报告的 `settlement` 之前封存 HEAD、项目 worktree（含未跟踪文件）和 index 的摘要，绑定原批次、票据与获批信封。若 settlement 如实返回 `BLOCKED`、没有外部环境 blocker 且原 writer 仍可恢复，宿主用同一 writer **自动续跑一次**，再给 20 分钟，不询问用户。5 分钟的 settlement 不计入这两段执行预算。
+
+只有第一次续跑也达到执行上限且候选未变时，才可请求第二次续跑：
+
+```json
+{"workflow":"matt-tdd","task":"请求第二次超时续跑","timeoutRecovery":{"dispatchId":"<最新超时派发>"}}
+```
+
+省略 `implementation`、`batch` 和 `laneTasks`；宿主复用原授权和任务。第二次续跑须经 TUI/RPC 真实用户确认，再给同一 writer 20 分钟；再次失败即停止，不重复结算或重置次数。续跑只补未完成的验证与报告，不修改封存候选。入队、RPC 启动及 writer 执行前后均核验快照；候选、授权、index 或票据漂移、缺证或 writer 不可恢复时拒绝，不重发 initial。旧版未封存的失败不从当前工作区补认。
+
+超时和 settlement 的原结果保留在原派发以及续跑的 `recoveryHistory` 中。`COMPLETE` 后仍要求原宿主检查与交付策略在该候选上通过；`reviewed` 仍须 Standards / Spec 双 PASS，`verified` 不启动 reviewer。父会话补跑测试不能替代宿主凭据，也不能直接解锁提交或下一票。
 
 ### 双 PASS 后的最终验证续修
 
