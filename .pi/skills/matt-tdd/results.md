@@ -12,7 +12,7 @@
 
 宿主通知区分 reviewer 的 `provider-limit` / `infrastructure` / `execution` 与有效 `review-fail`，不自动重试额度耗尽；先解决环境或额度，再走有界局部 recovery。
 
-writer 超时的 `settlement=pending|running|complete|failed|not-scheduled` 只在 TUI/RPC 显示进度，不唤醒父会话。保留 partial 变更，不擅自 resume 或丢弃；最终仍以完整结构化结果决定能否送审。符合[首次批次 writer 超时契约](dispatch-contract.md#初次批次实现的-writer-超时续跑)时，宿主自动续跑一次，按新 dispatchId 等待结果；再次超时后才可用 `timeoutRecovery` 请求真实用户确认。环境阻塞仍单独按 `blockedRecovery` 处理。已运行哪些测试以 writer 的实际证据为准。
+writer 超时的 `settlement=pending|running|complete|failed|not-scheduled` 只在 TUI/RPC 显示进度，不唤醒父会话。保留 partial 变更，不擅自 resume、编辑或丢弃；最终仍以完整结构化结果决定能否送审。单票和批次均按[首次 writer 超时契约](dispatch-contract.md#初次实现的-writer-超时续跑)在符合条件时自动续跑一次，按新 dispatchId 等待结果；再次超时且宿主仍报告可续跑，才可用 `timeoutRecovery` 请求真实用户确认。批次环境阻塞仍按 `blockedRecovery` 处理。已运行哪些测试以 writer 的实际证据为准。
 
 pi-subagents 0.88.0 的 `Response was truncated: the model reached its maximum output length.` 属于执行失败，不是有效评审 FAIL，也不是 timeout；不得从 partial `output` 补出结构化结果或自动追加 settlement。上游已经捕获合法 `structured_output` 时不因这一截断条件失败，仍须核对 `ok === true` 与 schema。lane timeout 与 settlement 数值是执行预算，supervisor 等待不计入，不能按 wall-clock 猜测终态。
 

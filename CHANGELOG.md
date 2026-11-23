@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.52
+
+- 修复 [#10](https://github.com/jinuxx/pi-x-matt/issues/10)：单票首次 writer 超时且具备可信快照时，可自动续跑同一 writer 20 分钟，在原授权范围内继续未完成的代码和测试；再次超时才须确认第二次续跑。越界或漂移时保留候选并停止，不恢复未封存的旧单票；批次规则不变。
+
 ## 0.2.51
 
 - 修复 [#7](https://github.com/jinuxx/pi-x-matt/issues/7)：批次首次 writer 超时且 settlement 返回 `BLOCKED` 时，宿主核验原候选并自动续跑同一 writer 20 分钟；再次超时才须确认第二次续跑。原失败记录与交付门禁保留，候选漂移或缺证时停止。

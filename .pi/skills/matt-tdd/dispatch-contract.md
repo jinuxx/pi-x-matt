@@ -130,19 +130,24 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 只续跑原 writer 一次，保留草稿和原 `BLOCKED`。未启动的测试不算 RED；续跑完成后按原交付策略检查。业务阻塞、不可恢复、缺失快照或再次失败都停止，不另发 initial 或跳票。
 
-### 初次批次实现的 writer 超时续跑
+### 初次实现的 writer 超时续跑
 
-批次当前票的首次 writer 有 20 分钟执行预算。没有结构化结果且原生 `terminalOutcome.reason === "timeout"` 时，宿主在只补交报告的 `settlement` 之前封存 HEAD、项目 worktree（含未跟踪文件）和 index 的摘要，绑定原批次、票据与获批信封。若 settlement 如实返回 `BLOCKED`、没有外部环境 blocker 且原 writer 仍可恢复，宿主用同一 writer **自动续跑一次**，再给 20 分钟，不询问用户。5 分钟的 settlement 不计入这两段执行预算。
+单票和批次当前票的首次 writer 均有 20 分钟执行预算。没有结构化结果且原生 `terminalOutcome.reason === "timeout"` 时，宿主在只补交报告的 `settlement` 之前封存 HEAD、项目 worktree（含 Git 可见的未跟踪文件）和 index 的摘要，绑定分支、票据和原获批信封（批次还绑定批次计划）。若 settlement 如实返回 `BLOCKED`、没有外部环境 blocker 且原 writer 仍可恢复，宿主用同一 writer **自动续跑一次**，再给 20 分钟，不询问用户。5 分钟的 settlement 不计入这两段执行预算。
 
-只有第一次续跑也达到执行上限且候选未变时，才可请求第二次续跑：
+- **单票**：启动时核对原封存快照和原授权，允许同一 writer 在原精确 `allowedFiles` 内继续未完成的代码、测试和验证，不修改 index、不重复已完成的工作。续跑退出时宿主核验分支、票据、累计变更和 index，封存此轮产生的候选；续跑若再次超时，以该快照作为下次起点。父会话或其他工具不能在轮次之间改动候选。
+- **批次**：维持原规则。续跑只在完全相同的封存候选上补验证和报告，不修改 worktree 或 index。
+
+只有第一次续跑也达到执行上限，宿主报告可续跑，且最新封存快照仍未漂移时，才可请求第二次续跑：
 
 ```json
 {"workflow":"matt-tdd","task":"请求第二次超时续跑","timeoutRecovery":{"dispatchId":"<最新超时派发>"}}
 ```
 
-省略 `implementation`、`batch` 和 `laneTasks`；宿主复用原授权和任务。第二次续跑须经 TUI/RPC 真实用户确认，再给同一 writer 20 分钟；再次失败即停止，不重复结算或重置次数。续跑只补未完成的验证与报告，不修改封存候选。入队、RPC 启动及 writer 执行前后均核验快照；候选、授权、index 或票据漂移、缺证或 writer 不可恢复时拒绝，不重发 initial。旧版未封存的失败不从当前工作区补认。
+省略 `implementation`、`batch` 和 `laneTasks`；宿主复用原授权和任务。第二次续跑须经 TUI/RPC 真实用户确认，再给同一 writer 20 分钟；再次失败即停止，不重复结算或重置次数。候选、授权、index 或票据漂移、缺证或 writer 不可恢复时拒绝，不重发 initial。`v0.2.51` 及之前已失败的单票没有可信超时快照，即使保留日志也不能从当前工作区补认。
 
-超时和 settlement 的原结果保留在原派发以及续跑的 `recoveryHistory` 中。`COMPLETE` 后仍要求原宿主检查与交付策略在该候选上通过；`reviewed` 仍须 Standards / Spec 双 PASS，`verified` 不启动 reviewer。父会话补跑测试不能替代宿主凭据，也不能直接解锁提交或下一票。
+单票超时路径发现越界会报告路径、保留未提交草稿和原派发并停止；预览截断时查看本地宿主步骤日志里的完整路径。不自动扩大范围、清理文件或把不完整结果当成 `COMPLETE`。需要额外路径时，另行明确确认范围并交接草稿；`timeoutRecovery` 不接收扩围，也不能用 `recollect` 复活未完成的 writer 或接续被超时边界拒绝的候选。保留旧证据和未完成状态，不解锁依赖。
+
+超时和 settlement 的原结果保留在原派发以及续跑的 `recoveryHistory` 中。`COMPLETE` 后仍要求原宿主检查与交付策略在该候选上通过；续跑后检查失败即停止，不额外启动纠正。`reviewed` 仍须 Standards / Spec 双 PASS，`verified` 不启动 reviewer。父会话按原流程补齐最终验证；补跑测试不能替代宿主凭据，也不能直接解锁提交或下一票。
 
 ### 双 PASS 后的最终验证续修
 

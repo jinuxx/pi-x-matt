@@ -10,7 +10,7 @@
 
 ```bash
 pi install -l npm:pi-subagents@0.90.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.51
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.52
 ```
 
 本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
@@ -47,10 +47,10 @@ Pi package 使用独立 module root，不能从另一个已安装 package 直接
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.51
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.52
 ```
 
-已固定旧版本的项目需用上面的 `pi install -l` 切换两个包的版本；`pi update` 不会改写原配置的 ref。若使用 package object，请只更新原条目的 `source`、保留资源过滤，再分别执行 `pi update npm:pi-subagents@0.90.0` 和 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.51`。
+已固定旧版本的项目需用上面的 `pi install -l` 切换两个包的版本；`pi update` 不会改写原配置的 ref。若使用 package object，请只更新原条目的 `source`、保留资源过滤，再分别执行 `pi update npm:pi-subagents@0.90.0` 和 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.52`。
 
 ## 提示中的测试术语
 
@@ -244,7 +244,7 @@ Follow-up 只提供实际执行的 lane task。committed `matt-code-review` 可�
 
 批次当前票的首次 writer 若因外部环境无法启动聚焦测试，且宿主保存了结构化环境阻塞及失败快照，可在环境修复后用 [`blockedRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次批次实现的环境阻塞恢复) 经显式确认续跑同一 writer 一次。范围与门禁不变，不重发 initial。
 
-批次当前票的首次 writer 达到 20 分钟上限，且宿主已封存同一候选、settlement 返回 `BLOCKED`、原 writer 可恢复时，宿主自动续跑同一 writer 20 分钟。若再次超时，才可用 [`timeoutRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次批次实现的-writer-超时续跑) 经用户确认续跑第二次。只补原验证与报告；候选漂移或缺证就停止，交付门禁不变。
+单票或批次当前票的首次 writer 达到 20 分钟上限，且宿主已有可信快照、settlement 返回合格 `BLOCKED`、原 writer 可恢复时，宿主自动再给同一 writer 20 分钟。再次超时后，才可用 [`timeoutRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次实现的-writer-超时续跑) 经用户确认续跑第二次。单票可以在原授权路径内继续未完成的代码和测试；批次仍只补验证和报告。越界、漂移、缺证或不可恢复就保留草稿并停止，交付门禁不变；未封存的旧单票不能补认。
 
 批次票通过实现门禁后若发现最终验证回归，可用 [`finalValidationRepair`](.pi/skills/matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修)。未预批命令须确认，宿主核验基线通过、候选复现才续跑原 writer；旧候选立即停止交付。新候选用 `review` 结算宿主检查，`verified` 不跑 reviewer；`reviewed` 仍须增量复核。
 

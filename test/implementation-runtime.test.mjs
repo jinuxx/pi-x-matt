@@ -73,7 +73,8 @@ async function fixture(run) {
   // `resolutions` replaces the compliant writer's accounting (null omits it); `correction` shapes the
   // host-requested correction turn: { value } rewrites parser.mjs, the rest overrides its result.
   const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
-    workerOverride, reviews, beforeEvidence, resolutions, correction = {}, receiptFailure = false, notifyCompletion = true } = {}) => {
+    workerOverride, settlement, reviews, beforeEvidence, beforeHost, beforeCompletion,
+    resolutions, correction = {}, receiptFailure = false, notifyCompletion = true } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [], trace = [];
     // A compliant writer accounts for exactly the finding IDs its handoff names.
     const accounted = (task, rows) => {
@@ -98,6 +99,9 @@ async function fixture(run) {
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
               structuredOutput: accounted(item.task, resolutions),
               ...workerOverride });
+          } else if (item.key === "implement-settlement" && settlement) {
+            results.push({ key: item.key, ok: true, agent: "matt-worker", runId: `${launch.runId}-settlement`,
+              resumability: { state: "resumable" }, ...settlement });
           } else if (item.key === "implement-correction") {
             const { value: corrected, ...override } = correction;
             if (corrected !== undefined) await writeFile(join(cwd, "parser.mjs"), corrected);
@@ -113,7 +117,8 @@ async function fixture(run) {
         return results;
       },
       host: async (key, options) => {
-        calls.push(key === "implement-claim" ? "claim" : key.startsWith("pre-review") ? key : "evidence");
+        calls.push(key === "implement-claim" ? "claim" : key === "review-evidence" ? "evidence" : key);
+        if (beforeHost) await beforeHost(key);
         if (key === "review-evidence" && beforeEvidence) await beforeEvidence();
         const result = await exec("/bin/sh", ["-c", options.command], { cwd });
         trace.push({ operation: "host", key, state: "completed" });
@@ -130,6 +135,7 @@ async function fixture(run) {
       status.error = error.message;
     }
     await writeFile(join(launch.asyncDir, "status.json"), JSON.stringify(status));
+    if (beforeCompletion) await beforeCompletion(launch);
     if (notifyCompletion) await runtime.completion({ runId: launch.runId });
     return { calls, status, itemsSeen };
   };
@@ -150,6 +156,192 @@ async function fixture(run) {
     await rm(artifacts, { recursive: true, force: true });
   }
 }
+
+const timedOutWriter = { ok: false, structuredOutput: undefined, terminalOutcome: { state: "partial", reason: "timeout" } };
+const blockedSettlement = { structuredOutput: { ...worker, status: "BLOCKED", summary: "Tests and implementation not finished" } };
+const timeoutFollowUp = dispatchId => ({ workflow: "matt-tdd", task: "Continue writer", timeoutRecovery: { dispatchId } });
+const lastImplementation = f => f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+
+async function startStandaloneTimeout(f, overrides = {}) {
+  f.ctx.ui.notify = text => f.notices.push(text);
+  const implementation = { ...f.params.implementation, delivery: "reviewed", allowedFiles: ["parser.mjs", "parser.test.mjs"],
+    preReviewCommands: ["node -e 'process.exit(0)'"], ...overrides };
+  const laneTasks = implementation.delivery === "verified" ? { implement: f.params.laneTasks.implement } : f.params.laneTasks;
+  const initial = await f.runtime.dispatch({ ...f.params, implementation, laneTasks }, undefined, f.ctx);
+  await f.runtime.flush();
+  return initial.details.dispatchId;
+}
+
+test("standalone writer timeout automatically resumes the same reviewed writer to finish code and tests", async () => {
+  await fixture(async f => {
+    const initial = await startStandaloneTimeout(f);
+    const timedOut = await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement,
+      files: { "parser.test.mjs": "partial test\n" },
+      beforeCompletion: ({ runId }) => Promise.all([f.runtime.completion({ runId }), f.runtime.progress()]),
+    });
+    assert.equal(timedOut.status.state, "failed");
+    assert.deepEqual(timedOut.calls, ["claim", "implement", "seal-writer-timeout", "implement-settlement"]);
+    assert.deepEqual(timedOut.itemsSeen.map(item => item.timeoutMs), [1_200_000, 300_000]);
+    assert.equal(timedOut.itemsSeen[1].resume, "run-0-writer");
+    assert.equal(f.launches.length, 2);
+    assert.equal(f.prompts, 1, "only the original scope approval");
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(initial), undefined, f.ctx), /active|latest/);
+
+    const recovered = await f.settle({ value: "finished\n", files: { "parser.test.mjs": "finished test\n" } });
+    assert.equal(recovered.status.state, "complete", recovered.status.error);
+    assert.deepEqual(recovered.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end",
+      "pre-review", "evidence", "standards", "spec"]);
+    assert.equal(recovered.itemsSeen[0].resume, "run-0-settlement");
+    assert.equal(recovered.itemsSeen[0].agent, undefined, "no fresh worker");
+    assert.equal(recovered.itemsSeen[0].timeoutMs, 1_200_000);
+    assert.match(recovered.itemsSeen.find(item => item.key === "spec").task, /AC1 only/);
+    const result = recovered.status.workflow.value[0];
+    assert.deepEqual(result.recoveryHistory.map(row => row.terminalOutcome?.reason ?? row.structuredOutput.status), ["timeout", "BLOCKED"]);
+    assert.equal(result.hostVerification.ok, true);
+    const pack = JSON.parse(await readFile(lastImplementation(f).evidence.snapshotPath, "utf8"));
+    assert.equal(pack.baseline.manifest.length, 0, "review is cumulative from the original dispatch");
+    assert.deepEqual(pack.incremental.changes.map(change => change.after.content), ["finished\n", "finished test\n"]);
+    assert.equal(result.hostVerification.preReview.snapshotId, pack.snapshotId);
+  });
+});
+
+test("second standalone writer timeout seals its progress, requires confirmation, and cannot be extended a third time", async () => {
+  await fixture(async f => {
+    await startStandaloneTimeout(f, { delivery: "verified" });
+    const initial = await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement });
+    const auto = await f.settle({ value: "more progress\n", workerOverride: timedOutWriter });
+    const snapshot = run => run.status.workflow.emits.findLast(row => row.type === "pi-x-matt.writer-timeout-snapshot").snapshot;
+    assert.notEqual(snapshot(initial).snapshotId, snapshot(auto).snapshotId);
+    assert.equal(snapshot(initial).indexId, snapshot(auto).indexId);
+    assert.equal(auto.status.state, "failed");
+    assert.equal(f.prompts, 1);
+    assert.equal(f.launches.length, 2);
+    f.reload();
+
+    const followUp = timeoutFollowUp(lastImplementation(f).id);
+    f.ctx.hasUI = false;
+    await assert.rejects(() => f.runtime.dispatch(followUp, undefined, f.ctx), /explicit user confirmation/);
+    f.ctx.hasUI = true;
+    const confirm = f.ctx.ui.confirm;
+    f.ctx.ui.confirm = async () => false;
+    await assert.rejects(() => f.runtime.dispatch(followUp, undefined, f.ctx), /not approved/);
+    f.ctx.ui.confirm = async (title, message) => {
+      assert.match(message, /40 minutes of execution budget/);
+      return confirm(title, message);
+    };
+    const continued = await f.runtime.dispatch(followUp, undefined, f.ctx);
+    await f.runtime.flush();
+    const exhausted = await f.settle({ value: "last progress\n", workerOverride: timedOutWriter });
+    assert.equal(exhausted.status.state, "failed");
+    assert.deepEqual(exhausted.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end"]);
+    assert.equal(exhausted.itemsSeen[0].resume, "run-1-writer");
+    assert.equal(exhausted.itemsSeen[0].timeoutMs, 1_200_000);
+    assert.equal(f.prompts, 2);
+    assert.equal(f.launches.length, 3);
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(continued.details.dispatchId), undefined, f.ctx), /exhausted/);
+  });
+});
+
+test("standalone writer timeout refuses candidate, index or original approval drift before automatic continuation", async () => {
+  for (const [drift, reason] of [
+    [f => writeFile(join(f.ctx.cwd, "parser.test.mjs"), "parent edited the test\n"), /snapshot.*stale/],
+    [f => exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd }), /snapshot.*stale/],
+    [f => {
+      const { identity, scope } = f.runtime.authorization.current();
+      f.runtime.revoke("user-revoked");
+      f.runtime.authorization.grant(identity, scope, "user-confirmed");
+    }, /original.*authorization/i],
+  ]) await fixture(async f => {
+    await startStandaloneTimeout(f);
+    await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement,
+      files: { "parser.test.mjs": "partial test\n" }, beforeCompletion: () => drift(f) });
+    assert.equal(f.launches.length, 1);
+    assert.equal(f.prompts, 1);
+    assert.match(f.notices.join("\n"), reason);
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.mjs"), "utf8"), "patched\n");
+  });
+});
+
+test("standalone writer timeout refuses changed ticket or index after confirmation and before writer launch", async () => {
+  for (const drift of ["ticket", "index"]) await fixture(async f => {
+    await writeFile(join(f.ctx.cwd, ".git", "info", "exclude"), "\n/ticket.md\n", { flag: "a" });
+    const ticket = join(f.ctx.cwd, "ticket.md");
+    await writeFile(ticket, "AC1\n");
+    await startStandaloneTimeout(f, { ticket: "ticket.md" });
+    await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement });
+    await f.settle({ workerOverride: timedOutWriter });
+    await f.runtime.dispatch(timeoutFollowUp(lastImplementation(f).id), undefined, f.ctx);
+    if (drift === "ticket") await writeFile(ticket, "different acceptance\n");
+    else await exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd });
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 2);
+    assert.equal(lastImplementation(f).state, "cancelled");
+    assert.match(f.notices.at(-1), /ticketDigest|snapshot is stale/);
+  });
+});
+
+test("standalone writer timeout names out-of-scope files and leaves the draft without presenting it for review", async () => {
+  for (const phase of ["initial", "continuation"]) await fixture(async f => {
+    const initial = await startStandaloneTimeout(f);
+    if (phase === "continuation") await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement });
+    const options = phase === "initial" ? { workerOverride: timedOutWriter, settlement: blockedSettlement } : {};
+    const failed = await f.settle({ ...options, files: { "unapproved.mjs": "retain draft\n" } });
+    assert.equal(failed.status.state, "failed");
+    assert.equal(await readFile(join(f.ctx.cwd, "unapproved.mjs"), "utf8"), "retain draft\n");
+    assert.match([failed.status.error, ...f.notices].join("\n"), /outside the approved envelope.*unapproved\.mjs/);
+    assert.ok(!failed.calls.some(key => ["pre-review", "evidence", "standards", "spec"].includes(key)));
+    assert.equal(f.launches.length, phase === "initial" ? 1 : 2);
+    const id = lastImplementation(f).id;
+    await assert.rejects(() => f.runtime.dispatch({ ...f.params, implementation: { ...lastImplementation(f).scope,
+      allowedFiles: ["parser.mjs", "parser.test.mjs", "unapproved.mjs"] },
+    laneTasks: {}, recollect: { dispatchId: id } }, undefined, f.ctx), /failed envelopeViolation/);
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(initial), undefined, f.ctx),
+      /outside the approved envelope|latest|authorization/);
+  });
+});
+
+test("standalone writer timeout cannot bypass host or review gates or change the index", async () => {
+  for (const failure of ["host check", "candidate drift", "index", "review FAIL"]) await fixture(async f => {
+    await startStandaloneTimeout(f, { preReviewCommands: [`node -e 'process.exit(${failure === "host check" ? 1 : 0})'`] });
+    await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement });
+    const result = await f.settle({ value: "finished\n", fail: failure === "review FAIL", beforeHost: async key => {
+      if (failure === "candidate drift" && key === "pre-review") {
+        await writeFile(join(f.ctx.cwd, "parser.mjs"), "changed after writer\n");
+      } else if (failure === "index" && key === "check-writer-timeout-end") {
+        await exec("git", ["add", "parser.mjs"], { cwd: f.ctx.cwd });
+      }
+    } });
+    assert.equal(result.status.state, "failed");
+    assert.match(result.status.error, /host checks|timeout candidate.*changed|changed the Git index|spec\.verdict/i);
+    assert.equal(result.calls.includes("pre-review"), failure !== "index");
+    assert.equal(result.calls.includes("standards"), failure === "review FAIL");
+    assert.equal(result.calls.includes("spec"), failure === "review FAIL");
+    assert.ok(!result.calls.includes("implement-correction"));
+  });
+});
+
+test("standalone writer timeout cannot reconstruct a missing seal or a missing retained writer", async () => {
+  for (const failure of ["legacy", "missing seal", "missing writer", "ordinary BLOCKED"]) await fixture(async f => {
+    const first = await startStandaloneTimeout(f);
+    const options = failure === "ordinary BLOCKED" ? { workerOverride: blockedSettlement }
+      : { workerOverride: timedOutWriter, settlement: blockedSettlement };
+    if (failure === "missing writer") options.settlement = { ...blockedSettlement,
+      resumability: { state: "not-resumable", reason: "missing descriptor" } };
+    if (failure === "missing seal") options.files = { "parser.test.mjs": Buffer.from([0, 1]) };
+    const result = await f.settle({ ...options, notifyCompletion: failure !== "legacy" });
+    assert.equal(result.status.state, "failed");
+    if (failure === "legacy") {
+      delete lastImplementation(f).timeoutTasks;
+      f.reload();
+      await f.runtime.progress();
+    }
+    assert.equal(f.launches.length, 1);
+    assert.equal(f.prompts, 1);
+    await assert.rejects(() => f.runtime.dispatch(timeoutFollowUp(first), undefined, f.ctx),
+      /no trusted.*snapshot|snapshot.*incomplete|missing descriptor|no eligible/i);
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.mjs"), "utf8"), "patched\n");
+  });
+});
 
 async function failedEvidenceReceipt(f, options = {}, request = f.params) {
   const dispatch = await f.runtime.dispatch(request, undefined, f.ctx);
@@ -2359,7 +2551,7 @@ test("a failing approved pre-review command gets one same-writer correction befo
     const params = gated(f.params);
     const initial = await f.runtime.dispatch(params, undefined, f.ctx);
     assert.deepEqual(f.runtime.plans.get(initial.details.dispatchId).hostCommands.map(row => row.key),
-      ["implement-claim", "pre-review", "pre-review-recheck", "review-evidence",
+      ["implement-claim", "seal-writer-timeout", "pre-review", "pre-review-recheck", "review-evidence",
         ...Array.from({ length: 23 }, (_, index) => `review-result-${index + 1}`)]);
     assert.ok(f.runtime.plans.get(initial.details.dispatchId).hostCommands.length <= 32);
     await f.runtime.flush();

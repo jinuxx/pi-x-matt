@@ -30,6 +30,6 @@ metadata:
 
 评审有阻断时按共同根因一次合并 `repair`，只续跑原 writer，核对全部 finding 和聚焦回归后，使用最新 `dispatchId` 显式 `review`，只核对原问题、修复直接影响的行为和有证据的新安全/完整性风险。`reviewed` 每票初审后最多修复一次（含最终验证续修）；仍失败就保留候选、等待用户决定。低价值建议放 `notes`，不派发 writer。真实 FAIL 不能用 prose、重做或改交付策略消掉。
 
-特殊状态才查 [宿主契约](dispatch-contract.md)：`recovery`（失败轴或报告纠错）、`reconsider`（具体异议）、`recollect`（只重采越界候选）、`blockedRecovery` / `writerRecovery`（符合条件的原 writer）、`timeoutRecovery`（批次首次实现自动续跑仍超时后，用户确认第二次续跑）、`finalValidationRepair`（批次实测回归）、`acceptRisk`（用户对普通 Standards P2 的精确候选确认，不称 PASS）。不重复 initial、不切换写者、不跑无关评审。
+特殊状态才查 [宿主契约](dispatch-contract.md)：`recovery`（失败轴或报告纠错）、`reconsider`（具体异议）、`recollect`（只重采合格的越界候选）、`blockedRecovery` / `writerRecovery`（符合条件的原 writer）、`timeoutRecovery`（单票或批次首次实现自动续跑仍超时后，用户确认第二次续跑）、`finalValidationRepair`（批次实测回归）、`acceptRisk`（用户对普通 Standards P2 的精确候选确认，不称 PASS）。不重复 initial、不切换写者、不跑无关评审。
 
 按 [Workflow Result Reading](results.md) 检查终态与 `structuredOutput`，并核对候选 Pack 和实时工作区。初次 `verified` 的合格结果只包含 implement 和宿主检查，不应补造缺失的轴；`reviewed` 还需两轴的有效结论。`repair` 的 `COMPLETE`、`reviewPending`、`reconsider` 的执行完成都不是交付通过。提交、tracker 和最终验证由父会话负责，TDD 不提交、不 push、不归档。

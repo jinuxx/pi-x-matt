@@ -266,6 +266,50 @@ test("pinned workflow sandbox saves the initial writer timeout snapshot before r
   assert.equal(writer.recoveryHistory[0].terminalOutcome.reason, "timeout");
 });
 
+test("pinned workflow sandbox verifies a changed standalone continuation without launching reviewers for verified delivery", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const evidence = {
+    controlled: true, path: "/tmp/mock-review.md", head: "a".repeat(40), resultPath: "/tmp/mock-review-result.json",
+    writerTimeoutStartCommand: "trusted-timeout-start", writerTimeoutCommand: "trusted-timeout-end",
+    preReviewCommand: "trusted-check", command: "trusted-collector",
+  };
+  const before = { snapshotId: "b".repeat(64), indexId: "d".repeat(64) };
+  const after = { ...before, snapshotId: "c".repeat(64) };
+  const timedOut = { key: "implement", ok: false, agent: "matt-worker", runId: "original",
+    terminalOutcome: { state: "partial", reason: "timeout" } };
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Timeout continuation", ROOT,
+    { implement: "finish in approved scope" }, evidence, undefined,
+    { delivery: "verified", standaloneTimeout: true, timeoutRecovery: { originalResult: timedOut },
+      verification: { approvedFindingIds: [] }, resume: "original" });
+  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
+  const calls = [];
+  const responses = {
+    "check-writer-timeout-start": before,
+    "check-writer-timeout-end": after,
+    "pre-review": { ...after, ok: true },
+    "review-evidence": { ...after, path: evidence.path, head: evidence.head, complete: true,
+      boundary: { incremental: false, changedPaths: ["parser.mjs"], approvedFindingIds: [] } },
+  };
+  const result = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key, params) => {
+      calls.push(key);
+      assert.equal(key, "implement");
+      assert.equal(params.resume, "original");
+      return implementResult(plan);
+    },
+    host: async (key, params) => {
+      calls.push(key);
+      assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
+        outputPath: "/tmp/mock-timeout-output", durationMs: 1, stdout: JSON.stringify(responses[key]) };
+    },
+  });
+  assert.deepEqual(calls, ["check-writer-timeout-start", "implement", "check-writer-timeout-end", "pre-review", "review-evidence"]);
+  assert.equal(result.value[0].hostVerification.preReview.snapshotId, after.snapshotId);
+  assert.deepEqual(result.value[0].recoveryHistory, [timedOut]);
+});
+
 test("large evidence receipt survives the real host preview before both reviewers", async () => {
   const directory = await mkdtemp(join(tmpdir(), "matt-large-receipt-"));
   let evidence;

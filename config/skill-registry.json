@@ -1200,7 +1200,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "905ea198b8ed9ef70af74ec6d01179a33807881a3e4fdf9fe0311e123326a10b",
+      "sourceDigest": "dfcf5a9ea12b2d6689406a544e7fff33a8e11f6d0b24360da7a378056a425f56",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d"
@@ -1216,7 +1216,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "0cb668a88855b4ff8c6be643ba1e8c6c5a7cd6aae20cc1f6f28cc7cd42cf7761",
+      "sourceDigest": "d31d30feb62a811205da6cff30d660bc9438d5ab8a6b38dca95359cde357ace2",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
@@ -1549,7 +1549,7 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "1438a9fdacc61bcb07876849abd2650e19c1f6db88bde2f7e829484ecd605744",
+      "sourceDigest": "f1c4243f1d95043d00f651bbd9788adcaac50e771759fca8a565876bbb406996",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "89b2b909f2fa584534695b955fd00d143470a4c12966e3f9f2351a4974ff8bc5",
       "workflow": {
