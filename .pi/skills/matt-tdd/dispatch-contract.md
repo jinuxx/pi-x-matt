@@ -12,7 +12,7 @@
 
 ## 限定授权
 
-`matt-tdd` 使用相同的 `implementation`（`timeoutRecovery` 由宿主复用原信封，不传此字段）：
+`matt-tdd` 使用相同的 `implementation`（`scopeRecovery` / `timeoutRecovery` 由宿主读取原信封，不传此字段）：
 
 ```json
 {
@@ -25,13 +25,27 @@
 }
 ```
 
-`ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticFiles` 可选，必须是 `allowedFiles` 的精确子集，且只能列测试/fixture 路径，不得把生产源码列入；测试/fixture 路径按最小命名规则识别：任一路径目录段恰为 `test`、`tests`、`__tests__`、`fixture` 或 `fixtures`，或文件名匹配 `*.test.*` / `*.spec.*`；未命中一律 fail closed，不读取文件内容、不探测测试框架、不提供配置项。它只为宿主隔离诊断区授予添加/替换文件的权限，不授予原工作区写权限，缺省时范围规范化对象保持 v0.2.27 形状。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。授权确认会展示隔离诊断文件清单。
+`ticket` 必须是精确的 active 仓库相对路径；direct slice 使用稳定的 `slice:<id>`，但不能代替上游真实 handoff。宿主读取 ticket hash；不接收模型提供的授权、hash 或证据文件路径。`allowedFiles` 是精确文件清单，不是目录/glob。`diagnosticFiles` 可选，须逐文件声明且在获批写入边界内，只能列测试/fixture，不得把生产源码列入；测试/fixture 路径按最小命名规则识别：任一路径目录段恰为 `test`、`tests`、`__tests__`、`fixture` 或 `fixtures`，或文件名匹配 `*.test.*` / `*.spec.*`；未命中一律 fail closed，不读取文件内容、不探测测试框架、不提供配置项。它只为宿主隔离诊断区授予添加/替换文件的权限，不授予原工作区写权限，缺省时范围规范化对象保持 v0.2.27 形状。`diagnosticCommands` 是获批的本地、非破坏性、无敏感数据命令；不允许生产访问或外部写入。授权确认会展示隔离诊断文件清单。
 
 `preReviewCommands` 在 `verified` 必填，在其他信封可选：最多 6 条、每条不超过 300 字节的精确命令，保留顺序、仅去重。应覆盖该票验收且在基线上通过、本地、结果确定、无敏感数据、不改写工作区。授权确认展示策略与命令；见 [宿主确定性校验](#宿主确定性校验)。
 
 `/skill:matt-implement` 只启动编排。宿主缺少有效授权时，用 TUI/RPC 确认一次具体范围和连续修复。后续同一 ticket/内容 hash/项目/branch/HEAD 且范围已被当前 grant 覆盖的派发不重复入口确认。同 ticket 增加 `allowedFiles` 或替换 `diagnosticFiles`/`diagnosticCommands`/`preReviewCommands` 属于新的授权信封，必须重新确认一次；确认后信封被替换而同一修复谱系保留：ticket、`scope`、宿主读取的 ticket hash、项目与 branch/HEAD 必须不变，旧 `allowedFiles` 必须全部保留（只增不减），授权 invocationId 变化不切断之前的 dispatch。把相对的 `.venv/bin/python` 改为项目内绝对解释器路径同样是 `diagnosticCommands` 替换，必须由用户显式确认新命令；确认后仍保留同一修复谱系，宿主不会自行发现或替换解释器。宿主以非模型上下文 custom entry 保存确认结果；reload 仅从当前 session branch 的这些记录恢复，不扫描其他分支或相信 prose。
 
 新确认的单票和批次授权不按时间过期。旧确认记录按原期限处理，旧命令直接签发的记录不恢复。授权对话最多等待 5 分钟，可取消。取消、失效或没有可信授权且无 UI 时 fail closed。新 ticket、实质范围扩张、架构选择或破坏性操作仍须新决定；不得以改写 `scope` 绕过根因门禁。新 session/fork 不继承授权；tree navigation 撤销。已经取得启动权的 child 用 `/subagents-stop` 停止。
+
+## 单票按范围授权与扩围
+
+新工单（含批次）开工前先只读核实源码和测试所属模块。`allowedDirectories` 一旦存在，启用宿主受控写入；`verified` 可给核实后的窄目录（严格的路径段边界，不是 glob），加少量目录外 `allowedFiles`。`reviewed` 传 `allowedDirectories: []` 与非空 `allowedFiles`，仍逐路径授权。目录内创建新文件不重问；共同鉴权、配置等敏感行为不因恰好位于已批目录内就获准，不用宽目录替代业务决定。目录需已存在或是已核实模块下的新子目录；路径不接受仓库根、私有路径、符号链接或 ignored 文件。省略 `allowedDirectories` 的旧信封不自动升级。
+
+宿主只给本票的 `matt-scoped-writer` 加载写入拦截，沿用 `matt-worker` 的模型和思考档。它用 `matt_scoped_edit`/`matt_scoped_write` 新建或更新文件，写前拒绝越界、私有、ignored、链接及用户已有改动，不提供 `apply_patch` 或通用 shell。需要删除或移动文件时停止并交由用户另行决定。`matt_scoped_check` 在原项目环境执行事先批准的 `diagnosticCommands` 或 `preReviewCommands` 原命令，不安装依赖。只批准本地、无敏感数据、无外部写入且不改写 Git 候选或 index 的命令；这里不是 OS 沙箱。命令导致候选或 index 漂移时，保留草稿并阻止续跑和交付。宿主仍独立验收，评审仍看实际 Git 候选；隔离诊断和最终验证的环境不变。
+
+需要新边界时，writer 在写前停止，返回 `BLOCKED` 与 `scopeBlocker: { paths, reason }`（核实后一次列齐精确缺失路径），不同时声明环境 blocker。宿主只在草稿仍符合原批准范围、Git index 未变时封存。父会话保持草稿不变，用最新 `dispatchId` 请求：
+
+```json
+{"workflow":"matt-tdd","task":"请求扩围后继续原 writer","scopeRecovery":{"dispatchId":"<最新 scope BLOCKED 派发>"}}
+```
+
+宿主据报告提出新增精确路径；普通票可额外传 `scopeRecovery.directories` 将实际请求覆盖在经核实的窄目录中。省略 `implementation`、`laneTasks` 和 `batch`。拒绝或取消扩围时不启动 writer，也不撤销原授权。候选漂移、已落盘的越界变更、未封存或原 writer 不可恢复时停止。批准后运行同一个 writer，只给当轮剩余执行时间，等待用户回复不计时，不重置超时、修复计数或验收。后续派发沿用返回的 `implementation`；批次扩围只对当前 ticket 生效，不改原计划和其他票。已经写出界不是这条路径，也不能用 `recollect` 补批。
 
 ## 批量授权（matt-implement-spec）
 
@@ -46,10 +60,9 @@
       {
         "ticket": ".x-matt/work/feature/issues/01-parser.md",
         "scope": "本票批准的行为与架构边界",
-        "allowedFiles": ["src/parser.ts", "test/parser.test.ts"],
-        "diagnosticFiles": ["test/parser.test.ts"],
-        "diagnosticCommands": ["npm test -- parser.test.ts"],
-        "preReviewCommands": ["npm run typecheck", "npm test -- parser"]
+        "allowedDirectories": ["src/parser", "test/parser"],
+        "delivery": "verified",
+        "preReviewCommands": ["npm test -- parser"]
       }
     ]
   }
@@ -58,9 +71,9 @@
 
 `spec`/`ticket` 必须是精确 active 仓库相对路径，不得指向 `.x-matt/work/shipped/`；`fixedPoint` 必须是存在且属于当前批准 starting HEAD ancestry 的原始完整 SHA。宿主自己读取 spec/tickets、Parent、`Blocked by` 与内容摘要；模型提供的 hash、tree、commit、授权或额外字段一律拒绝。每张 ticket 的 Parent 必须精确等于该 spec，Type 必须为 `ticket`，status 只能是 `ready-for-agent` 或 `resolved`；blocker 必须是真实 active ticket，自依赖、循环和未完成依赖 fail closed。已经 `resolved` 的启动 blocker 按批准 starting HEAD 的 ancestry 核验其完整 `Implementation commit`，不要求读取 archived 历史，也不创建 tracker artifact。首次工作区必须干净（ignored 本地 tracker 不计入）。
 
-`/skill:matt-implement-spec <spec-path>` 可读取同目录、未跟踪且受 ignore 保护的 `<spec-path>.dispatch.json`，但命令回调不是授权凭据。宿主展示精确信封并经真实 TUI/RPC 确认锁定计划；没有本地计划也走一次确认。`/matt-revoke` 使旧确认和未启动的派发失效，即便已交接 RPC，只要 writer 尚未取得启动标记也不能开跑。其他 skill、tree navigation、new session/fork 不继承授权。派发前复核 branch/HEAD、票据及工作区/index，批次同时复核锁定计划与依赖 frontier。文件越界由证据采集核验，这不是进程级沙箱。风险豁免始终单独确认且不能跳过失败的宿主校验。
+`/skill:matt-implement-spec <spec-path>` 可读取同目录、未跟踪且受 ignore 保护的 `<spec-path>.dispatch.json`，但命令回调不是授权凭据。宿主核验并展示每票写入边界和命令，经真实 TUI/RPC 确认锁定计划；没有本地计划也走一次确认。`/matt-revoke` 使旧确认和未启动的派发失效，即便已交接 RPC，只要 writer 尚未取得启动标记也不能开跑。其他 skill、tree navigation、new session/fork 不继承授权。派发前复核 branch/HEAD、票据及工作区/index，批次同时复核锁定计划与依赖 frontier。受控 writer 先拦写入，宿主仍按实际 diff 核验；旧信封只靠证据采集核验。这不是进程级沙箱。风险豁免始终单独确认且不能跳过失败的宿主校验。
 
-对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。当前 `implementation` 信封必须等于批准条目；undeclared ticket、额外文件/命令、语义变化、Parent/type/status/active path 不合法时拒绝，并提示提交新的显式 batch 确认。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding；只增 `allowedFiles` 或替换诊断清单仍需既有单票重新确认，batch 计划本身不扩张。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
+对每张声明的串行 ticket，宿主先重读 spec/tickets 并核验内容、Parent、edges、固定基线和 `Blocked by` 图未漂移，再从可信 batch capability 签发或复用新的 HEAD-bound 单票 grant，不重复 UI。首次 `implementation` 必须等于批准条目；undeclared ticket、额外范围/命令、语义变化、Parent/type/status/active path 不合法时拒绝。同票 repair/review/recovery/reconsider 即使省略 `batch` 也继承宿主 batch binding，并使用当前工单已确认的边界。受控 writer 只用 `scopeRecovery` 加写入范围，改命令仍需另行确认；旧信封保留原精确文件重新确认机制。已有 initial 派发后重新 batch 确认或 invocation 都不能重开 initial 或清空 findings/计数。
 
 batch-bound collector 用 OS temp 的 `GIT_INDEX_FILE` 和 `GIT_OBJECT_DIRECTORY` 隔离 index 与 object store，不写入真实 index、HEAD、object store 或工作区。tree、采集时 HEAD 与 Review Evidence snapshot 绑定到宿主记录。只有 writer `COMPLETE`、当前票交付策略通过（`verified` 的精确候选实测，或双轴通过/有效风险收据）且已登记最终检查通过，才是 terminal candidate。已声明宿主检查失败不能被 reviewer PASS 代替。
 
@@ -70,7 +83,7 @@ batch-bound collector 用 OS temp 的 `GIT_INDEX_FILE` 和 `GIT_OBJECT_DIRECTORY
 
 ## 信封越界后的仅重采集
 
-`allowedFiles` 是权限清单，不是承诺一定会改动的文件清单；条目无需已经存在。应预先包含按已批准契约可能新建的精确文件路径，不用目录/glob 或无关文件扩大权限。
+此入口仅适用省略 `allowedDirectories` 的旧信封（含旧批次），不适用受控 writer。`allowedFiles` 是权限清单，不是承诺一定会改动的文件清单；条目无需已经存在。应预先包含按已批准契约可能新建的精确文件路径，不用目录/glob 或无关文件扩大权限。
 
 writer 已合法 `COMPLETE`、但完整候选因信封越界被拒绝时，collector 仍将只读 `review.md/json` 保存，Pack 与宿主记录包含 `envelopeViolation.paths` 和原 `allowedFiles`。原派发保持 `failed`，reviewer 不启动，不生成可交付 batch candidate。不要使用 `repair`、`writerRecovery` 或重发 initial 来处理这类失败。
 
@@ -120,9 +133,9 @@ writer 已合法 `COMPLETE`、但完整候选因信封越界被拒绝时，colle
 
 finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重复、遗漏或通过改名清除已有根因计数。只有相同 `rootCauseId` 延续根因身份，`relatedFindingIds` 是因果关联，不把不同根因强制合组；同根因改名错误列出期望 group IDs。相同文件并不自动代表相同根因。父会话只合并根因，不合并 Standards/Spec verdict；无证据或越轴的报告属于 review contract failure，需要修复评审，而不是派发 writer。
 
-`previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：可在保留全部旧 `allowedFiles` 的前提下增加文件，也可替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）或 `preReviewCommands`。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
+`previousDispatchId` 必须指向同一 session、canonical 项目与 ticket 的最近一次未取消派发；宿主不按授权 invocationId 过滤修复历史。重新确认后的修复使用最新 `implementation` 信封：旧信封可保留全部旧 `allowedFiles` 并增加文件，受控 writer 仅用 `scopeRecovery` 扩围。替换 `diagnosticFiles`/`diagnosticCommands`（仍须通过原有测试路径与子集校验）或 `preReviewCommands` 仍须确认。ticket、`scope` 文本、宿主读取的 ticket hash、项目与 branch/HEAD 必须与旧派发完全一致；移除旧文件、收窄范围、ticket 内容/行为变化、快照漂移或引用非最新 `dispatchId` 时 fail closed。已有派发后新的 initial 同样被拒绝，不能借重新授权清空基线、计数或已获批 findings。
 
-`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择 `agent=matt-worker`、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer；只有下述显式 writer 执行恢复可继续失败 repair。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
+`repair` 只运行 writer 和证据采集，不自动启动 reviewer。宿主从最近完成结果选择本票 writer（受控写入为 `matt-scoped-writer`，其他为 `matt-worker`）、`resumability.state=resumable` 的精确 runId，以 retained resume 延续原模型、工具、skills/schema 和上下文；不会用父会话提供的 runId 替换。不可恢复、结果不完整或修复执行失败时停止，不暗中换 fresh writer；只有下述显式 writer 执行恢复可继续失败 repair。只需 `laneTasks.implement`，不为未运行的轴填写占位文本。
 
 ### 初次批次实现的环境阻塞恢复
 
@@ -134,8 +147,8 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 单票和批次当前票的首次 writer 均有 20 分钟执行预算。没有结构化结果且原生 `terminalOutcome.reason === "timeout"` 时，宿主在只补交报告的 `settlement` 之前封存 HEAD、项目 worktree（含 Git 可见的未跟踪文件）和 index 的摘要，绑定分支、票据和原获批信封（批次还绑定批次计划）。若 settlement 如实返回 `BLOCKED`、没有外部环境 blocker 且原 writer 仍可恢复，宿主用同一 writer **自动续跑一次**，再给 20 分钟，不询问用户。5 分钟的 settlement 不计入这两段执行预算。
 
-- **单票**：启动时核对原封存快照和原授权，允许同一 writer 在原精确 `allowedFiles` 内继续未完成的代码、测试和验证，不修改 index、不重复已完成的工作。续跑退出时宿主核验分支、票据、累计变更和 index，封存此轮产生的候选；续跑若再次超时，以该快照作为下次起点。父会话或其他工具不能在轮次之间改动候选。
-- **批次**：维持原规则。续跑只在完全相同的封存候选上补验证和报告，不修改 worktree 或 index。
+- **单票**：启动时核对原封存快照和原授权，允许同一 writer 在获批边界内继续未完成的代码、测试和验证，不修改 index、不重复已完成的工作。续跑退出时宿主核验分支、票据、累计变更和 index，封存此轮产生的候选；续跑若再次超时，以该快照作为下次起点。父会话或其他工具不能在轮次之间改动候选。写前扩围确认不追加执行时间；`timeoutRecovery` 自身仍不改变范围。
+- **批次**：续跑只在完全相同的封存候选上补验证和报告，不修改 worktree 或 index，不接受扩围。
 
 只有第一次续跑也达到执行上限，宿主报告可续跑，且最新封存快照仍未漂移时，才可请求第二次续跑：
 
@@ -145,7 +158,7 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 
 省略 `implementation`、`batch` 和 `laneTasks`；宿主复用原授权和任务。第二次续跑须经 TUI/RPC 真实用户确认，再给同一 writer 20 分钟；再次失败即停止，不重复结算或重置次数。候选、授权、index 或票据漂移、缺证或 writer 不可恢复时拒绝，不重发 initial。`v0.2.51` 及之前已失败的单票没有可信超时快照，即使保留日志也不能从当前工作区补认。
 
-单票超时路径发现越界会报告路径、保留未提交草稿和原派发并停止；预览截断时查看本地宿主步骤日志里的完整路径。不自动扩大范围、清理文件或把不完整结果当成 `COMPLETE`。需要额外路径时，另行明确确认范围并交接草稿；`timeoutRecovery` 不接收扩围，也不能用 `recollect` 复活未完成的 writer 或接续被超时边界拒绝的候选。保留旧证据和未完成状态，不解锁依赖。
+若超时封存发现已落盘的越界，报告路径、保留未提交草稿和原派发并停止；预览截断时查看本地宿主步骤日志里的完整路径。不自动扩大范围、清理文件或把不完整结果当成 `COMPLETE`。`timeoutRecovery` 不接收扩围；只有写前暂停且成功封存才可用 `scopeRecovery`。不能用 `recollect` 复活未完成的 writer 或接续被超时边界拒绝的候选。保留旧证据和未完成状态，不解锁依赖。
 
 超时和 settlement 的原结果保留在原派发以及续跑的 `recoveryHistory` 中。`COMPLETE` 后仍要求原宿主检查与交付策略在该候选上通过；续跑后检查失败即停止，不额外启动纠正。`reviewed` 仍须 Standards / Spec 双 PASS，`verified` 不启动 reviewer。父会话按原流程补齐最终验证；补跑测试不能替代宿主凭据，也不能直接解锁提交或下一票。
 
@@ -169,7 +182,7 @@ finding 引用为 `<axis>:<id>`；必须覆盖全部真实阻断项，不能重�
 {"writerRecovery": {"dispatchId": "<最新失败 repair 的宿主 dispatchId>"}}
 ```
 
-仍提供 `workflow=matt-tdd`、相同 `implementation` 与仅 `laneTasks.implement`；`writerRecovery` 和 repair/review/recovery/reconsider/acceptRisk 互斥。它不是 reviewer `recovery`，也不是新的修复轮次：仅适用于 `state=failed`、`reviewPending=true`、保留原正式评审来源与 repair 契约的 dispatch，且 implement 为 `ok=false`、无结构化结果、`agent=matt-worker`、有宿主 runId 与 `resumability.state=resumable`。成功实现、合法 `BLOCKED`、无结果/不可恢复 writer、初次实现失败、运行中/paused/stopped 或接受状态不明的 workflow 均不能借此恢复。
+仍提供 `workflow=matt-tdd`、相同 `implementation` 与仅 `laneTasks.implement`；`writerRecovery` 和 repair/review/recovery/reconsider/acceptRisk 互斥。它不是 reviewer `recovery`，也不是新的修复轮次：仅适用于 `state=failed`、`reviewPending=true`、保留原正式评审来源与 repair 契约的 dispatch，且本票 writer 的 implement 为 `ok=false`、无结构化结果、有宿主 runId 与 `resumability.state=resumable`。成功实现、合法 `BLOCKED`、无结果/不可恢复 writer、初次实现失败、运行中/paused/stopped 或接受状态不明的 workflow 均不能借此恢复。
 
 宿主首次观察失败终态时绑定 partial worktree 快照；升级前没有该字段的失败记录在首次重新读取终态时绑定，不冒称还原了旧失败时刻。恢复前检查授权、session/project/ticket/branch/HEAD、最新 dispatch、该 partial 快照与完整证据，并核对自原正式评审以来的全部变化都在当前获批 `allowedFiles` 内；入队前及 RPC 启动前再次检查快照。无需失败 writer 已产出候选 Pack，宿主从原 baseline 准备新的只读证据路径，并以新的原子 claim 启动精确 retained writer。原模型、工具、上下文、repair groups/findings/counts/diagnosis 和累计评审基线不变；不接受 caller runId，不重做已完成 slices，不绕过根因诊断。
 

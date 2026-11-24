@@ -11,6 +11,7 @@ import { loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
 import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { MAX_REVIEW_RESULT_PARTS, prepareTddEvidence, reviewResultFrame } from "../lib/review-workflow.mjs";
 import { collectReviewEvidence } from "../lib/review-evidence.mjs";
+import { SCOPED_WRITER_AGENT, WRITER_SCOPE_BINDING } from "../lib/writer-scope.mjs";
 import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 
@@ -266,6 +267,38 @@ test("pinned workflow sandbox saves the initial writer timeout snapshot before r
   assert.equal(writer.recoveryHistory[0].terminalOutcome.reason, "timeout");
 });
 
+test("pinned workflow sandbox passes the host writer binding and seals scope BLOCKED before any checks", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Scope probe", ROOT,
+    { implement: "finish in approved scope" },
+    { writerScopeSealCommand: "trusted-scope-seal", preReviewCommand: "not-run", command: "not-collected" },
+    undefined, { delivery: "verified", writerBinding: "/tmp/mock-grant.json", verification: { approvedFindingIds: [] } });
+  const checked = validateWorkflowScript(plan.rpcParams.script);
+  assert.equal(checked.ok, true, JSON.stringify(checked.errors));
+  const calls = [], emits = [];
+  const snapshot = { snapshotId: "a".repeat(64), indexId: "b".repeat(64) };
+  await assert.rejects(() => runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    onEmit: values => { emits.splice(0, emits.length, ...values); },
+    launch: async (key, params) => {
+      calls.push(key);
+      assert.equal(params.agent, SCOPED_WRITER_AGENT);
+      assert.deepEqual(params.extensionBindings, { [WRITER_SCOPE_BINDING]: "/tmp/mock-grant.json" });
+      assert.equal(params.worktree, false);
+      return { ...implementResult(plan), agent: params.agent, runId: "same-writer", resumability: { state: "resumable" },
+        structuredOutput: { status: "BLOCKED", scopeBlocker: { paths: ["tests/new.java"], reason: "Correct module path" } } };
+    },
+    host: async (key, params) => {
+      calls.push(key);
+      assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
+        outputPath: "/tmp/mock-scope-output", durationMs: 1, stdout: JSON.stringify(snapshot) };
+    },
+  }), /paused before an out-of-scope write/);
+  assert.deepEqual(calls, ["implement", "seal-writer-scope"]);
+  assert.deepEqual(emits.find(row => row.type === "pi-x-matt.writer-scope-checkpoint")?.snapshot, snapshot);
+});
+
 test("pinned workflow sandbox verifies a changed standalone continuation without launching reviewers for verified delivery", async () => {
   const registry = await loadCurrentRegistry(ROOT);
   const evidence = {
@@ -279,7 +312,7 @@ test("pinned workflow sandbox verifies a changed standalone continuation without
     terminalOutcome: { state: "partial", reason: "timeout" } };
   const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Timeout continuation", ROOT,
     { implement: "finish in approved scope" }, evidence, undefined,
-    { delivery: "verified", standaloneTimeout: true, timeoutRecovery: { originalResult: timedOut },
+    { delivery: "verified", writableTimeout: true, timeoutRecovery: { originalResult: timedOut },
       verification: { approvedFindingIds: [] }, resume: "original" });
   assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
   const calls = [];

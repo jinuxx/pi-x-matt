@@ -1200,7 +1200,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "dfcf5a9ea12b2d6689406a544e7fff33a8e11f6d0b24360da7a378056a425f56",
+      "sourceDigest": "d624f730dee3b097fa776698c6a8fff501a0d576fd0700844be808eb78e16821",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d"
@@ -1216,7 +1216,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "d31d30feb62a811205da6cff30d660bc9438d5ab8a6b38dca95359cde357ace2",
+      "sourceDigest": "b9a7b418bdb1e0291e40eca128b6ced23a0a7055c47cd1ae5f1e48fa007ec4b7",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
@@ -1549,9 +1549,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "f1c4243f1d95043d00f651bbd9788adcaac50e771759fca8a565876bbb406996",
+      "sourceDigest": "6940c786c1906e7c530d55fefe62e0f4736a0748dc95b15c744ca588cba38c91",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "89b2b909f2fa584534695b955fd00d143470a4c12966e3f9f2351a4974ff8bc5",
+      "workflowDigest": "0f9ed2ceff44625b7c259d839a94ef6b62e2c5b26a771452d901b65069ad5047",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1710,6 +1710,28 @@
                     "type": "string"
                   }
                 },
+                "scopeBlocker": {
+                  "type": "object",
+                  "properties": {
+                    "paths": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "paths",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                },
                 "environmentBlocker": {
                   "type": "object",
                   "properties": {
@@ -1799,8 +1821,17 @@
                 },
                 "not": {
                   "type": "object",
-                  "required": [
-                    "environmentBlocker"
+                  "anyOf": [
+                    {
+                      "required": [
+                        "environmentBlocker"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "scopeBlocker"
+                      ]
+                    }
                   ]
                 }
               },
@@ -2279,7 +2310,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "b0fab9f6afa7691ef6083e571c34791e6207e2765eb9b5dfbf76a4a9e69eaae6",
+      "sourceDigest": "5083105a1847c8736588119c0096c361874eb9ace5ad5467bbe0f0bc67d200f1",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0"

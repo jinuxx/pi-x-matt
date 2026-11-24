@@ -4,7 +4,9 @@
 
 按获批信封确定预期结果。`verified` 只返回 implement 和宿主实测，要求 workflow `complete`、结构化 `COMPLETE`、`hostVerification.ok=true` 且候选 Pack 新鲜；没有两轴结果是正常的。`reviewed` 和旧信封还需有效双 PASS。`acceptRisk` 是双轴路径的用户真实确认，直接返回 `state=accepted-risk` / `deliveryEligible=true` / `reviewPassed=false`，不运行 child，不改写原 FAIL。
 
-完整候选因 `envelopeViolation` 失败时，按[仅重采集](dispatch-contract.md#信封越界后的仅重采集)扩大信封并真实确认后用 `recollect`，不重跑 writer。`verified` 宿主检查通过即可结算非待审候选；`reviewPending=true` 时仍用新 dispatchId `review`，不得提交。丢失 Pack、其他失败或漂移不适用。
+旧的精确文件信封的完整候选因 `envelopeViolation` 失败时，按[仅重采集](dispatch-contract.md#信封越界后的仅重采集)确认后用 `recollect`，不重跑 writer。`verified` 宿主检查通过即可结算非待审候选；`reviewPending=true` 时仍用新 dispatchId `review`，不得提交。丢失 Pack、其他失败或漂移不适用。
+
+受控 writer 在写入前暂停时，读取 stage 1 的合法 `BLOCKED/scopeBlocker` 与宿主 `pi-x-matt.writer-scope-checkpoint`。两者都不是交付证据。只有宿主确认封存并报告可继续，才保持工作区不变、核实路径后用 `scopeRecovery`；实质需求改变或已落盘越界时不走此入口。
 
 批次配置了 `finalValidationCommands` 时，还要等同一候选的宿主 `required final validation PASS`；workflow `complete` 不是这份回执。失败不提交、不推进。
 

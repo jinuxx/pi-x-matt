@@ -10,14 +10,14 @@
 
 ```bash
 pi install -l npm:pi-subagents@0.90.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.52
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.53
 ```
 
 本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
 
 `fffind`、`ffgrep` 只在 pi-fff 的 `tools-and-ui` / `tools-only` 模式注册，`override` 模式下不存在。显式 tools allowlist 中声明了子进程里没有的工具，会让 child 以工具诊断（`missing`）直接启动失败，所以共享 agent 定义不再绑定这两个名称；这并非 pi-subagents 弃用了什么，而是定义不应依赖用户本机的 pi-fff 模式。需要这些工具时，在个人 `agentOverrides.<name>.tools` 中追加；`matt-reviewer` 还须在个人 `toolBudget.block` 中同步列出它们，否则它们不受 50 次取证上限约束（`toolBudget` 为整体替换，需连同 `hard` 一起写）。
 
-`matt-worker` 写文件时使用 `apply_patch`，该工具在目标环境不可用时退回 `edit` 或 `write`，因此目标项目需自行提供 `apply_patch` 或允许该回退。
+受控工单（单票或批次）使用独立的 `matt-scoped-writer`，仅提供受控写入和测试命令；不限制其他 runner。普通 `matt-worker` 仍优先使用 `apply_patch`，不可用时使用 `edit` / `write`。
 
 安装或升级 pi-subagents、本 package 的 extension 或 `lib/*.mjs` 后，退出并重新启动 Pi，再恢复原会话；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。仅修改 skills 等文本资源时，可使用：
 
@@ -40,17 +40,17 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.52
 
 不要把这份 object 与同一 package 的另一个 entry 并存。
 
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package bundle 同版本的 `pi-subagents`，只导入其 `workflow-resources` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts，独立 project-local runtime 仍必须保留。最小加载过滤须匹配 npm manifest 的 `+bundle/index.js`，不能沿用 `+index.js`。
+Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package bundle 同版本的 `pi-subagents`，只导入其 `workflow-resources` 和 `required-child-extensions` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts，独立 project-local runtime 仍必须保留。最小加载过滤须匹配 npm manifest 的 `+bundle/index.js`，不能沿用 `+index.js`。
 
 本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
 
 安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
 
 ```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.52
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.53
 ```
 
-已固定旧版本的项目需用上面的 `pi install -l` 切换两个包的版本；`pi update` 不会改写原配置的 ref。若使用 package object，请只更新原条目的 `source`、保留资源过滤，再分别执行 `pi update npm:pi-subagents@0.90.0` 和 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.52`。
+已固定旧版本的项目需用上面的 `pi install -l` 切换两个包的版本；`pi update` 不会改写原配置的 ref。若使用 package object，请只更新原条目的 `source`、保留资源过滤，再分别执行 `pi update npm:pi-subagents@0.90.0` 和 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.53`。
 
 ## 提示中的测试术语
 
@@ -230,7 +230,7 @@ TDD 必须提供限定的 `implementation`。宿主对新的单票范围或批�
 
 `preReviewCommands` 是随信封获批的本地确定性验收命令（最多 6 条，共享 10 分钟预算）；`verified` 必填，其他档可选。命令应在基线上通过、覆盖本次行为、不写工作区、不输出敏感数据。writer 完成后宿主对候选实测；能修则同一个 writer 纠正一次后重测。新信封检查仍失败就不启动 reviewer、不提交。检查与候选 worktree/index 绑定，不能用旧 PASS 或 writer 自述替代。细节见[宿主确定性校验](.pi/skills/matt-tdd/dispatch-contract.md#宿主确定性校验)。
 
-受限诊断可用可选的 `implementation.diagnosticFiles`（`allowedFiles` 的精确子集）与 `repair.diagnosis.testFiles` 提供内联复现内容；授权确认会展示这份隔离权限，缺省时保持既有范围对象形状。父流程必须在提交 `testFiles` 前完成脱敏，只使用合成或已脱敏 fixture；凭据只经环境变量，不写入测试、fixture 或输出。宿主先严格确认原工作区等于最近已审快照，再在自己的 OS temp 区从该已审状态（HEAD 加已审未提交变更，含删除/重命名）重建项目，只写入获批诊断文件并运行原批准命令；要求退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未被改动，否则 fail closed 且不排 writer。成功、失败与取消都清理宿主临时区；GREEN、其他症状、超时、取消、快照漂移和越权改动都不能解锁。该隔离只用于本机故障隔离，不是安全 sandbox，不联网安装依赖，也不复制个人 ignored 资料（因此不含被忽略的 `.venv`，相对的 `.venv/bin/python` 会以 127 失败）。需要虚拟环境依赖时，由用户显式批准使用项目绝对解释器路径的命令（属于新的 `diagnosticCommands` 授权信封，同一 ticket 修复谱系不变），例如 `/absolute/project/.venv/bin/python -B -m pytest -p no:cacheprovider tests/repro.py`，含空格路径按 shell 规则加引号；`-B` 避免未获批的 `__pycache__` 写入，`-p no:cacheprovider` 避免 pytest 缓存。宿主不自动发现或替换解释器、不安装依赖、不挂载或复制 `.venv`，解释器与依赖本身并非 OS 强制只读。失败按真实退出状态归因：127 命令/解释器不存在、126 不可执行、其他非 1 为命令失败；退出 1 但无目标文本按症状不匹配提示检查解释器与依赖，持久化只保留退出状态与输出 sha256，不保留原始输出。宿主只在该次临时区使用正文，repair 证据与 implement lane handoff 仅保留准确 path 与内容 sha256。该门禁不自动识别任意 secret/PII，也不能从会话记录抹去已经提交的工具输入；没有 `testFiles` 时保留原项目根诊断路径。
+受限诊断可用可选的 `implementation.diagnosticFiles`（在获批写入边界内逐文件声明）与 `repair.diagnosis.testFiles` 提供内联复现内容；授权确认会展示这份隔离权限，缺省时保持既有范围对象形状。父流程必须在提交 `testFiles` 前完成脱敏，只使用合成或已脱敏 fixture；凭据只经环境变量，不写入测试、fixture 或输出。宿主先严格确认原工作区等于最近已审快照，再在自己的 OS temp 区从该已审状态（HEAD 加已审未提交变更，含删除/重命名）重建项目，只写入获批诊断文件并运行原批准命令；要求退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未被改动，否则 fail closed 且不排 writer。成功、失败与取消都清理宿主临时区；GREEN、其他症状、超时、取消、快照漂移和越权改动都不能解锁。该隔离只用于本机故障隔离，不是安全 sandbox，不联网安装依赖，也不复制个人 ignored 资料（因此不含被忽略的 `.venv`，相对的 `.venv/bin/python` 会以 127 失败）。需要虚拟环境依赖时，由用户显式批准使用项目绝对解释器路径的命令（属于新的 `diagnosticCommands` 授权信封，同一 ticket 修复谱系不变），例如 `/absolute/project/.venv/bin/python -B -m pytest -p no:cacheprovider tests/repro.py`，含空格路径按 shell 规则加引号；`-B` 避免未获批的 `__pycache__` 写入，`-p no:cacheprovider` 避免 pytest 缓存。宿主不自动发现或替换解释器、不安装依赖、不挂载或复制 `.venv`，解释器与依赖本身并非 OS 强制只读。失败按真实退出状态归因：127 命令/解释器不存在、126 不可执行、其他非 1 为命令失败；退出 1 但无目标文本按症状不匹配提示检查解释器与依赖，持久化只保留退出状态与输出 sha256，不保留原始输出。宿主只在该次临时区使用正文，repair 证据与 implement lane handoff 仅保留准确 path 与内容 sha256。该门禁不自动识别任意 secret/PII，也不能从会话记录抹去已经提交的工具输入；没有 `testFiles` 时保留原项目根诊断路径。
 
 工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
 
@@ -302,17 +302,17 @@ Follow-up 只提供实际执行的 lane task。committed `matt-code-review` 可�
     {
       "ticket": ".x-matt/work/example/issues/01-parser.md",
       "scope": "实现已批准的 parser 行为",
-      "allowedFiles": ["src/parser.mjs", "test/parser.test.mjs"],
+      "allowedDirectories": ["src/parser", "test/parser"],
       "delivery": "verified",
-      "preReviewCommands": ["node --test test/parser.test.mjs"]
+      "preReviewCommands": ["node --test test/parser"]
     }
   ]
 }
 ```
 
-按依赖顺序列票；把示例命令替换为项目在基线上可运行的聚焦验收。新批次普通票声明 `verified` 与检查；如有权限、数据完整性等高风险或关键验收不能充分自动化，声明 `reviewed`。未写 `delivery` 的旧计划仍按原双轴跑；仅在重新确认新计划时为尚未派发的票选新策略。`finalValidationCommands` 可选，只从本地计划读取；有声明就必须等当前候选的 `required final validation PASS`。续跑批次保留原始 fixed-point SHA。
+按依赖顺序列票；用实际源码、测试目录和在基线上可运行的聚焦验收替换示例。普通票用 `verified` 和核实后的窄目录，目录内新文件无需逐个列出；高风险或关键验收不能充分自动化的票用 `reviewed`、`allowedDirectories: []` 和精确 `allowedFiles`。省略 `allowedDirectories` 的旧计划不自动升级，未写 `delivery` 仍按原双轴跑。`finalValidationCommands` 可选，只从本地计划读取；有声明就必须等当前候选的 `required final validation PASS`。续跑批次保留原始 fixed-point SHA。
 
-范围、基线漂移或实质决定时暂停，汇总阻塞和下一步，不逐票征询常规决定。用 `/matt-revoke` 撤销授权；尚未取得启动权的 writer 被拦截，已取得启动权的任务用 `/subagents-stop` 停止。若误改计划，恢复原文件可继续；撤销或实质扩权时保留未提交候选，不自动重新绑定。worker 仍有通用 shell 和写工具，文件信封通过证据采集核验，不是进程级沙箱；只在受信任的仓库运行。
+需要越出当前票的写入边界时，受控 writer 写前暂停，由 `scopeRecovery` 只确认这张票的新增范围。同一 writer 用剩余时间继续，不重批 spec、不改原计划、其他票不继承。基线漂移或实质需求改变时停下。用 `/matt-revoke` 撤销授权；已取得启动权的任务用 `/subagents-stop` 停止。若误改计划，恢复原文件可继续；撤销时保留未提交草稿，不自动重新绑定。
 
 前一票通过获批门禁，真实 commit 的 parent/tree 与候选精确一致，原始 fixed point ancestry、干净工作区和本地 `Status: resolved` / `Implementation commit` 写回均核验后才推进。全部票结束后跑一次尚未覆盖的完整测试和集成检查，再从原始 fixed point 到 HEAD 做一次 committed 集成评审。不自动 push、开 PR 或归档。
 
@@ -339,6 +339,8 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 `matt-implement` 默认普通票走 `verified`：宿主实测验收，**不启动模型评审**。高风险走 `reviewed`：先实测，再并行两轴；只让有证据的验收失败、可达回归或关键风险阻断，命名偏好、非关键规范和等价测试建议记为 notes。`matt-code-review` 仍可显式用于独立深审。
 
+单票和批次先只读核实源码与测试位置，再批准写入范围。受控 writer 写前拒绝越界；必要时一次报告所需路径、由宿主封存草稿，经用户同意后让同一 writer 用剩余时间继续。事后仍核对实际 Git diff 并执行原验收。受控 writer 只在原项目环境运行获批的原命令；测试不得改写 Git 候选或 index。见[范围授权契约](.pi/skills/matt-tdd/dispatch-contract.md#单票按范围授权与扩围)。
+
 `reviewed` 初审后最多修复一次（含最终验证续修），然后一次增量 `review`。只续跑原 writer，只复核原 findings、修复直接影响的行为及新安全/完整性风险；不重扫已通过的范围。仍失败就保留候选、暂停，不提交或自动重开评审。`reviewPending` 不是通过。失败轴恢复、报告纠错、存量计划诊断等例外见[宿主契约](.pi/skills/matt-tdd/dispatch-contract.md)。
 
 有效 FAIL 有异议时，父会话使用 `reconsider: {dispatchId, findings: [{findingId, reason, evidence}]}`，不能直接删除 finding。宿主只启动受影响轴的 fresh 只读 reviewer，沿用原 Evidence Pack；reviewer 对每条争议明确 `uphold`/`withdraw`，未争议 findings 与另一轴原样保留，最终仍须 effective 双轴 PASS。每个候选快照每轴最多一次异议复核，可一次提交多条争议；原报告、决定和根因计数保留。报告契约错误通过同一 `recovery` 接口有界纠正，每轴每候选最多两次，与 execution recovery 分开计数；不自动剔除非法引用，不把错误报告变成 PASS。无效异议决定的纠错保持原目标集合，reload 或重新授权不重置额度。后续 repair 使用 effective remaining findings。
@@ -351,7 +353,7 @@ TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏�
 
 ### 信封越界的原地恢复
 
-`allowedFiles` 是精确权限清单，可包含尚未创建的文件。完整候选仅因越界失败时，宿主保留 `review.md/json` 和越界路径。保持候选不变，保留旧文件、补齐必需 `allowedFiles` 后，用 `recollect: {dispatchId: "<最新越界派发>"}` 复用单票重新确认（省略 laneTasks）。宿主补跑因越界跳过的评审前命令并重采集，不重跑 writer；已有校验结果不重复运行。成功仍须用新 dispatchId 显式 `review`。详见 [恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#信封越界后的仅重采集)。
+旧精确文件信封（含旧批次）的完整候选仅因越界失败时，仍可按[旧恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#信封越界后的仅重采集)重新确认后用 `recollect` 只重采集、不重跑 writer。受控 writer 不采用这种事后补批。
 
 `0.90.0` 契约测试使用已安装 runtime 的脚本 sandbox、bundled resource 注册、原生 agent discovery 和 MCP 精确选择。宿主回归覆盖完成通知早于终态落盘、原结果被回收后的拒绝恢复，以及既有 lane 标签和 orphaned runner 的 `unknown` 证明；child/model 与 PID liveness 使用 mock，不替代真实模型、Windows 锁文件或 Fleet 交互验证。
 

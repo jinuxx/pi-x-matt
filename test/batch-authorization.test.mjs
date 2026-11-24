@@ -7,11 +7,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
+import { registerAgent, RUNTIME_AGENT_REGISTER_EVENT } from "pi-subagents/agents";
 import { BATCH_ENTRY, batchOutcome, collectCandidateTreeProof, confirmBatchPlan, createBatchAuthorization, normalizeBatchPlan, prepareBatchPlan, verifyBatchDispatch } from "../lib/batch-authorization.mjs";
 import { AUTH_ENTRY, createDispatchAuthorization } from "../lib/dispatch-authorization.mjs";
 import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { IMPLEMENTATION_ENTRY } from "../lib/repair-contract.mjs";
 import { collectReviewEvidence } from "../lib/review-evidence.mjs";
+import { scopedWriteTarget, SCOPED_WRITER_AGENT, WRITER_SCOPE_BINDING, WRITER_WAIT_FILE } from "../lib/writer-scope.mjs";
 
 const exec = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -55,6 +57,12 @@ function implementation(ticketPath) {
   return { ticket: ticketPath, scope, allowedFiles: ["parser.mjs"] };
 }
 
+const latestDispatch = f => f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+const scopeBlocked = path => ({ structuredOutput: { ...worker, status: "BLOCKED",
+  scopeBlocker: { paths: [path], reason: "The existing parser tests live in this module" } } });
+const recoverScope = (dispatchId, directories) => ({ workflow: "matt-tdd", task: "Continue the same scoped writer",
+  scopeRecovery: { dispatchId, ...(directories && { directories }) } });
+
 async function writeFeature(cwd, { t1 = ticket("01: parser", SPEC, "None"), t2 = ticket("02: second", SPEC, T1) } = {}) {
   await mkdir(join(cwd, ".x-matt/work/demo/issues"), { recursive: true });
   await writeFile(join(cwd, SPEC), specContent);
@@ -86,12 +94,19 @@ async function batchFixture(run) {
     ui: { notify() {}, confirm: async (_title, text) => { prompts++; messages.push(text); return true; } },
   };
   const pi = {
+    on() {}, registerTool() {},
     appendEntry: (customType, data) => entries.push({ type: "custom", customType, data: structuredClone(data) }),
-    events: { emit() {} }, sendUserMessage: text => notices.push(text),
+    events: { emit(type, request) {
+      if (type === RUNTIME_AGENT_REGISTER_EVENT) request.result = {
+        ok: true, registration: registerAgent({ pi, name: request.name, definition: request.definition }),
+      };
+    } }, sendUserMessage: text => notices.push(text),
   };
   const reload = (reason = "reload", overrides = {}) => {
+    runtime?.shutdown();
     runtime = createImplementationRuntime(pi, ROOT, {
       now: () => clock,
+      resolveWriterModel: async () => ({ model: "test/original-writer:high", thinking: "high" }),
       rpc: async (method, params) => {
         assert.equal(method, "spawn");
         const plan = params.workflow ? runtime.resolve(params.args) : { script: params.script };
@@ -108,7 +123,11 @@ async function batchFixture(run) {
     return runtime;
   };
   const settle = async ({ value = "first slice\n", files = {}, reviews, workerOverride, settlement, beforeCompletion } = {}) => {
-    const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [];
+    const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [], trace = [];
+    assert.ok(launch, notices.at(-1));
+    const { writerBinding, evidence } = latestDispatch({ entries });
+    const writer = writerBinding ? SCOPED_WRITER_AGENT : "matt-worker";
+    if (writerBinding) await writeFile(join(dirname(evidence.baselinePath), WRITER_WAIT_FILE), "0");
     const runs = {
       all: async items => {
         calls.push(...items.map(item => item.key));
@@ -124,18 +143,20 @@ async function batchFixture(run) {
             // A compliant writer accounts for exactly the finding IDs its repair handoff names.
             const findingResolutions = JSON.parse(item.task.match(/"approvedFindingIds":(\[[^\]]*\])/)?.[1] ?? "[]")
               .map(findingId => ({ findingId, cycleTest: worker.cycles[0].test, evidence: "covered by the cycle" }));
-            results.push({ key: "implement", ok: true, agent: "matt-worker",
+            results.push({ key: "implement", ok: true, agent: writer,
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
               structuredOutput: findingResolutions.length ? { ...worker, findingResolutions } : worker,
               ...workerOverride });
           } else if (item.key === "implement-settlement") {
             assert.ok(settlement, "unexpected writer settlement");
-            results.push({ key: item.key, ok: true, agent: "matt-worker",
+            results.push({ key: item.key, ok: true, agent: writer,
               runId: `${launch.runId}-settlement`, resumability: { state: "resumable" }, ...settlement });
           } else if (reviews?.[item.key]) {
             results.push({ key: item.key, ok: true, artifactPaths: [], ...reviews[item.key] });
           } else results.push(review(item.key));
         }
+        for (const result of results) trace.push({ operation: "run", key: result.key, runId: result.runId,
+          state: result.ok ? "completed" : "failed", durationMs: 12_000 });
         return results;
       },
       host: async (key, options) => {
@@ -143,7 +164,7 @@ async function batchFixture(run) {
         return exec("/bin/sh", ["-c", options.command], { cwd });
       },
     };
-    const status = { runId: launch.runId, state: "running", workflow: { emits } };
+    const status = { runId: launch.runId, state: "running", workflow: { emits, trace } };
     try {
       const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
       status.workflow.value = await new AsyncFunction("runs", "emit", launch.script)(runs, value => emits.push(value));
@@ -175,6 +196,7 @@ async function batchFixture(run) {
       get runtime() { return runtime; }, get prompts() { return prompts; },
       get clock() { return clock; }, set clock(value) { clock = value; } });
   } finally {
+    runtime?.shutdown();
     const evidenceDirs = new Set(entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY)
       .map(entry => entry.data.evidence?.path).filter(Boolean).map(dirname));
     for (const path of evidenceDirs) await rm(path, { recursive: true, force: true });
@@ -301,13 +323,14 @@ test("initial batch launch rechecks worktree and ignored spec after queuing", as
   });
 });
 
-test("initial environment BLOCKED resumes the original batch writer once without weakening delivery gates", async () => {
+for (const mode of ["legacy", "scoped"]) test(`initial environment BLOCKED resumes the original ${mode} batch writer once`, async () => {
   await batchFixture(async f => {
     const common = { workflow: "matt-tdd", task: "shared", implementation: implementation(T1),
       laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
     const batch = batchParams(f.fixedPoint);
     const checks = ["node -e 'process.exit(0)'"];
     batch.tickets[0].preReviewCommands = common.implementation.preReviewCommands = checks;
+    if (mode === "scoped") batch.tickets[0].allowedDirectories = common.implementation.allowedDirectories = [];
     const first = await f.runtime.dispatch({ ...common, batch }, undefined, f.ctx);
     await f.runtime.flush();
     const failed = await f.settle({ value: "draft\n", workerOverride: { structuredOutput: environmentBlocked } });
@@ -439,10 +462,10 @@ const timeoutSettlement = { structuredOutput: { ...worker, status: "BLOCKED", su
 const timeoutFollowUp = dispatchId => ({ workflow: "matt-tdd", task: "Continue the timed-out writer",
   timeoutRecovery: { dispatchId } });
 
-async function startTimeoutBatch(f, delivery = "reviewed") {
+async function startTimeoutBatch(f, delivery = "reviewed", writeScope = {}) {
   const batch = batchParams(f.fixedPoint);
   const approved = { delivery, allowedFiles: ["parser.mjs", "parser.test.mjs"],
-    preReviewCommands: ["node -e 'process.exit(0)'"] };
+    preReviewCommands: ["node -e 'process.exit(0)'"], ...writeScope };
   Object.assign(batch.tickets[0], approved);
   const params = { workflow: "matt-tdd", task: "shared", batch, implementation: { ...implementation(T1), ...approved },
     laneTasks: { implement: "implement",
@@ -545,6 +568,35 @@ test("batch timeout recovery rejects candidate drift before admission and after 
     assert.equal(drifted.status.state, "failed");
     assert.match(drifted.status.error, /candidate.*stale/i);
     assert.ok(!drifted.calls.some(call => call === "standards" || call === "spec" || call === "implement-correction"));
+  });
+});
+
+test("scoped batch timeout continuation verifies the sealed candidate without adding write permission", async () => {
+  await batchFixture(async f => {
+    await mkdir(join(f.ctx.cwd, "tests/parser"), { recursive: true });
+    await startTimeoutBatch(f, "verified", { allowedDirectories: ["tests/parser"] });
+    await f.settle({ workerOverride: timeoutWorker, settlement: timeoutSettlement,
+      files: { "tests/parser/fresh.test.mjs": "existing sealed test\n" } });
+    assert.equal(f.prompts, 1);
+    assert.equal(f.launches.length, 2);
+    const grant = JSON.parse(await readFile(latestDispatch(f).writerBinding.path, "utf8"));
+    await assert.rejects(scopedWriteTarget(f.ctx.cwd, grant, "tests/parser/fresh.test.mjs"), /only verifies/);
+    const timedOut = await f.settle({ workerOverride: timeoutWorker });
+    assert.deepEqual(timedOut.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end"]);
+    assert.equal(timedOut.itemsSeen[0].resume, "run-0-settlement");
+    assert.match(timedOut.itemsSeen[0].task, /不要修改已封存/);
+    assert.equal(f.launches.length, 2, "only one automatic continuation");
+    assert.equal(latestDispatch(f).timeoutRecovery.attempt, 1);
+    const followUp = timeoutFollowUp(latestDispatch(f).id);
+    await assert.rejects(() => f.runtime.dispatch(followUp, undefined, { ...f.ctx, hasUI: false }), /explicit user confirmation/);
+    await f.runtime.dispatch(followUp, undefined, f.ctx);
+    await f.runtime.flush();
+    const finished = await f.settle();
+    assert.equal(finished.status.state, "complete", finished.status.error);
+    assert.equal(finished.itemsSeen[0].resume, "run-1-writer");
+    assert.equal(latestDispatch(f).batchOutcome.complete, true);
+    assert.equal(latestDispatch(f).timeoutRecovery.attempt, 2);
+    assert.equal(f.prompts, 2, "batch approval and second timeout recovery");
   });
 });
 
@@ -937,11 +989,133 @@ test("verified batch ticket advances only after passing host checks and committi
   });
 });
 
-for (const delivery of ["verified", "reviewed"]) test(`${delivery} batch final regression follows its approved delivery gate`, async () => {
+test("local scoped batch plan delivers two tickets with one approval and reviews the full committed range", async () => {
+  await batchFixture(async f => {
+    const { cwd } = f.ctx;
+    await mkdir(join(cwd, "tests/parser"), { recursive: true });
+    const plan = batchParams(f.fixedPoint);
+    const [first, next] = plan.tickets;
+    const added = "tests/parser/new-parser.test.mjs";
+    Object.assign(first, {
+      delivery: "verified", allowedDirectories: ["tests/parser"], preReviewCommands: ["test -s parser.mjs"],
+    });
+    Object.assign(next, { delivery: "reviewed", allowedDirectories: [] });
+    const localPlan = { tickets: [{ ...first, finalValidationCommands: [`test -s ${added}`] }, next] };
+    await writeFile(join(cwd, `${SPEC}.dispatch.json`), JSON.stringify(localPlan));
+    await f.runtime.beginBatchCommand(SPEC, f.ctx);
+    assert.match(f.messages[0], /Write directories \(including new files\): tests\/parser\//);
+
+    const request = { workflow: "matt-tdd", task: "shared", laneTasks: { implement: "parser" }, implementation: first };
+    const wider = { ...first, allowedDirectories: ["tests"] };
+    await assert.rejects(() => f.runtime.dispatch({ ...request, batch: { ...plan, tickets: [wider, next] } }, undefined, f.ctx),
+      /Batch metadata differs/);
+    await assert.rejects(() => f.runtime.dispatch({ ...request, implementation: wider }, undefined, f.ctx),
+      /differs from the approved batch plan/);
+    await f.runtime.dispatch(request, undefined, f.ctx);
+    await f.runtime.flush();
+    const { status, calls, itemsSeen } = await f.settle({ files: { [added]: "new test\n" } });
+    assert.equal(status.state, "complete", status.error);
+    assert.deepEqual(calls, ["claim", "implement", "pre-review", "evidence"]);
+    const record = latestDispatch(f), proof = record.batchOutcome.candidate;
+    assert.equal(record.requiredValidation.ok, true);
+    assert.equal(record.batchOutcome.complete, true);
+    assert.equal(itemsSeen[0].agent, SCOPED_WRITER_AGENT);
+    assert.equal(itemsSeen[0].extensionBindings[WRITER_SCOPE_BINDING], record.writerBinding.path);
+    const nextRequest = { ...request, implementation: next,
+      laneTasks: { implement: "next", standards: "standards", spec: "spec" } };
+    await git(cwd, "add", "--", "parser.mjs", added);
+    await git(cwd, "commit", "-qm", "verified parser slice");
+    assert.equal(await git(cwd, "rev-parse", "HEAD^{tree}"), proof.tree);
+    await assert.rejects(() => f.runtime.dispatch(nextRequest, undefined, f.ctx), /must be resolved/);
+    await resolveTicket(cwd, T1, await git(cwd, "rev-parse", "HEAD"));
+    await f.runtime.dispatch(nextRequest, undefined, f.ctx);
+    await f.runtime.flush();
+    const nextGrant = JSON.parse(await readFile(latestDispatch(f).writerBinding.path, "utf8"));
+    await assert.rejects(() => scopedWriteTarget(cwd, nextGrant, added), /blocked before mutation/);
+    const second = await f.settle({ value: "second slice\n" });
+    assert.deepEqual(second.calls, ["claim", "implement", "evidence", "standards", "spec"]);
+    assert.equal(latestDispatch(f).batchOutcome.complete, true);
+    await git(cwd, "add", "--", "parser.mjs");
+    await git(cwd, "commit", "-qm", "reviewed second slice");
+    const head = await git(cwd, "rev-parse", "HEAD");
+    await resolveTicket(cwd, T2, head);
+
+    await f.runtime.dispatch({ workflow: "matt-code-review", task: "integrated spec",
+      reviewScope: { kind: "committed", fixedPoint: plan.fixedPoint },
+      laneTasks: { standards: "integrated standards", spec: "all spec acceptance criteria" },
+    }, undefined, f.ctx);
+    await f.runtime.flush();
+    const integrated = await f.settle();
+    assert.equal(integrated.status.state, "complete", integrated.status.error);
+    assert.deepEqual(integrated.calls, ["evidence", "standards", "spec"]);
+    const pack = JSON.parse(await readFile(latestDispatch(f).evidence.snapshotPath, "utf8"));
+    assert.equal(pack.fixedPoint, plan.fixedPoint);
+    assert.equal(pack.head, head);
+    assert.deepEqual(pack.manifest.map(row => row.path), ["parser.mjs", added]);
+    assert.equal(f.prompts, 1);
+  });
+});
+
+test("scoped batch expansion preserves the plan, scope checkpoint and retained writer across reload", async () => {
+  await batchFixture(async f => {
+    const { cwd } = f.ctx;
+    await mkdir(join(cwd, "tests/old"), { recursive: true });
+    const batch = batchParams(f.fixedPoint);
+    const [first, next] = batch.tickets;
+    Object.assign(first, { delivery: "verified", allowedDirectories: ["tests/old"], preReviewCommands: ["test -s parser.mjs"] });
+    Object.assign(next, { delivery: "verified", allowedDirectories: ["tests/old"], preReviewCommands: ["test -s parser.mjs"] });
+    const request = { workflow: "matt-tdd", task: "shared", laneTasks: { implement: "parser" }, implementation: first };
+    const { details } = await f.runtime.dispatch({ ...request, batch }, undefined, f.ctx);
+    await f.runtime.flush();
+    const original = latestDispatch(f);
+    const path = "tests/parser/new.test.mjs";
+    const originalGrant = () => readFile(original.writerBinding.path, "utf8").then(JSON.parse);
+    await assert.rejects(() => originalGrant().then(grant => scopedWriteTarget(cwd, grant, path)), /blocked before mutation/);
+    const paused = await f.settle({ workerOverride: scopeBlocked(path) });
+    assert.deepEqual(paused.calls, ["claim", "implement", "seal-writer-scope"]);
+    await assert.rejects(() => readFile(join(cwd, path)), /ENOENT/);
+    const recovery = recoverScope(details.dispatchId, ["tests/parser"]);
+    await assert.rejects(() => f.runtime.dispatch(recovery, undefined,
+      { ...f.ctx, ui: { confirm: async () => false } }), /not authorized/);
+    assert.equal(f.launches.length, 1);
+
+    f.reload();
+    await f.runtime.dispatch(recovery, undefined, f.ctx);
+    assert.match(f.messages[1], /Add directories: tests\/parser\//);
+    await writeFile(join(cwd, SPEC), `${specContent}\nchanged requirement\n`);
+    await f.runtime.flush();
+    assert.equal(f.launches.length, 1, "spec drift cannot launch the expanded writer");
+    assert.match(f.notices.at(-1), /Approved spec content drift/);
+    assert.deepEqual((await originalGrant()).allowedDirectories, ["tests/old"]);
+
+    await writeFile(join(cwd, SPEC), specContent);
+    await f.runtime.dispatch(recovery, undefined, f.ctx);
+    await f.runtime.flush();
+    assert.deepEqual((await originalGrant()).allowedDirectories, ["tests/old", "tests/parser"]);
+    const resumed = await f.settle({ files: { [path]: "approved test\n" } });
+    assert.equal(resumed.status.state, "complete", resumed.status.error);
+    assert.deepEqual(resumed.calls, ["claim", "check-writer-timeout-start", "implement", "pre-review", "evidence"]);
+    assert.equal(resumed.itemsSeen[0].resume, "run-0-writer");
+    assert.equal(resumed.itemsSeen[0].timeoutMs, 1_200_000 - 12_000);
+    assert.deepEqual(latestDispatch(f).batch, original.batch);
+    assert.equal(latestDispatch(f).batchOutcome.complete, true);
+    assert.deepEqual(f.entries.findLast(entry => entry.customType === BATCH_ENTRY).data.tickets[0].allowedDirectories, ["tests/old"]);
+    await git(cwd, "add", "--", "parser.mjs", path);
+    await git(cwd, "commit", "-qm", "expanded parser slice");
+    await resolveTicket(cwd, T1, await git(cwd, "rev-parse", "HEAD"));
+    await assert.rejects(() => f.runtime.dispatch({ ...request, implementation: {
+      ...next, allowedDirectories: ["tests/old", "tests/parser"],
+    } }, undefined, f.ctx), /differs from the approved batch plan/);
+    await f.runtime.dispatch({ ...request, implementation: next }, undefined, f.ctx);
+    assert.equal(f.prompts, 2, "one batch approval and one ticket-local expansion");
+  });
+});
+
+for (const delivery of ["verified", "reviewed"]) test(`${delivery} scoped batch final regression preserves gates across expansion`, async () => {
   await batchFixture(async f => {
     const command = "if grep -qx 'first slice' parser.mjs; then echo 'final regression'; exit 1; fi";
     const plan = batchParams(f.fixedPoint);
-    const scope = { ...plan.tickets[0], delivery,
+    const scope = { ...plan.tickets[0], delivery, allowedDirectories: [],
       preReviewCommands: ["grep -Eq '^(original|first slice|fixed)$' parser.mjs"] };
     plan.tickets[0] = { ...scope, finalValidationCommands: [command] };
     await writeFile(join(f.ctx.cwd, `${SPEC}.dispatch.json`), JSON.stringify({ tickets: plan.tickets }));
@@ -959,25 +1133,36 @@ for (const delivery of ["verified", "reviewed"]) test(`${delivery} batch final r
       dispatchId: initial.details.dispatchId, command, expectedFailure: "final regression",
     } }, undefined, f.ctx);
     await f.runtime.flush();
-    const repaired = await f.settle({ value: "fixed\n" });
-    assert.deepEqual(repaired.calls, ["claim", "implement", "pre-review", "evidence"]);
-    assert.equal(repaired.itemsSeen[0].resume, "run-0-writer");
+    const extra = "parser.regression.test.mjs";
+    const paused = await f.settle({ workerOverride: scopeBlocked(extra) });
+    assert.deepEqual(paused.calls, ["claim", "implement", "seal-writer-scope"]);
+    assert.equal(paused.itemsSeen[0].resume, "run-0-writer");
+    const resumed = await f.runtime.dispatch(recoverScope(pending.details.dispatchId), undefined, f.ctx);
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: "fixed\n", files: { [extra]: "focused coverage\n" } });
+    assert.equal(repaired.status.state, "complete", repaired.status.error);
+    assert.deepEqual(repaired.calls, ["claim", "check-writer-timeout-start", "implement", "pre-review", "evidence"]);
+    assert.equal(repaired.itemsSeen[0].resume, "run-1-writer");
     assert.equal(latest().batchOutcome.complete, false);
-    const settledDispatch = await f.runtime.dispatch({ ...common, laneTasks: reviewers,
-      review: { dispatchId: pending.details.dispatchId } }, undefined, f.ctx);
+    assert.equal(latest().finalValidation.attempts, 1);
+    assert.deepEqual(resumed.details.implementation.allowedFiles, ["parser.mjs", extra].sort());
+    const expanded = { ...common, implementation: resumed.details.implementation };
+    f.reload();
+    const settledDispatch = await f.runtime.dispatch({ ...expanded, laneTasks: reviewers,
+      review: { dispatchId: resumed.details.dispatchId } }, undefined, f.ctx);
     await f.runtime.flush();
     const settled = await f.settle();
     assert.equal(settled.status.state, "complete");
     assert.deepEqual(settled.calls, Object.keys(reviewers ?? {}));
     assert.equal(latest().batchOutcome.complete, true);
     assert.equal(latest().finalValidationPass.snapshotId, latest().snapshotId);
-    assert.equal(f.prompts, 1);
+    assert.equal(f.prompts, 2);
     if (delivery === "reviewed") {
       f.reload();
-      await assert.rejects(() => f.runtime.dispatch({ ...common, laneTasks: { implement: "another repair" },
+      await assert.rejects(() => f.runtime.dispatch({ ...expanded, laneTasks: { implement: "another repair" },
         finalValidationRepair: { dispatchId: settledDispatch.details.dispatchId, command: "false", expectedFailure: "regression" },
       }, undefined, f.ctx), /Post-review repair budget exhausted/);
-      assert.equal(f.prompts, 1);
+      assert.equal(f.prompts, 2);
     }
   });
 });
@@ -1406,7 +1591,7 @@ test("candidate proof preserves the primary proof failure when owned cleanup als
   });
 });
 
-test("a repair-only proof survives same-snapshot formal review and reviewer recovery, then unlocks the next ticket", async () => {
+test("a scoped finding repair keeps its proof through expansion and formal review; reviewer recovery still reuses its proof", async () => {
   const base = { workflow: "matt-tdd", task: "shared",
     laneTasks: { implement: "implement", standards: "standards", spec: "spec" } };
   const acceptanceFinding = {
@@ -1419,23 +1604,29 @@ test("a repair-only proof survives same-snapshot formal review and reviewer reco
     axis: "spec", verdict: "FAIL", summary: "blocked", findings: [acceptanceFinding], notes: [],
   } };
   await batchFixture(async f => {
-    const initial = await f.runtime.dispatch({ ...base, implementation: implementation(T1),
-      batch: batchParams(f.fixedPoint) }, undefined, f.ctx);
+    const batch = batchParams(f.fixedPoint);
+    const scoped = Object.assign(batch.tickets[0], { delivery: "reviewed", allowedDirectories: [] });
+    const initial = await f.runtime.dispatch({ ...base, implementation: scoped, batch }, undefined, f.ctx);
     await f.runtime.flush();
     await f.settle({ reviews: { standards: review("standards"), spec: specFail } });
-    const repair = await f.runtime.dispatch({ ...base, implementation: implementation(T1),
+    const repair = await f.runtime.dispatch({ ...base, implementation: scoped,
       repair: { previousDispatchId: initial.details.dispatchId,
         groups: [{ id: "parser", findingIds: ["spec:parse"], contract: "implement behavior",
           preserve: ["original parser contract"], validationOrder: "validate -> parse",
           callPath: ["public -> parser"], examples: ["works"] }] } }, undefined, { ...f.ctx, hasUI: false });
     assert.equal(repair.details.authorization, "batch-plan");
     await f.runtime.flush();
-    const repaired = await f.settle({ value: "repaired\n" });
-    assert.deepEqual(repaired.calls, ["claim", "implement", "evidence"]);
+    const newTest = "parser.repair.test.mjs";
+    await f.settle({ workerOverride: scopeBlocked(newTest) });
+    const continued = await f.runtime.dispatch(recoverScope(repair.details.dispatchId), undefined, f.ctx);
+    await f.runtime.flush();
+    const repaired = await f.settle({ value: "repaired\n", files: { [newTest]: "repair regression\n" } });
+    assert.deepEqual(repaired.calls, ["claim", "check-writer-timeout-start", "implement", "evidence"]);
+    assert.deepEqual(repaired.status.workflow.value[0].hostVerification.accounting.unresolvedFindingIds, []);
     const repairRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
     assert.ok(repairRecord.batchOutcome.candidate);
     assert.equal(repairRecord.batchOutcome.complete, false);
-    const reviewDispatch = await f.runtime.dispatch({ ...base, implementation: implementation(T1),
+    const reviewDispatch = await f.runtime.dispatch({ ...base, implementation: continued.details.implementation,
       review: { dispatchId: repairRecord.id } }, undefined, { ...f.ctx, hasUI: false });
     assert.equal(reviewDispatch.details.authorization, "batch-plan");
     await f.runtime.flush();
@@ -1444,13 +1635,13 @@ test("a repair-only proof survives same-snapshot formal review and reviewer reco
     const reviewRecord = f.entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY).at(-1).data;
     assert.equal(reviewRecord.batchOutcome.complete, true);
     assert.deepEqual(reviewRecord.batchOutcome.candidate, repairRecord.batchOutcome.candidate);
-    await git(f.ctx.cwd, "add", "parser.mjs");
+    await git(f.ctx.cwd, "add", "parser.mjs", newTest);
     await git(f.ctx.cwd, "commit", "-qm", "reviewed repair");
     await resolveTicket(f.ctx.cwd, T1, await git(f.ctx.cwd, "rev-parse", "HEAD"));
     const next = await f.runtime.dispatch({ ...base, implementation: implementation(T2) },
       undefined, { ...f.ctx, hasUI: false });
     assert.equal(next.details.authorization, "batch-plan");
-    assert.equal(f.prompts, 1);
+    assert.equal(f.prompts, 2);
   });
   await batchFixture(async f => {
     const initial = await f.runtime.dispatch({ ...base, implementation: implementation(T1),

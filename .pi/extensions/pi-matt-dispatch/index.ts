@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { registerWorkflowResource } from "pi-subagents/workflow-resources";
 import { createImplementationRuntime } from "../../../lib/implementation-runtime.mjs";
@@ -9,12 +9,31 @@ import { createImplementationRuntime } from "../../../lib/implementation-runtime
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const text = () => Type.String({ minLength: 1 });
 const strings = () => Type.Array(text(), { minItems: 1 });
+const writeBoundary = {
+  allowedFiles: Type.Optional(Type.Array(text(), { description: "Exact write paths. Required unless approved directories cover the work." })),
+  allowedDirectories: Type.Optional(Type.Array(text(), { description: "Enables the scoped writer. Use narrow canonical project-relative directories, including new files, for verified delivery; [] for exact-file-only guarded work. Omit for legacy grants." })),
+};
 const delivery = () => Type.Optional(Type.Union([Type.Literal("verified"), Type.Literal("reviewed")], {
   description: "User-approved delivery policy. verified: routine work with required host preReviewCommands and no reviewer. reviewed: high-risk work with independent review and at most one repair after review. Omission retains existing dual-review plans.",
 }));
 
 export default function (pi: ExtensionAPI) {
-  const runtime = createImplementationRuntime(pi, PACKAGE_ROOT);
+  const runtime = createImplementationRuntime(pi, PACKAGE_ROOT, {
+    async resolveWriterModel(cwd: string, ctx: ExtensionContext) {
+      // Use the same agent resolution as an unguarded writer, including provider-specific settings.
+      const { resolveSubagentLaunchContract } = await import("pi-subagents/preflight");
+      const launch = await resolveSubagentLaunchContract({
+        agent: "matt-worker", cwd, context: "fresh", artifacts: false, runtimeSnapshotHost: pi,
+        parentModel: ctx.model, availableModels: ctx.modelRegistry.getAvailable(),
+        knownProviders: () => [...new Set(ctx.modelRegistry.getAll().map(model => model.provider))],
+        scopedModelIds: ctx.scopedModels.map(({ model }) => `${model.provider}/${model.id}`),
+      });
+      if (!launch.ok) throw new Error(`Cannot resolve the original matt-worker model: ${launch.message}`);
+      const { model, thinking } = launch.contract;
+      if (!model) throw new Error("A scoped writer requires a native Pi model for matt-worker");
+      return { model, thinking };
+    },
+  });
   let resource: { dispose(): void } | undefined;
   let unsubscribe: Array<() => void> = [];
   const observeRuntime = () => [
@@ -92,9 +111,10 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: [
       "Use pi_matt_dispatch for workflows defined by this project's parent skills; never bypass registry validation.",
       "For routine matt-tdd work use implementation.delivery='verified', approved preReviewCommands covering the changed behavior, and laneTasks.implement only. Use 'reviewed' for high-risk work or inadequate deterministic coverage; supply both reviewer tasks then. Do not change the approved delivery policy during a follow-up.",
-      "For matt-tdd envelopeViolation with a persisted complete Pack and COMPLETE writer, add only the required allowedFiles and use recollect with the latest dispatchId after explicit reapproval. Omit laneTasks. Recollect runs the collector and any checks skipped due to the violation. Never recollect other failures or repeat initial implementation.",
+      "For new tickets, standalone or batch, locate the source and test modules read-only. Set allowedDirectories in implementation and the matching batch entry to narrow verified directories (or [] for exact-only guarded work). Use scopeRecovery only after a scoped writer returns BLOCKED with scopeBlocker and a host checkpoint. Confirm only that ticket's added scope and resume the same writer; do not use it to adopt out-of-scope writes.",
+      "For legacy exact-file matt-tdd envelopeViolation with a persisted complete Pack and COMPLETE writer, add only the required allowedFiles and use recollect with the latest dispatchId after explicit reapproval. Omit laneTasks. Never recollect scoped writer failures or repeat initial implementation.",
       "For an initial batch environment BLOCKED with a host-sealed snapshot, use blockedRecovery with the latest dispatchId only after the environment is fixed. Omit batch and keep the exact envelope and its lane tasks. The host requires explicit user confirmation and resumes only the original writer.",
-      "For a sealed initial writer timeout in a single ticket or batch, the host automatically resumes the same writer once after eligible settlement. Leave the worktree and index untouched between attempts. Standalone writers may finish code and tests only within the original file envelope; batch writers only finish verification and reporting. If the first continuation times out and the host reports eligibility, use timeoutRecovery with the latest dispatchId. Provide only workflow, task and timeoutRecovery; the host reuses the original envelope and tasks and asks the user before allowing a second continuation.",
+      "For a sealed initial writer timeout, the host automatically resumes the same writer once after eligible settlement. Leave the worktree and index untouched between attempts. Standalone writers may finish code and tests within the approved scope; batch writers only finish verification and reporting on the sealed candidate. If the first continuation times out and the host reports eligibility, send only workflow, task and timeoutRecovery with the latest dispatchId; the host reuses the approved scope and tasks and requires confirmation.",
       "After a batch ticket has passed its implementation gate, use finalValidationRepair for an evidenced final regression. Omit batch; supply only laneTasks.implement, the exact command and literal failure text. Commands not pre-approved require confirmation. Finish via review: on verified delivery omit laneTasks (host checks only); on reviewed delivery supply both incremental reviewer tasks.",
       "For matt-code-review, pass reviewScope {kind:'committed', fixedPoint} only when the review target is already-committed history. The host resolves F, verifies ancestry of the current HEAD and pins H; it captures one read-only Git-object Pack before both reviewers. Never pass your own hash, HEAD, path or command. Omit reviewScope for the existing manual worktree/files evidence path.",
       "For matt-tdd reuse the approved implementation scope. A reviewed ticket permits one repair after review, including final validation repair; use review on the resulting candidate, then stop if blocked. repair runs only the retained writer. A failed execution may use writerRecovery once with only the implement task when eligible. Pending review is not delivery approval. Use recovery for failed reviewers or at most two report corrections per axis per candidate; disputed valid FAIL findings use reconsider. DIAGNOSIS_REQUIRED stops patch dispatch.",
@@ -112,9 +132,9 @@ export default function (pi: ExtensionAPI) {
       implementation: Type.Optional(Type.Object({
         ticket: Type.String({ minLength: 1, description: "Exact active project-relative ticket path, or slice:<stable-id> for an approved direct slice." }),
         scope: Type.String({ minLength: 1, description: "Stable approved behavior/contract and architecture boundaries; unchanged across repairs." }),
-        allowedFiles: strings(),
+        ...writeBoundary,
         diagnosticFiles: Type.Optional(Type.Array(text(), {
-          description: "Exact subset of allowedFiles the host may add or replace only inside its isolated diagnostic workspace.",
+          description: "Exact test/fixture paths inside the approved write scope that the host may add or replace inside its isolated diagnostic workspace.",
         })),
         diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands; runtime diagnosis is bounded to 30 seconds." })),
         delivery: delivery(),
@@ -144,6 +164,10 @@ export default function (pi: ExtensionAPI) {
       timeoutRecovery: Type.Optional(Type.Object({
         dispatchId: text(),
       }, { additionalProperties: false, description: "matt-tdd only: request a second same-writer continuation after the initial writer and its automatic continuation both timed out. Requires explicit user confirmation and the latest sealed candidate under the original authority. Omit implementation, batch and laneTasks." })),
+      scopeRecovery: Type.Optional(Type.Object({
+        dispatchId: text(),
+        directories: Type.Optional(strings()),
+      }, { additionalProperties: false, description: "Scoped matt-tdd only: the latest trusted scope BLOCKED checkpoint. Confirm added exact paths or narrow directories for this ticket only, then resume the same writer with its remaining budget. Omit implementation, batch and laneTasks." })),
       finalValidationRepair: Type.Optional(Type.Object({
         dispatchId: text(),
         command: Type.Optional(text()),
@@ -158,8 +182,8 @@ export default function (pi: ExtensionAPI) {
         tickets: Type.Array(Type.Object({
           ticket: Type.String({ minLength: 1, description: "Exact active declared ticket path; Parent must equal the approved spec." }),
           scope: Type.String({ minLength: 1, description: "Approved behavior/contract and architecture boundary for this ticket." }),
-          allowedFiles: strings(),
-          diagnosticFiles: Type.Optional(Type.Array(text(), { description: "Exact subset of allowedFiles for host-isolated diagnostics only." })),
+          ...writeBoundary,
+          diagnosticFiles: Type.Optional(Type.Array(text(), { description: "Exact test/fixture paths within the approved write scope, for host-isolated diagnostics only." })),
           diagnosticCommands: Type.Optional(Type.Array(text(), { description: "Exact approved local repro commands." })),
           delivery: delivery(),
           preReviewCommands: Type.Optional(Type.Array(text(), { maxItems: 6, description: "Exact approved deterministic checks the host runs after every writer run and before any review." })),

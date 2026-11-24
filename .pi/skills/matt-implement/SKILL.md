@@ -28,14 +28,18 @@ metadata:
 3. 对 ticket 核对 title、type、parent、status、blocked-by、acceptance criteria 和 scope。Local Markdown 只接受 `Type: ticket` 且 `Status: ready-for-agent` 的入口；ticket 路径、Parent 或任何待读取 blocker 一旦位于 `.x-matt/work/shipped/`，立即 fail closed，提示该 ticket 已随 spec 归档，不能实现、重新开启或借 archived blocker 解锁 active ticket。默认不得枚举 shipped 内容；用户同一会话点名授权也仅允许历史只读，不构成实现授权。`Parent: None` 只表示没有 parent spec 的当前会话单 slice，其他 Parent 值必须作为 ticket 中声明的仓库相对路径读取，并核对目标是 active `Type: spec`、`Status: spec-ready`。如果目标项目提供 `scripts/check-local-ticket.mjs`，它只做 Parent 字段存在性与 shipped 非入口 preflight，不能替代该 relationship 核验；没有该脚本时直接执行本段的人工读取核验。逐个读取 `Blocked by` 引用，只有 blocker 同时为 `Type: ticket` 且 `Status: resolved` 才算完成。只实现一个 ticket；parent/blocker 未完成、ticket reference 无法核验或输入互相矛盾时停止。没有 ticket 时，必须在当前会话中找到 grilling/diagnosis 等上游流程留下的明确 direct-slice handoff 和用户授权；greenfield、多业务流程、多个独立测试切入点、部署或迁移工作，以及依赖用户提供且不能安全压缩的事实、说明、样例或约束的工作，不得作为无 ticket 单 slice 开始。材料类型不限于技术 contract。
    Local Markdown tracker 只在本机维护：按 `.x-matt/agents/issue-tracker.md` 核验当前 feature 受本地 Git exclude 保护且未被跟踪，否则停止并提示先修复配置。按精确路径直接读取 ignored ticket/parent/blocker，不依赖 Git-aware 搜索或 `git show`；在 Context Pack 中提供内容与 hash，不能因它们不在 Git diff 中就判为缺失。对每个 resolved blocker 还须读取 Comments 的完整 `Implementation commit`，核验 commit 存在且 `git merge-base --is-ancestor <SHA> HEAD` 成功；记录缺失或仅在其他 branch 上存在时停止，不能用本地残留状态解锁。metadata checker 不能替代此核验。
 4. 从 ticket 或当前会话单 slice 计划中提取候选测试切入点，并先做测试价值判断。显式 acceptance criterion、缺陷回归、业务规则、分支/状态转换、权限/数据完整性和公开 contract 必须有测试；不要仅因代码行数少而跳过。纯机械且已被现有行为测试覆盖的映射、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格明确排除的假设性边缘情况，不必新增独立测试方法；多个紧密相关的简单字段优先由一个行为级测试覆盖，而不是一字段一测试。参数化案例按独立行为、字段映射和共享校验等价类选取：同一等价类保留一个代表输入即可，不默认生成字段×状态×错误值的全排列；只有当某个组合本身产生不同的可观察行为、状态转换或安全/数据完整性风险时才单独保留。不为压缩数量而合并独立行为，也不规定测试案例数上限。把保留的测试行为、代表输入、预计展开次数和省略项的理由都写入 TDD task。若没有可执行的公开测试切入点、行为或聚焦测试命令，停止并报告缺口；不要在 implement 中重新设计。
-5. 按 [Context Pack 契约](../matt-tdd/context-packs.md) 生成明确的 Implementation Context Pack：ticket 内容/准确摘要、parent/blocker 核验、acceptance matrix、known code map、expected change points、fixed point、文件 hash、精确 manifest（关系与必须/按需读取）、允许修改范围、定向搜索的一层边界和停止条件。验证命令分为 RED/GREEN、worker 相关回归、parent-only final validation；完整测试套件与全量 typecheck/build 仅由父会话保留和执行，不得把父会话最终验证命令作为 worker 执行项下发。
+5. 先只读核实实际源码、直接调用者和测试模块，再按 [Context Pack 契约](../matt-tdd/context-packs.md) 生成 Implementation Context Pack。**读过的精确 manifest 与用户批准的写入范围是两份不同的清单。** 新单票普通改动提议经核实的窄目录及目录外少量精确路径，不必猜目录内的新文件名；`reviewed` 只提议精确路径。目录不存在时，核实其真实父模块及新建理由再授权。用 RED/GREEN、worker 相关回归、parent-only final validation 区分命令；完整测试套件与全量 typecheck/build 仅由父会话保留和执行，不得把父会话最终验证命令作为 worker 执行项下发。
 6. 完整读取并应用 [domain-modeling](../matt-domain-modeling/SKILL.md) 的写入边界。worker 若在实现中发现值得持久化的新术语或 ADR 级决定，必须通过 `contact_supervisor` 报告而不是写领域文档；当前 TDD run 随即停止为 `BLOCKED`。run 退出后由父会话按 domain-modeling gate 取得用户决定并仅写本地资料，再以新基线重新调度，确保父会话与 worker 不并行写同一工作区；源码维护例外遵循已声明边界。
 
 ## 执行顺序
 
 ### 1. 实现并验证候选
 
-按 [TDD](../matt-tdd/SKILL.md) 调用 `pi_matt_dispatch`（`workflow`: `matt-tdd`），保存宿主 `dispatchId`。`/skill:matt-implement` 只启动编排，不替代授权；宿主尚无有效授权时，对具体范围确认一次。信封绑定 ticket、精确允许路径与命令；无可信授权且无 UI 的 print/JSON mode 仍须 fail closed。增加文件或替换命令须真实重新确认，不重开 initial、不重置发现或基线。
+按 [TDD](../matt-tdd/SKILL.md) 调用 `pi_matt_dispatch`（`workflow`: `matt-tdd`），保存宿主 `dispatchId`。`/skill:matt-implement` 只启动编排，不替代授权；宿主尚无有效授权时，对具体范围确认一次。信封绑定 ticket、写入边界与命令；无可信授权且无 UI 的 print/JSON mode 仍须 fail closed。扩大边界或替换命令须真实重新确认，不重开 initial、不重置发现或基线。
+
+新工单用 `implementation.allowedDirectories` 启用受控写入：普通票填核实后的窄目录，可配目录外 `allowedFiles`；高风险、只有精确路径时传 `[]` 和 `allowedFiles`。批次从该票已确认的条目继承；旧信封沿用原形状。不预先列获批目录内每个新文件。将 worker 的 RED/GREEN 与聚焦命令精确登记在 `diagnosticCommands` / `preReviewCommands`，供受控 writer 在原项目环境执行；命令不得改写 Git 候选或 index。独立的父会话验收不加入子写者命令清单。
+
+writer 的写工具会在越界落盘前拒绝。若宿主报告可信 `scopeBlocker`，不要自己改草稿或重派 initial；先只读核实它列出的全部新增路径和理由，再用最新派发 ID 请求 [`scopeRecovery`](../matt-tdd/dispatch-contract.md#单票按范围授权与扩围)。用户同意后同一 writer 用剩余时间继续。已经写出界、候选漂移、未封存或不愿扩围则停下。
 
 | 当前票 | `implementation.delivery` | 候选门禁 |
 | --- | --- | --- |

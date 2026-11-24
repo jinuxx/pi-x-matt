@@ -7,11 +7,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
+import { registerAgent, RUNTIME_AGENT_REGISTER_EVENT } from "pi-subagents/agents";
 import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
 import { IMPLEMENTATION_ENTRY } from "../lib/repair-contract.mjs";
 import { resolveImplementationScope } from "../lib/dispatch-authorization.mjs";
 import { batchOutcome } from "../lib/batch-authorization.mjs";
-import { collectReviewEvidence, renderReviewEvidence } from "../lib/review-evidence.mjs";
+import { collectReviewEvidence, renderReviewEvidence, runScopedWriterCheck } from "../lib/review-evidence.mjs";
+import { SCOPED_WRITER_AGENT, SCOPED_WRITER_TOOLS, scopedWriteTarget, WRITER_SCOPE_BINDING, WRITER_WAIT_FILE } from "../lib/writer-scope.mjs";
 
 const exec = promisify(execFile);
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -32,7 +34,7 @@ const review = (axis, fail = false, item = finding) => ({ key: axis, ok: true,
 async function fixture(run) {
   const cwd = await mkdtemp(join(tmpdir(), "matt-runtime-project-"));
   const artifacts = await mkdtemp(join(tmpdir(), "matt-runtime-status-"));
-  const entries = [], launches = [], notices = [];
+  const entries = [], launches = [], notices = [], registeredAgents = [];
   let prompts = 0, runtime;
   const ctx = {
     cwd, hasUI: true, isProjectTrusted: () => true,
@@ -40,11 +42,18 @@ async function fixture(run) {
     ui: { confirm: async () => { prompts++; return true; } },
   };
   const pi = {
+    on() {}, registerTool() {},
     appendEntry: (customType, data) => entries.push({ type: "custom", customType, data: structuredClone(data) }),
-    events: { emit() {} }, sendUserMessage: text => notices.push(text),
+    events: { emit(type, request) {
+      if (type !== RUNTIME_AGENT_REGISTER_EVENT) return;
+      registeredAgents.push({ name: request.name, ...request.definition });
+      request.result = { ok: true, registration: registerAgent({ pi, name: request.name, definition: request.definition }) };
+    } }, sendUserMessage: text => notices.push(text),
   };
   const reload = (overrides = {}) => {
+    runtime?.shutdown();
     runtime = createImplementationRuntime(pi, ROOT, {
+      resolveWriterModel: async () => ({ model: "test/original-writer:high", thinking: "high" }),
       rpc: async (method, params) => {
         assert.equal(method, "spawn");
         if (params.workflow) {
@@ -74,8 +83,12 @@ async function fixture(run) {
   // host-requested correction turn: { value } rewrites parser.mjs, the rest overrides its result.
   const settle = async ({ fail = false, executionFailure = false, value = "patched\n", files = {}, findingOverride,
     workerOverride, settlement, reviews, beforeEvidence, beforeHost, beforeCompletion,
-    resolutions, correction = {}, receiptFailure = false, notifyCompletion = true } = {}) => {
+    resolutions, correction = {}, receiptFailure = false, notifyCompletion = true,
+    durationMs = 12_000, supervisorWaitMs = 0 } = {}) => {
     const launch = launches.at(-1), calls = [], itemsSeen = [], emits = [], trace = [];
+    const { writerBinding, evidence } = lastImplementation({ entries });
+    const writer = writerBinding ? SCOPED_WRITER_AGENT : "matt-worker";
+    if (writerBinding) await writeFile(join(dirname(evidence.baselinePath), WRITER_WAIT_FILE), String(supervisorWaitMs));
     // A compliant writer accounts for exactly the finding IDs its handoff names.
     const accounted = (task, rows) => {
       const ids = JSON.parse(task.match(/"approvedFindingIds":(\[[^\]]*\])/)?.[1] ?? "[]");
@@ -95,17 +108,17 @@ async function fixture(run) {
               await mkdir(dirname(join(cwd, path)), { recursive: true });
               await writeFile(join(cwd, path), content);
             }
-            results.push({ key: "implement", ok: true, agent: "matt-worker",
+            results.push({ key: "implement", ok: true, agent: item.agent ?? writer,
               runId: `${launch.runId}-writer`, resumability: { state: "resumable" },
               structuredOutput: accounted(item.task, resolutions),
               ...workerOverride });
           } else if (item.key === "implement-settlement" && settlement) {
-            results.push({ key: item.key, ok: true, agent: "matt-worker", runId: `${launch.runId}-settlement`,
+            results.push({ key: item.key, ok: true, agent: writer, runId: `${launch.runId}-settlement`,
               resumability: { state: "resumable" }, ...settlement });
           } else if (item.key === "implement-correction") {
             const { value: corrected, ...override } = correction;
             if (corrected !== undefined) await writeFile(join(cwd, "parser.mjs"), corrected);
-            results.push({ key: item.key, ok: true, agent: "matt-worker",
+            results.push({ key: item.key, ok: true, agent: writer,
               runId: `${launch.runId}-correction`, resumability: { state: "resumable" },
               continuation: { runIds: [item.resume] }, structuredOutput: accounted(item.task), ...override });
           } else if (reviews?.[item.key]) {
@@ -114,6 +127,8 @@ async function fixture(run) {
             results.push({ key: "spec", ok: false, error: "fetch failed" });
           } else results.push(review(item.key, item.key === "spec" && fail, findingOverride));
         }
+        for (const result of results) trace.push({ operation: "run", key: result.key, runId: result.runId,
+          state: result.ok ? "completed" : "failed", durationMs });
         return results;
       },
       host: async (key, options) => {
@@ -146,9 +161,10 @@ async function fixture(run) {
     for (const args of [["init", "-q"], ["config", "user.email", "test@example.invalid"],
       ["config", "user.name", "Test"], ["add", "."], ["commit", "-qm", "baseline"]]) await exec("git", args, { cwd });
     reload();
-    await run({ ctx, pi, params, entries, launches, notices, reload, settle,
+    await run({ ctx, pi, params, entries, launches, notices, registeredAgents, reload, settle,
       get runtime() { return runtime; }, get prompts() { return prompts; } });
   } finally {
+    runtime?.shutdown();
     const evidenceDirs = new Set(entries.filter(entry => entry.customType === IMPLEMENTATION_ENTRY)
       .map(entry => entry.data.evidence?.path).filter(Boolean).map(dirname));
     for (const path of evidenceDirs) await rm(path, { recursive: true, force: true });
@@ -161,6 +177,178 @@ const timedOutWriter = { ok: false, structuredOutput: undefined, terminalOutcome
 const blockedSettlement = { structuredOutput: { ...worker, status: "BLOCKED", summary: "Tests and implementation not finished" } };
 const timeoutFollowUp = dispatchId => ({ workflow: "matt-tdd", task: "Continue writer", timeoutRecovery: { dispatchId } });
 const lastImplementation = f => f.entries.findLast(entry => entry.customType === IMPLEMENTATION_ENTRY).data;
+
+const scopeBlocked = paths => ({ structuredOutput: { ...worker, status: "BLOCKED", summary: "Need actual project paths",
+  scopeBlocker: { paths, reason: "Original approval has the wrong module layout" } } });
+const recoverScope = (dispatchId, directories) => ({ workflow: "matt-tdd", task: "Continue within the newly approved boundary",
+  scopeRecovery: { dispatchId, ...(directories && { directories }) } });
+
+async function startScopedTicket(f, directories) {
+  for (const path of [...directories, "framework/property", "manager/session"]) {
+    await mkdir(join(f.ctx.cwd, path), { recursive: true });
+  }
+  f.ctx.ui.notify = text => f.notices.push(text);
+  const initial = await f.runtime.dispatch({
+    ...f.params, implementation: { ...f.params.implementation, delivery: "verified",
+      allowedDirectories: directories, preReviewCommands: ["node -e 'process.exit(0)'"] },
+    laneTasks: { implement: f.params.laneTasks.implement },
+  }, undefined, f.ctx);
+  await f.runtime.flush();
+  return initial.details.dispatchId;
+}
+
+test("scoped single ticket checks and delivers new files in an approved directory without another prompt", async () => {
+  await fixture(async f => {
+    await startScopedTicket(f, ["framework/property", "manager/session"]);
+    const result = await f.settle({ files: { "framework/property/Scope.java": "source\n", "manager/session/ScopeTest.java": "test\n" } });
+    assert.equal(result.status.state, "complete", result.status.error);
+    assert.equal(f.prompts, 1);
+    assert.deepEqual(result.calls, ["claim", "implement", "pre-review", "evidence"]);
+    const record = lastImplementation(f);
+    assert.equal(result.itemsSeen[0].agent, SCOPED_WRITER_AGENT);
+    assert.deepEqual(f.registeredAgents.map(agent => agent.name), [SCOPED_WRITER_AGENT]);
+    const [agent] = f.registeredAgents;
+    assert.deepEqual(agent.runner, { type: "pi" });
+    assert.equal(agent.model, "test/original-writer:high");
+    assert.equal(agent.thinking, "high");
+    assert.equal(agent.allowNestedSubagents, false);
+    assert.deepEqual(agent.tools, SCOPED_WRITER_TOOLS);
+    assert.ok(!agent.tools.some(tool => ["write", "edit", "bash", "apply_patch"].includes(tool)));
+    assert.deepEqual(agent.subagentOnlyExtensions, [join(ROOT, "child-tools/scoped-writer.ts")]);
+    assert.equal(result.itemsSeen[0].extensionBindings[WRITER_SCOPE_BINDING], record.writerBinding.path);
+    assert.match(result.itemsSeen[0].task, /宿主已批准写入的目录.*framework\/property/);
+    const pack = JSON.parse(await readFile(record.evidence.snapshotPath, "utf8"));
+    assert.equal(pack.envelopeViolation, undefined);
+    assert.deepEqual(pack.incremental.changes.map(row => row.path), [
+      "framework/property/Scope.java", "manager/session/ScopeTest.java", "parser.mjs",
+    ]);
+    assert.equal(result.status.workflow.value[0].hostVerification.preReview.snapshotId, pack.snapshotId);
+  });
+});
+
+test("scoped writer stops before wrong-directory writes and resumes the retained writer only after expansion", async () => {
+  await fixture(async f => {
+    const first = await startScopedTicket(f, ["old-location"]);
+    const path = "framework/property/Scope.java", testPath = "manager/session/ScopeTest.java";
+    const original = lastImplementation(f);
+    const before = JSON.parse(await readFile(original.writerBinding.path, "utf8"));
+    await assert.rejects(scopedWriteTarget(f.ctx.cwd, before, path), /blocked before mutation/);
+    await assert.rejects(scopedWriteTarget(f.ctx.cwd, before, testPath), /blocked before mutation/);
+    const paused = await f.settle({ workerOverride: scopeBlocked([path, testPath]),
+      durationMs: 1_205_000, supervisorWaitMs: 1_193_000 });
+    assert.deepEqual(paused.calls, ["claim", "implement", "seal-writer-scope"]);
+    assert.match(paused.status.error, /paused before/);
+    assert.match(f.notices.at(-1), /Scope\.java.*ScopeTest\.java/);
+    await assert.rejects(readFile(join(f.ctx.cwd, path)), /ENOENT/);
+    await assert.rejects(readFile(join(f.ctx.cwd, testPath)), /ENOENT/);
+    await assert.rejects(() => f.runtime.dispatch(recoverScope(first, ["arbitrary"]), undefined, f.ctx), /actually requested/);
+    await assert.rejects(() => f.runtime.dispatch(recoverScope(first), undefined, { ...f.ctx, hasUI: false }), /explicit user authorization/);
+    assert.equal(f.prompts, 1);
+    const confirm = f.ctx.ui.confirm;
+    f.ctx.ui.confirm = async () => false;
+    await assert.rejects(() => f.runtime.dispatch(recoverScope(first), undefined, f.ctx), /was not authorized/);
+    f.ctx.ui.confirm = confirm;
+    assert.equal(f.launches.length, 1, "declining expansion never launches a writer");
+    assert.deepEqual(JSON.parse(await readFile(original.writerBinding.path, "utf8")), before);
+    f.reload();
+    await f.runtime.dispatch(recoverScope(first, ["framework/property"]), undefined, f.ctx);
+    assert.deepEqual(JSON.parse(await readFile(original.writerBinding.path, "utf8")), before, "not widened before launch");
+    await f.runtime.flush();
+    const approved = JSON.parse(await readFile(original.writerBinding.path, "utf8"));
+    assert.deepEqual(approved.allowedDirectories, ["framework/property", "old-location"]);
+    assert.deepEqual(approved.allowedFiles, [testPath, "parser.mjs"]);
+    assert.equal(f.prompts, 2);
+    const result = await f.settle({ files: { [path]: "source\n", [testPath]: "test\n" } });
+    assert.equal(result.status.state, "complete", result.status.error);
+    assert.deepEqual(result.calls, ["claim", "check-writer-timeout-start", "implement", "pre-review", "evidence"]);
+    assert.equal(result.itemsSeen[0].resume, "run-0-writer");
+    assert.equal(result.itemsSeen[0].extensionBindings, undefined, "retained native binding cannot be passed again");
+    assert.equal(result.itemsSeen[0].timeoutMs, 1_200_000 - 12_000);
+  });
+});
+
+test("host verification refuses a scoped writer check that changed even an approved file", async () => {
+  await fixture(async f => {
+    await startScopedTicket(f, ["framework/property"]);
+    const artifacts = dirname(lastImplementation(f).evidence.baselinePath);
+    const result = await f.settle({ beforeHost: async key => {
+      if (key !== "pre-review") return;
+      await assert.rejects(runScopedWriterCheck(f.ctx.cwd, artifacts, () =>
+        writeFile(join(f.ctx.cwd, "parser.mjs"), "changed by check\n")), /Git candidate or index/);
+    } });
+    assert.equal(result.status.state, "failed");
+    assert.match(result.status.error, /Approved writer check changed the Git candidate or index/);
+    assert.deepEqual(result.calls, ["claim", "implement", "pre-review", "evidence"]);
+    await assert.rejects(readFile(lastImplementation(f).evidence.snapshotPath), /ENOENT/);
+    assert.equal(await readFile(join(f.ctx.cwd, "parser.mjs"), "utf8"), "changed by check\n");
+  });
+});
+
+test("scope recovery rejects drift and does not adopt already-written out-of-scope files", async () => {
+  for (const failure of ["drift", "out-of-scope"]) await fixture(async f => {
+    const first = await startScopedTicket(f, ["framework/property"]);
+    const outside = "manager/session/ScopeTest.java";
+    const paused = await f.settle({ workerOverride: scopeBlocked([outside]),
+      files: failure === "out-of-scope" ? { [outside]: "must not adopt\n" } : {} });
+    if (failure === "drift") await writeFile(join(f.ctx.cwd, "parser.mjs"), "changed after pause\n");
+    else assert.match(paused.status.error, /outside the approved envelope/);
+    await assert.rejects(() => f.runtime.dispatch(recoverScope(first), undefined, f.ctx),
+      failure === "drift" ? /snapshot is stale/ : /No trusted scope BLOCKED/);
+    assert.equal(f.prompts, 1);
+    assert.equal(f.launches.length, 1);
+  });
+});
+
+test("reviewed scope expansion during host-check correction stays exact and still requires both reviewers", async () => {
+  await fixture(async f => {
+    const check = `node -e "process.exit(Number(require('fs').readFileSync('parser.mjs','utf8') !== 'green'))"`;
+    const initial = await f.runtime.dispatch({ ...f.params, implementation: { ...f.params.implementation,
+      allowedDirectories: [], delivery: "reviewed", preReviewCommands: [check] } }, undefined, f.ctx);
+    await f.runtime.flush();
+    const paused = await f.settle({ correction: scopeBlocked(["parser.test.mjs"]) });
+    assert.deepEqual(paused.calls, ["claim", "implement", "pre-review", "implement-correction", "seal-correction-scope"]);
+    await assert.rejects(() => f.runtime.dispatch(recoverScope(initial.details.dispatchId, ["tests"]), undefined, f.ctx),
+      /actually requested/);
+    await f.runtime.dispatch(recoverScope(initial.details.dispatchId), undefined, f.ctx);
+    await f.runtime.flush();
+    const passed = await f.settle({ value: "green", files: { "parser.test.mjs": "covers parser\n" } });
+    assert.equal(passed.status.state, "complete", passed.status.error);
+    assert.deepEqual(passed.calls, ["claim", "check-writer-timeout-start", "implement", "pre-review", "evidence", "standards", "spec"]);
+    assert.ok(passed.itemsSeen.slice(1).every(item => item.agent === "matt-reviewer" && !item.extensionBindings));
+    assert.equal(passed.itemsSeen[0].resume, "run-0-correction");
+    assert.equal(passed.itemsSeen[0].timeoutMs, 600_000 - 12_000);
+    assert.deepEqual(lastImplementation(f).scope.allowedDirectories, []);
+    assert.deepEqual(lastImplementation(f).scope.allowedFiles, ["parser.mjs", "parser.test.mjs"]);
+    assert.equal(f.prompts, 2);
+  });
+});
+
+test("scoped writer expansion during the first timeout continuation preserves the attempt count and remaining budget", async () => {
+  await fixture(async f => {
+    await startScopedTicket(f, ["framework/property"]);
+    await f.settle({ workerOverride: timedOutWriter, settlement: blockedSettlement });
+    assert.equal(f.launches.length, 2);
+    assert.equal(f.prompts, 1, "first timeout continuation stays automatic");
+    const automatic = lastImplementation(f);
+    await f.settle({ value: "partial second slice\n", workerOverride: scopeBlocked(["manager/session/ScopeTest.java"]) });
+    await f.runtime.dispatch(recoverScope(automatic.id), undefined, f.ctx);
+    await f.runtime.flush();
+    const expanded = await f.settle({ workerOverride: timedOutWriter, value: "remaining slice timed out\n" });
+    assert.deepEqual(expanded.calls, ["claim", "check-writer-timeout-start", "implement", "check-writer-timeout-end"]);
+    assert.equal(expanded.itemsSeen[0].resume, "run-1-writer");
+    assert.equal(expanded.itemsSeen[0].timeoutMs, 1_200_000 - 12_000);
+    assert.equal(f.launches.length, 3, "no second automatic timeout continuation");
+    assert.equal(f.prompts, 2, "only initial and expansion approval");
+    const followUp = timeoutFollowUp(lastImplementation(f).id);
+    await assert.rejects(() => f.runtime.dispatch(followUp, undefined, { ...f.ctx, hasUI: false }), /explicit user confirmation/);
+    await f.runtime.dispatch(followUp, undefined, f.ctx);
+    await f.runtime.flush();
+    const last = await f.settle({ files: { "manager/session/ScopeTest.java": "finish newly approved test\n" } });
+    assert.equal(last.status.state, "complete", last.status.error);
+    assert.equal(last.itemsSeen[0].timeoutMs, 1_200_000);
+    assert.equal(f.prompts, 3);
+  });
+});
 
 async function startStandaloneTimeout(f, overrides = {}) {
   f.ctx.ui.notify = text => f.notices.push(text);

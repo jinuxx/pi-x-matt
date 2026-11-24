@@ -54,6 +54,7 @@ Refactor 不属于当前 red→green 循环。除了为当前 GREEN 必需的最
 - `commands[]`：每个 RED/GREEN/related-regression 命令、phase、真实 exitCode、testCount（runner 不提供时为 null，禁止猜测）与 outcome；保留能核验数量和失败原因的输出摘要。这些是 worker-reported 测试记录，不得冒充 workflow 独立采集的 Git 证据
 - `residualRisks[]`：未覆盖行为、环境限制或待决事项
 - `environmentBlocker`：仅在返回 `BLOCKED` 且外部测试环境使聚焦测试未能启动时填写 `{ command, evidence }`，记录失败命令和脱敏后的实际诊断。业务、范围、验收冲突和正常测试断言失败不填。没有真实 RED/GREEN 的停点不写入 `cycles`；未取得的列表证据留空，不编造。
+- `scopeBlocker`：仅在宿主启用受控写入、确实需要未授权路径且尚未写入时，用 `BLOCKED` 一次返回 `{ paths: [精确仓库相对路径], reason: "为何这些路径是原工单所需" }`。先只读核实实际源码/测试位置；不得用 bash、`apply_patch`、私有文档或其他路径绕过写入限制。不要同时填 `environmentBlocker`。获批后延续原会话、预算和测试证据。
 - `findingResolutions[]`：仅修复任务提供，初次实现省略。对 task 中每个获批 finding ID 恰好一行：`findingId` 为带轴前缀的精确 ID；`cycleTest` 为本结果 `cycles` 中证明该修复的 `test`，确无测试可表达时为 `null`；`evidence` 说明改了什么、在哪里（`cycleTest` 为 `null` 时还须说明为何没有适用测试）。缺行、重复或未知 ID 会被宿主拒绝并阻止正式送审。这是自述交代，不是已修复的证据，不得把未真正解决的 finding 写成已解决
 
 缺少任一保留行为的真实 RED 证据、测试仍失败、无理由省略显式验收行为或改动超出批准范围时不得返回 `COMPLETE`。task 列出宿主评审前命令时，它们会在你返回后由宿主原样执行；可在返回前运行确认，已知因本次改动而失败时不要返回 `COMPLETE`。

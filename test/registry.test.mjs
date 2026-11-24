@@ -254,10 +254,12 @@ test("implement-spec keeps serial ticket gates and a distinct whole-spec review"
   assert.match(skill, /frontier.*编号.*路径/);
   assert.match(skill, /没有 frontier.*仍有未完成.*停止/);
   assert.match(skill, /顶层 `batch`/);
-  assert.match(skill, /宿主展示精确信封并确认一次/);
-  assert.match(skill, /每张 ticket.*scope.*allowedFiles/s);
+  assert.match(skill, /宿主展示并确认一次/);
+  assert.match(skill, /首次派发每票.*scope、写入边界、delivery 和获批命令.*与已确认条目一致/);
+  assert.match(skill, /窄 `allowedDirectories`，只补列目录外的 `allowedFiles`/);
   assert.match(skill, /不重复询问/);
-  assert.match(skill, /undeclared ticket.*额外文件\/命令/s);
+  assert.match(skill, /未声明的票、语义扩张和 tracker 图漂移不能静默执行/);
+  assert.match(skill, /命令变更仍需明确确认/);
   assert.match(skill, /不是全局写入权限/);
   assert.match(skill, /不跨 ticket 复用.*dispatchId/);
   assert.match(skill, /提交成功.*tracker.*核验.*下一张/);
@@ -361,7 +363,7 @@ test("package manifest exposes namespaced resources", async () => {
 test("dispatcher extension binds the package root and session lifecycle to the runtime", async () => {
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
   assert.match(extension, /const PACKAGE_ROOT = resolve\(dirname\(fileURLToPath\(import\.meta\.url\)\), "\.\.\/\.\.\/\.\."\)/);
-  assert.match(extension, /createImplementationRuntime\(pi, PACKAGE_ROOT\)/);
+  assert.match(extension, /createImplementationRuntime\(pi, PACKAGE_ROOT, \{\s*async resolveWriterModel/);
   assert.match(extension, /registerWorkflowResource/);
   assert.match(extension, /pi\.on\("turn_end", \(\) => runtime\.flush\(\)\)/);
   assert.match(extension, /pi\.on\("input", \(event, ctx\)/);

@@ -15,7 +15,7 @@ metadata:
 
 ## 准备
 
-- 复用已核验的 ticket、验收与项目规则，按 [Context Pack](context-packs.md) 提供基线、精确文件、变更点和停止条件；不重复发现上下文。
+- 复用已核验的 ticket、验收与项目规则，按 [Context Pack](context-packs.md) 分开提供精确读取清单、批准的写入边界和停止条件；不重复发现上下文。新单票和批次中的新票使用 `allowedDirectories`（精确模式为 `[]`）；旧信封不自动升级。
 - “测试切入点”是可从公开入口观察的行为。说明从哪个入口测、能验证什么、验证不到什么。测试价值 gate：覆盖明确验收、可达回归、独立状态变化以及权限/数据不变量；共享等价类只取代表例，不做全排列。简记省略测试的候选项及理由，不为增加数量测内部实现。
 - 选可在基线上通过、短时、确定、无工作区写入的聚焦测试或 typecheck 作为 `preReviewCommands`，不能用无关命令代替验收。纯环境失败不算 RED。完整测试套件与全量构建由父会话执行，worker 不得运行。
 
@@ -31,5 +31,7 @@ metadata:
 评审有阻断时按共同根因一次合并 `repair`，只续跑原 writer，核对全部 finding 和聚焦回归后，使用最新 `dispatchId` 显式 `review`，只核对原问题、修复直接影响的行为和有证据的新安全/完整性风险。`reviewed` 每票初审后最多修复一次（含最终验证续修）；仍失败就保留候选、等待用户决定。低价值建议放 `notes`，不派发 writer。真实 FAIL 不能用 prose、重做或改交付策略消掉。
 
 特殊状态才查 [宿主契约](dispatch-contract.md)：`recovery`（失败轴或报告纠错）、`reconsider`（具体异议）、`recollect`（只重采合格的越界候选）、`blockedRecovery` / `writerRecovery`（符合条件的原 writer）、`timeoutRecovery`（单票或批次首次实现自动续跑仍超时后，用户确认第二次续跑）、`finalValidationRepair`（批次实测回归）、`acceptRisk`（用户对普通 Standards P2 的精确候选确认，不称 PASS）。不重复 initial、不切换写者、不跑无关评审。
+
+只在受控 writer 写入前 `BLOCKED` 且宿主封存时，才可请求 `scopeRecovery`；它只确认当前票的新增写入权限，不改批次计划、验收或执行预算。已有越界内容不能从此入口交付。
 
 按 [Workflow Result Reading](results.md) 检查终态与 `structuredOutput`，并核对候选 Pack 和实时工作区。初次 `verified` 的合格结果只包含 implement 和宿主检查，不应补造缺失的轴；`reviewed` 还需两轴的有效结论。`repair` 的 `COMPLETE`、`reviewPending`、`reconsider` 的执行完成都不是交付通过。提交、tracker 和最终验证由父会话负责，TDD 不提交、不 push、不归档。

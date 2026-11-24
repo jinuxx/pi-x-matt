@@ -38,7 +38,7 @@ Expected change points:
 
 Relevant files (exact manifest):
 - 路径 | symbol/用途 | 必须读取 / 仅在需要时读取 | SHA-256/absent
-- 允许修改文件与允许读取文件分开列明
+- 写入边界与精确读取 manifest 分开：普通新票（含批次）列获批窄目录及目录外精确文件；高风险和旧信封列精确写入文件。不把预计变更点当成已获批权限。
 - 定向搜索的 module/package 边界及停止条件
 
 Commands:
