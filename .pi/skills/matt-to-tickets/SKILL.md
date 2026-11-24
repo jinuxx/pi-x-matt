@@ -13,102 +13,29 @@ metadata:
 
 # To Tickets
 
-本 skill 把已确认的 spec、计划或当前会话拆成 tickets。它只负责切分、展示、取得用户批准和发布，不实现代码，也不启动 subagent。是否需要 tickets 必须在进入本 skill 前由用户决定；一旦显式调用，不得因 agent 判断“一个 session 能完成”而静默跳过到 implement。
+本 skill 将已确认的 spec 或讨论拆分为垂直切片（tracer-bullet）tickets，经用户确认后发布到已配置的 issue tracker。
 
 ## 前置条件
 
-1. 读取当前会话中的 spec 或用户提供的 spec reference；若是 issue/URL，读取完整正文和评论。
-2. 读取相关代码、`.x-matt/context/` 和 `.x-matt/adr/`，使用项目领域词汇，尊重既有决定。
-3. 检查 `.x-matt/agents/issue-tracker.md` 和 `.x-matt/agents/triage-labels.md`。任一文件缺失、tracker 前置条件无法核验或 label mapping 不含 `ready-for-agent` 时，停止并报告“tracker 尚未配置”；建议用户先运行已移植的 `matt-setup`，不要自行猜测 GitHub、GitLab 或 local-markdown。
-4. 不要把 `matt-to-tickets` 当作 triage：它产生的 tickets 已按 `ready-for-agent` 约定准备好，不需要再次 triage；不要关闭或修改 parent spec issue。
-5. Local Markdown 发布前读取非空 `PI_SESSION_ID`，并把 `Source session: pi:<PI_SESSION_ID>` 写入每张新 ticket。缺少 session identity 时停止发布。
-6. Local Markdown parent spec 必须位于 active `.x-matt/work/<feature-slug>/spec.md`，并核对 `Type: spec`、`Status: spec-ready`。默认跳过 `.x-matt/work/shipped/`，不得枚举或把 archived spec 当作 parent/近似回退；即使用户在同一会话点名并授权只读某个 archived spec，它也只能作为历史依据，不能重新拆 tickets、修改状态或创建实现入口。
-7. 先应用[业务项目隐私契约](../matt-setup/privacy.md)：业务项目整个 `.x-matt/` 与个人 `.pi/` 都只在本机维护，不只 `.x-matt/work/`。按 tracker 契约核验本机 exclude 生效且个人资料未被 Git 跟踪，未满足则停止并提示先运行 `matt-setup`。直接读取已知 ignored parent/ticket 路径，不依赖 Git-aware 搜索；发布只写本地文件，不暂存、不提交、不用 `git add -f`。源码维护例外须已核验。
+1. 读取目标 active spec（Local Markdown 位于 `.x-matt/work/<feature-slug>/spec.md`，`Type: spec`、`Status: spec-ready`，跳过 `.x-matt/work/shipped/`）、相关代码与领域文档。
+2. 检查 `.x-matt/agents/issue-tracker.md` 与 `.x-matt/agents/triage-labels.md`；缺失时提示先运行 `matt-setup`。
+3. 应用[业务项目隐私契约](../matt-setup/privacy.md)：业务项目 `.x-matt/` 仅本地保存，不暂存不提交；Local Markdown 读取非空 `PI_SESSION_ID` 写入 `Source session`。
 
 ## 切分原则
 
-每张 ticket 必须是一个 tracer bullet：
+每张 ticket 应是一个可独立验证的 tracer bullet：
 
-- 穿过本 slice 需要的全部层次，形成一条窄但完整的用户可观察路径；不要按 schema/API/UI/tests 等水平分层。
-- 完成后可以独立 demo 或验证；验收标准必须能在 ticket 开始的基线提交上失败，并在完成后观察为真。
-- 能由一个 fresh context 完成。超出单 session 容量时继续拆分，但不要牺牲端到端完整性。
-- 标题和正文使用领域 glossary，不写具体文件路径、行号或容易过时的代码片段。
-- 先识别“make the change easy”的 prefactoring，把必要的 prefactor ticket 放在功能 ticket 前。
+- 穿过所需各层，形成一条窄但完整的用户可观察路径（避免纯水平分层）；验收标准在当前基线可失败、完成后可验证。
+- 大小适合单个 `matt-worker` 会话完成；必要的 prefactoring 单独成票放在前置。
+- 大范围机械重构无法垂直保持绿色时，使用 expand → migrate → contract 模式。
+- 只标注真实阻塞前置的 `Blocked by`（remote tracker 支持 native edges 时正文省略 `## Blocked by`）。
 
-### Wide refactor 例外
+## 确认、发布与衔接
 
-如果是一个 blast radius 很大的机械重构，无法让任何垂直 slice 单独保持绿色，使用 expand–contract：
-
-1. Expand：新旧形式并存，保持现有行为。
-2. Migrate：按包或目录批次迁移调用点，每批独立验证并 blocked by expand。
-3. Contract：确认没有旧调用者后删除旧形式，blocked by 所有 migrate tickets。
-4. 如果迁移批次也无法独立保持绿色，明确建立 integration-and-verify ticket，并让它 blocked by 所有批次。
-
-## Blocking edges
-
-为每张 ticket 列出真正阻止它开始的 tickets，不要把“相关”或“可能更方便”当成 blocker。无 blocker 的 ticket 可以立即开始；发布顺序按 blockers-first，保证依赖已有 tracker identifier 后再建立 native blocking links。tracker 支持 native edges 时只用 native edges 表达 blocking，正文不写 `## Blocked by`，避免两处记录漂移；tracker 不支持时才在 ticket body 的 `Blocked by` 中保留引用。
-
-## User quiz
-
-在任何发布前，展示编号列表。每张 ticket 必须包含：
-
-- **Title**：短且描述行为的标题
-- **Blocked by**：真实前置 tickets，或 None
-- **What it delivers**：完成后可 demo/验证的端到端行为
-- **Acceptance criteria**：可观察、可失败、只覆盖本 ticket 拥有的行为
-
-随后使用 `ask_user_question` 逐轮确认：粒度是否过粗/过细、blocking edges 是否真实、哪些 ticket 应合并或继续拆分。用户未批准前不得创建本地文件、issue 或 native relationship。用户要求调整时重算编号、依赖和 frontier，再次展示。
-
-## 发布
-
-1. 用户批准 breakdown 后，先发布无 blocker 的 tickets，再按依赖顺序发布后续 tickets。
-2. local-markdown tracker：按 blockers-first 写入 `.x-matt/work/<feature-slug>/issues/<NN>-<slug>.md`，每张 ticket 一个文件，`NN` 从 `01` 开始；每个文件使用 `Type: ticket`、`Status: ready-for-agent`、`Source session: pi:<PI_SESSION_ID>`、Parent、Blocked by、What to build、Acceptance criteria 和空的 `## Comments` 锚点。
-3. real tracker：按配置执行 issue 创建，使用 `ready-for-agent` label；优先使用 tracker 原生 blocking/sub-issue relationship，不可用时将 blocking references 写入 body。源是既有 parent spec issue 时，按 tracker doc 的操作把每张 ticket 建成它的 sub-issue；sub-issue 不可用时在 ticket body 顶部写 `Part of #<parent>`。父 spec 只作为 parent reference，不关闭、不修改。Local Markdown parent 同样保持 `spec-ready`；归档只能由用户之后单独运行 `matt-archive`。
-4. 每次创建后读取或查询结果。Local Markdown 核对标题、Type、Parent、Status、Source session、Blocked by、正文、验收标准和 Comments 锚点；real tracker 核对标题、正文、label、identifier 和 blocking edge。任何发布结果无法核验时停止并报告，不继续批量创建。
-5. 发布完成后报告 ticket 数量、frontier、blocking graph 和下一步 `matt-implement`；`matt-implement` 已移植，每次只处理一个 ticket，并在 TDD、完整验证和双轴 code-review 通过后提交当前 branch。不要在 `matt-to-tickets` 中自行实施或批量处理 tickets。
-
-## Ticket 模板
-
-```markdown
-# <NN>: <Ticket title>
-
-Type: ticket
-Parent: <父 spec 的本地路径/identifier，或 None>
-Status: ready-for-agent
-Source session: pi:<PI_SESSION_ID>
-Blocked by: <Local Markdown 使用仓库相对 ticket 路径，或 None (can start immediately)>
-
-## What to build
-
-<从用户角度描述端到端行为>
-
-## Acceptance criteria
-
-- [ ] <可观察且可失败的验收标准>
-- [ ] <可观察且可失败的验收标准>
-
-## Comments
-```
-
-## Real tracker issue template
-
-```markdown
-## Parent
-
-<reference to the parent spec issue, when one exists>
-
-## What to build
-
-<从用户角度描述端到端行为>
-
-## Acceptance criteria
-
-- [ ] <可观察且可失败的验收标准>
-- [ ] <可观察且可失败的验收标准>
-
-## Blocked by
-
-- <仅在 tracker 不支持 native edges 时保留本段：每个 blocking ticket 的 tracker reference，或 None (can start immediately)>
-```
-
-real tracker ticket 应使用 `ready-for-agent` label，并优先通过 tracker 原生 relationship 写入 parent/sub-issue 和 blocking edges；blocker 已用 native edges 表达时省略整个 `## Blocked by` 段，正文中的 Parent 与 Blocked by 只在 tracker 缺少对应原生关系时作为可核验的备用记录。
+1. 展示编号清单（Title、Blocked by、What it delivers、Acceptance criteria），使用 `ask_user_question` 确认拆分方案，并询问发布后是否直接开始实现（单票 `matt-implement` / 整批串行 `matt-implement-spec` / 先暂停）。
+2. 按 blockers-first 顺序发布并读回核验：
+   - Local Markdown 写入 `.x-matt/work/<feature-slug>/issues/<NN>-<slug>.md`，模板包含：
+     - 头部：`Type: ticket`、`Parent: <spec 路径或 None>`、`Status: ready-for-agent`、`Source session: pi:<PI_SESSION_ID>`、`Blocked by: <路径或 None>`
+     - 正文：`## What to build`、`## Acceptance criteria`、`## Comments`
+   - Remote tracker 使用 `ready-for-agent` label 与 native sub-issue / blocking edges；不关闭或修改 parent spec。
+3. 报告 ticket 清单、frontier 与依赖图；若用户已确认继续实现，直接衔接 `matt-implement` 或 `matt-implement-spec`。

@@ -1,89 +1,22 @@
 # pi-x-matt
 
-`pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 中的方法论移植为纯 Pi Agent + pi-subagents 的项目级能力。它不提供 Claude Code、Codex 或其他 agent harness 的运行时兼容层。
+`pi-x-matt` 将 [mattpocock/skills](https://github.com/mattpocock/skills) 的工程方法论移植为纯 Pi Agent + `pi-subagents` 的轻量项目级能力。
 
-当前已实现 tracker 配置、交互式需求到实现链、多会话 wayfinding、完成规格归档、throwaway prototype、hard-bug 诊断、architecture deepening survey 与串行整份 spec 实现，以及 12 个交互式 parent：`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`；另有 6 个执行型 parent：`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、双轴 `matt-code-review` 与分阶段 `matt-tdd`。交互式 parent 在父会话中保留 HITL 决策，不通过后台 workflow 运行；执行型 parent 使用 pi-subagents lanes，其中 `matt-prototype` 与 architecture workflows 的用户选择仍留在父会话。
+v0.3.0 回归“**确定性测试做门禁，LLM Review 做建议，人类始终拥有最终拍板权**”的简洁架构：
 
-## 安装
+- **12 个交互式 parent**（留在父会话）：`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`。
+- **6 个执行型 parent**（经 `pi_matt_dispatch` 走角色隔离 subagent）：`matt-tdd`（单写者 + 可选确定性 `verifyCommands`）、`matt-code-review`（双轴建议型只读评审）、`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`。
 
-要求 Pi 1.2.0+、Node.js 22.19.0+。project-local runtime 与 bundled library 同步固定为 `pi-subagents@0.90.0`；使用 named workflow resource / host step，不支持旧 `workflowScript` RPC。在目标项目中安装配套版本：
+## 安装与配置
+
+要求 Pi `1.2.0+`、Node.js `22.19.0+`，配套固定 `pi-subagents@0.90.0`：
 
 ```bash
 pi install -l npm:pi-subagents@0.90.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.53
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.0
 ```
 
-本地代码 agents 声明 `find`、`grep`：它们在 Pi 内置工具和 pi-fff 的全部模式下都存在。可选安装 `pi install -l npm:@ff-labs/pi-fff`，用 `override` 模式获得同名的 FFF 实现；本 package 不自动改动用户的 pi-fff 配置。
-
-`fffind`、`ffgrep` 只在 pi-fff 的 `tools-and-ui` / `tools-only` 模式注册，`override` 模式下不存在。显式 tools allowlist 中声明了子进程里没有的工具，会让 child 以工具诊断（`missing`）直接启动失败，所以共享 agent 定义不再绑定这两个名称；这并非 pi-subagents 弃用了什么，而是定义不应依赖用户本机的 pi-fff 模式。需要这些工具时，在个人 `agentOverrides.<name>.tools` 中追加；`matt-reviewer` 还须在个人 `toolBudget.block` 中同步列出它们，否则它们不受 50 次取证上限约束（`toolBudget` 为整体替换，需连同 `hard` 一起写）。
-
-受控工单（单票或批次）使用独立的 `matt-scoped-writer`，仅提供受控写入和测试命令；不限制其他 runner。普通 `matt-worker` 仍优先使用 `apply_patch`，不可用时使用 `edit` / `write`。
-
-安装或升级 pi-subagents、本 package 的 extension 或 `lib/*.mjs` 后，退出并重新启动 Pi，再恢复原会话；已运行的进程可能缓存旧模块，不能只依赖 `/reload`。仅修改 skills 等文本资源时，可使用：
-
-```text
-/reload
-```
-
-首次使用时手动运行 `matt-setup`，在父会话中选择 issue tracker（Local Markdown、GitHub 或 GitLab）并确认项目文档契约。package manifest 会自动加载 dispatcher、`matt-*` skills 和 `matt-*` agents；`pi-subagents` 作为 project-local 前置 package 加载。若目标项目已有 `pi-subagents`，不要再添加第二个 `pi-subagents` extension 路径，以免重复注册工具。若要保持最小加载，可把 `.pi/settings.json` 中的 `npm:pi-subagents` 字符串改为：
-
-```json
-{
-  "source": "npm:pi-subagents@0.90.0",
-  "autoload": false,
-  "extensions": ["+bundle/index.js"],
-  "skills": [],
-  "prompts": [],
-  "themes": []
-}
-```
-
-不要把这份 object 与同一 package 的另一个 entry 并存。
-
-Pi package 使用独立 module root，不能从另一个已安装 package 直接解析 imports。因此本 package bundle 同版本的 `pi-subagents`，只导入其 `workflow-resources` 和 `required-child-extensions` 公共注册 API；该 library copy 不会自动加载 pi-subagents extension、agents、skills 或 prompts，独立 project-local runtime 仍必须保留。最小加载过滤须匹配 npm manifest 的 `+bundle/index.js`，不能沿用 `+index.js`。
-
-本地开发安装依赖使用 `npm install --omit=peer --ignore-scripts --no-package-lock`，避免安装 Pi 已提供的 SDK/TypeBox 副本；它们仍由运行中的 Pi 提供，`npm ls --omit=peer pi-subagents` 可检查 bundled 版本。
-
-安装包拥有 Pi package 的系统访问能力：`matt-worker` 可以在用户批准的范围内修改目标仓库，`matt-researcher` 可以访问配置的 web provider。安装前请审阅 source，升级时使用固定 tag：
-
-```bash
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.53
-```
-
-已固定旧版本的项目需用上面的 `pi install -l` 切换两个包的版本；`pi update` 不会改写原配置的 ref。若使用 package object，请只更新原条目的 `source`、保留资源过滤，再分别执行 `pi update npm:pi-subagents@0.90.0` 和 `pi update git:github.com/jinuxx/pi-x-matt@v0.2.53`。
-
-## 提示中的测试术语
-
-- **测试切入点**：用哪个公开入口来验证行为。例如，通过登录 API 验证错误密码会被拒绝，而不是直接检查数据库内部字段。
-- **可替换点**：不改调用方就能换掉某个实现的位置。例如，测试时把远程存储换成内存存储。
-
-## 架构
-
-系统分为三个边界：
-
-1. **父会话 skill**：位于 `.pi/skills/`，负责识别任务、保留 HITL 决策、调用项目 dispatcher 和综合结果。交互式 parent（`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs`、`matt-improve-codebase-architecture`）留在当前会话中，直接使用用户问答和受限调查；执行型 parent（`matt-research`、`matt-prototype`、`architecture-scan`、`architecture-design`、`matt-code-review`、`matt-tdd`）通过 registry workflow 调度子代理。
-2. **leaf agent**：位于 `.pi/agents/`，只完成一次明确委派。所有 agent 都设置 `inheritSkills: false`、私有 `skillPath` 和 `maxSubagentDepth: 0`，且工具列表不包含 `subagent`。
-3. **私有 leaf skill**：位于 `skillpacks/leaf/`，不会进入父会话的 Pi skill catalog，只能由 agent 的 `skillPath` 解析，并由每次 launch 精确选择。
-
-作为 Git package 安装时，package root 负责保存和校验 `.pi/skills`、`skillpacks/leaf`、`config/skill-registry.json` 与上游快照；目标项目 root 提供代码、测试和统一的 `.x-matt/` 项目文档树。dispatcher 不再要求 package 文件出现在目标项目中，child 仍以目标项目 root 作为 `cwd`。
-
-运行链路支持单 lane、并行 lane 和按 stage 顺序执行、stage 内并行的 pipeline：
-
-```text
-用户任务
-  → 父会话读取 .pi/skills/<workflow>/SKILL.md
-  → pi_matt_dispatch 校验 registry 与 workflow digest
-  → 计算每个 lane 的 leaf 闭包
-  → 通过 pi-subagents RPC 异步启动 fresh worker/reviewer/researcher；同票修复 resume 原 writer
-  → 子代理读取私有 leaf skill 并按结构化 schema 返回结果
-  → 父会话核验并综合结果
-```
-
-`matt-research`、`matt-prototype` 与 `architecture-scan` 使用单 lane；`architecture-design` 使用 minimal/flexible/common-caller 三个 fresh 只读 lane；`matt-prototype` 只把 artifact 构建交给唯一 `matt-worker`，`architecture-scan` 的 worker 只写 OS temp report。`matt-code-review` 独立运行 `standards` 与 `spec`；`matt-tdd` 由唯一 `matt-worker` 执行 RED→GREEN，普通票没有 reviewer。`matt-setup`、`matt-archive`、`matt-grilling`、`matt-domain-modeling`、`matt-grill-with-docs`、`matt-wayfinder`、`matt-to-spec`、`matt-to-tickets`、`matt-implement`、`matt-implement-spec`、`matt-diagnosing-bugs` 和 `matt-improve-codebase-architecture` 是 `dispatch: none` 的 interaction parent：interaction parent 本身不定义 `workflow.json`，可以在父会话中调用执行型 workflow。`matt-archive` 只处理显式指定的归档，无提交；`matt-improve-codebase-architecture` 先扫描，必要时再比较接口，不修改生产代码。`matt-implement` 调用 `matt-tdd` 实现一票，父会话验证并提交；`matt-implement-spec` 串行编排，不增加 writer 或 worktree。
-
-## pi-subagents 最小加载
-
-`.pi/settings.json` 使用 Pi package delta filter，只加载 `pi-subagents` 的 extension。`autoload: false` 会在用户级已安装同一 package 时复用该安装并应用项目过滤，避免用户级与项目级两个绝对路径各自注册 RPC bridge；若用户级未安装，则仍从项目安装中显式加载该 extension：
+若要保持最小加载（不加载 `pi-subagents` 自带 skills/prompts/builtin agents），在目标项目 `.pi/settings.json` 中使用：
 
 ```json
 {
@@ -104,276 +37,88 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.2.53
 }
 ```
 
-0.82.0 起，上游默认在重启或 `/reload` 后自动续跑最近 24 小时内中断的 workflow，可能重跑 `runs.host`/`runs.steer`。本 package 不保证一次性 TDD resource 能被重放；需要保留显式恢复边界时，由用户在 `~/.pi/agent/extensions/subagent/config.json` 顶层合并以下配置（不要覆盖其他已有配置）：
+升级 extension 或 `lib/*.mjs` 后请完整重启 Pi 并恢复会话；仅修改 `SKILL.md` 时使用 `/reload`。
 
-```json
-{
-  "autoResume": false
-}
-```
+建议在用户级 `~/.pi/agent/extensions/subagent/config.json` 中配置 `"autoResume": false`（避免重启后意外重放）与 `"disabledFeatures": ["session-sharing"]`（禁用 Gist 分享）。
 
-这是影响所有项目的用户级设置，不是 `.pi/settings.json` 的 `subagents` 字段；package 安装不会自动修改它。TDD 另外在 writer 前使用宿主原子 claim，阻止同一脚本重放再次启动 writer，不依赖该全局设置。恢复前仍须核验中断状态与工作区，不得自动重派发写者。
+## 提示中的测试术语
 
-使用 `0.90.0` 时，业务项目建议在同一用户级 config 的 `disabledFeatures` 数组中合并 `"session-sharing"`。这是上游原生的 Gist 分享禁用项；也会拒绝恢复曾启用 `share` 的运行。不写在项目 settings，不覆盖已有选项，也不禁用 `workflow-scripts`。升级 runtime 后再设置并完整重启 Pi。
+- **测试切入点**：用哪个公开入口来验证行为（例如通过公开 API/命令验证，而不直接检查内部实现）。
+- **可替换点**：不改调用方就能替换依赖的位置（例如将远程存储替换为内存实现）。
 
-因此本地开发配置不会加载包内 `pi-subagents`/`council-mode` skills、prompt templates 或 builtin agents。package manifest 只加载本 package 的 dispatcher，并只暴露四个 `matt-*` 自定义 agents；reviewer 默认继承用户当前模型，不要求 DeepSeek provider（可按角色覆盖，见[为子代理指定模型](#为子代理指定模型)）。`pi-subagents` 由上面的 project-local package 配置提供：
+## 架构与角色隔离
 
-| Agent | 权限 | 当前用途 |
+系统分为三个清晰边界：
+
+1. **父会话 skills**（`.pi/skills/`）：负责需求澄清、规格/拆票、编排决策、验证与提交。
+2. **四个只做一件事的 leaf agents**（`.pi/agents/`，均设置 `inheritSkills: false`、`maxSubagentDepth: 0`）：
+
+| Agent | 权限 | 用途 |
 | --- | --- | --- |
-| `matt-reader` | 本地只读 | 代码库探索与 `architecture-design` 三方案 lanes |
+| `matt-worker` | 读写与命令（优先 `apply_patch`，回退 `edit`/`write` + `bash`） | `matt-tdd`、`matt-prototype`、`architecture-scan` |
+| `matt-reviewer` | 本地只读 + `git_read`（50 次取证预算） | `matt-code-review` 的 Standards / Spec 两轴 |
+| `matt-reader` | 本地只读 | 代码库探索与 `architecture-design` 三方案比较 |
 | `matt-researcher` | `read`、`web_search`、`web_fetch` | `matt-research` |
-| `matt-reviewer` | 本地只读 | `matt-code-review` 与 `matt-tdd` 的 Standards/Spec lanes |
-| `matt-worker` | 单写者工具集 | `matt-tdd` 实现、`matt-prototype` artifact 与 OS temp architecture report |
 
-`matt-researcher` 依赖父环境中已经注册的 `web_search` 与 `web_fetch` provider。显式 allowlist 不会自动加载 provider；若工具未注册，pi-subagents 应在 child 启动阶段失败，而不是生成无来源回答。
+3. **私有 leaf skills**（`skillpacks/leaf/`）：只由对应 agent 的 `skillPath` 加载，不污染父会话 catalog。
 
-若检索能力改由 MCP 提供，在本地 `subagents.agentOverrides.matt-researcher.tools` 中替换为 `["read", "mcp:<server>/<search-tool>", "mcp:<server>/<fetch-tool>"]`，使用实际 server/tool 名称，不改共享 agent 定义、不授予整台 MCP server 或 `tools: "inherit"`。Pi 原生 MCP 与 pi-mcp-adapter 均支持该 selector；adapter 的 metadata cache 首次建立后需重启 Pi。0.88.0 会跳过 adapter 中明确 `disabled: true` 的 server，但未知 server 或已启用而未匹配到工具仍失败，不能据父会话可用推断 child 可用。
+### 为子代理指定模型
 
-## 0.89.2 → 0.90.0 升级边界
+本插件不接管模型选择；按需在 `<项目>/.pi/settings.json` 或 `~/.pi/agent/settings.json` 的 `subagents.agentOverrides` 中为 `matt-worker`、`matt-reviewer`、`matt-researcher`、`matt-reader` 配置 `model` / `thinking`，修改后 `/reload` 并用 `/subagents-models` 核对。
 
-按 [官方发布说明](https://github.com/nicobailon/pi-subagents/releases/tag/v0.90.0) 与 npm 发布源码核对，没有新的弃用或移除涉及本插件。保留 RPC `spawn`（`script` 或 `workflow` + `args`）、named resource、`runs.all`、`runs.host`、`emit`、原生异步事件和 `terminalOutcome`，不加旧接口回退。
+## 核心工作流
 
-| 上游变化 | 本插件处理 |
-| --- | --- |
-| 已完成 workflow 及其 child 可由上游回收（通常 30 天；可恢复运行等受原生保留规则保护）。 | `status.json` 是临时运行证据，不是归档。缺失时报告原 run ID 和路径，阻断缺证的恢复或交付，不复制会话、不重派 writer。 |
-| Windows 锁住 `status.json` 时，完成通知仍会送达，终态可能稍后写回。 | 不把通知当成终态。若文件仍显示运行中则提示证据未就绪；等上游写回后核验同一个 run，不加轮询。 |
-| `label` 扩到直接运行和内置 `parallel`，并新增前台 lifecycle 事件。 | 保留原有 `workflow / lane` 标签和异步事件；不读取任务正文作标题、不重复订阅前台事件。 |
-| 命名 workflow 支持顶层 `globalConcurrencyLimit`。 | 不使用无效的 `args.concurrency`，也不强制串行复核。保留原生限流和本项目的独立轴、lane key、权限与结构化结果。 |
+### 1. 需求澄清 → 规格 → 拆票 → 实现
 
-Fleet 嵌套状态、前台 JSON 结果与 Pi 1.6 的适配由原生 runtime 提供。`fastServiceTier` 不由本插件配置，不改变已有模型、费率选择或超时预算。Gist 分享用上面的原生禁用项，不实现第二套分享控制。
+- 首次使用在父会话运行 `/skill:matt-setup`，配置本地 `.x-matt/` tracker、领域文档布局与本机 Git exclude。
+- `matt-grill-with-docs` 澄清需求后，小改动经确认可直接衔接 `matt-implement`；多流程或跨会话需求可平滑衔接 `matt-to-spec` → `matt-to-tickets` → `matt-implement-spec`。
+- 跨会话大型模糊规划使用 `matt-wayfinder`；难复现 bug 使用 `matt-diagnosing-bugs`；架构梳理使用 `matt-improve-codebase-architecture`。
 
-## 0.84.0 → 0.88.1 历史升级边界
+### 2. 单票实现与批次实现
 
-按 [官方 CHANGELOG](https://github.com/nicobailon/pi-subagents/blob/v0.88.1/CHANGELOG.md) 与 npm 发布源码逐项核对：
+- **`matt-implement`**：调用 `pi_matt_dispatch({ workflow: "matt-tdd", task, verifyCommands })`。
+  - 同一会话内首次对项目启动写者（或新增 `verifyCommands`）时确认一次，之后同项目复用，调用其他 `/skill` 不会撤销授权。
+  - 默认只跑单写者 TDD + 确定性 `verifyCommands`，**不自动发起每票 code review**。
+  - 若需续修，可传 `resumeRunId` 续跑原 `matt-worker`，也可省略该参数随时开 fresh writer 或在父会话直接修正。
+  - 核对 `git diff --stat` 与测试通过后，提交到当前分支并在本地把 ticket 写为 `resolved`（附 `Implementation commit: <SHA>`）。
+- **`matt-implement-spec`**：在父会话按 `Blocked by` 顺序逐票执行 `matt-implement`，全部完成后跑全量测试并调用一次 committed `matt-code-review` 做整批建议型评审。
 
-| 版本 | 与本 package 的关系 |
-| --- | --- |
-| 0.85.0 | Node workflow 改为独立 permission-restricted 进程，继承不到宿主环境变量或启动参数；保留纯 JSON 脚本与受信任 `runs.host`，不增加绕过 sandbox 的 fallback。`structured_output` 在 Pi 参数转换前严格校验原值，本 package 的封闭 schema 保持不变。 |
-| 0.85.0 | resume/autoResume 改用 run 目录外的可信记录，**升级前启动的 run 不可恢复**。不要重建旧 descriptor、用 `reuseFrom` 重放 TDD 或启动 fresh writer；保留 partial 改动和原证据并停止，由用户决定后续处理。新 run 的 retained repair/settlement 保持原边界。 |
-| 0.86.0 | 修复 compaction 后工具消失与循环 schema 验证崩溃；现有 schema 没有循环引用，不需要放松校验或调整工具激活配置。 |
-| 0.87.0 | `provider/id` 不再偷偷切换 provider；模型选择继续交给 settings，鉴权失败不自动换模型。新增 `defaultInheritGlobalContext`；四个 leaf 显式 `inheritGlobalContext: false`，保持默认不继承父会话的全局指令，仍可由用户逐 agent override。 |
-| 0.88.0 | child 等待 supervisor decision/interview 或 intercom ask 时暂停执行预算；`progress_update` 不暂停，workflow 总 deadline 仍是 wall-clock。输出长度截断现在是执行失败，不能解析 partial prose 或当成有效 FAIL；已有合法 `structured_output` 不受此项影响。bundled `undici` 升到安全修复版 `8.12.4`。 |
-| 0.88.1 | 后台 child 未声明 tools 且无 capability ceiling 时恢复 ambient MCP。本 package 四个 leaf 仍显式列 tools，researcher 仍只选精确 `mcp:` 工具，不借升级继承整台 server。required extension 注册但未选择的 MCP server 可降为 warning；其他必需扩展启动错误仍失败，不增加本地 catch/fallback。 |
-| 0.88.1 | 修复结果文件先于最终 status 落盘的竞态：同 PID namespace 中仍活跃的 child 保持 `running`，不伪造 `unknown` 终态。父流程继续等待原生 completion、核对完整 status；有结果文件不等于已取得 runner exit proof，真正未知的终态仍不可放行。 |
-| 0.88.1 | 手动 compaction 不再唤醒空闲或 Esc 停止的父会话；compaction 中到达的 completion 延后唤醒一次。fleet inspector 会为授权/select/confirm 对话框让位；直接使用原生修复，不额外插入唤醒、轮询或自建确认 UI。 |
-| 0.88.1 | `subagent_launch` handler 对新 child 的 task 改写现在生效，但不改其他字段或 resumed message，也不覆盖 RPC/SDK。本 package 的 RPC 授权与轴隔离仍由自己的 dispatcher 维护。 |
-
-0.88.1 没有废弃我们在用的 `disableBuiltins`、`projectRootResolution`、agent tools/skillPath、RPC `spawn`、named resource、`runs.all`/`runs.host`、`emit`、`terminalOutcome` 或结果事件。新增 `stop` 的 `drain: true` 是显式停止、不是交付完成；不自动替换本项目的失败恢复路径。latest progress 直接由原生 widget/status 展示，不再新增轮询或重复消息。
-
-移除的是早已不属于 workflow child 公共结果的 `timedOut` 兼容与错误文本超时猜测：settlement 和通知只使用 `terminalOutcome.reason === "timeout"`，避免 provider 错误引用超时文字时误启恢复；预算耗尽、截断、停止和基础设施失败仍不自动结算。这不删除上游在其他状态/直接运行结果中仍支持的 `timedOut`。
-
-**权限边界不扩大**：0.85.0 的嵌套 `subagent_launch` 审批只覆盖经工具调用启动的 workflow，不覆盖本 package 的 RPC 启动路径，不能宣称外部 permission extension 会逐 child 审批。dispatcher 自身的限定授权、唯一 writer、host command allowlist 与双轴 gate 继续生效；Node permission layer 也不是 child 的 OS sandbox。
-
-## 为子代理指定模型
-
-pi-x-matt 不参与选模型：dispatcher 下发的 lane item 只包含 `key/agent/task/context/skill/timeoutMs/outputSchema/output`，没有 `model`。0.80.0 为内置 `parallel/tasks/chain` 新增的逐子任务 `cwd/model` 不改变本 package 的 scripted workflow；所有 child 仍使用目标项目 root，模型仍由 pi-subagents 的解析链决定，配置写在 **pi-subagents 的 settings**，而不是 package 文件里：
-
-```text
-<项目>/.pi/settings.json      ← 优先
-~/.pi/agent/settings.json     ← 兜底
-```
-
-四个 agent 没有 `package:` frontmatter，因此名称固定为 `matt-worker`、`matt-reviewer`、`matt-researcher`、`matt-reader`。按角色钉模型时在同一 `subagents` 块里写 `agentOverrides`；下例的模型 id 只是分层示意，实际取值以本机 registry 为准：
+### 3. 建议型双轴 Code Review
 
 ```json
 {
-  "subagents": {
-    "agentOverrides": {
-      "matt-worker": { "model": "<provider>/<workhorse-model>", "thinking": "max" },
-      "matt-reviewer": { "model": "<provider>/<reasoning-model>", "thinking": "high" },
-      "matt-researcher": { "model": "<provider>/<fast-model>" },
-      "matt-reader": { "model": "<provider>/<fast-model>", "thinking": "low" }
-    }
+  "workflow": "matt-code-review",
+  "task": "评审背景与目标",
+  "reviewScope": { "kind": "worktree" },
+  "laneTasks": {
+    "standards": "适用工程规范与隐私/安全边界",
+    "spec": "ticket 或 parent spec 验收条款"
   }
 }
 ```
 
-`agentOverrides` 是逐字段替换：只写 `model` 或 `thinking` 时，其余定义（tools、skillPath、默认 context、toolBudget）仍取自 `.pi/agents/*.md` 的 frontmatter。也可以只用 `subagents.defaultModel` / `subagents.defaultThinking` 统一兜底，它只填补没有自己 `model` 的 agent。角色需要随父会话 provider 变化时用 `subagents.agentOverridesByProvider.<provider>.<name>` 分层；`subagents.modelScope` 只做拦截，不做选择。
+- 支持 `reviewScope: { kind: "worktree" }`（当前工作区变更）与 `{ kind: "committed", fixedPoint: "<ref>" }`（纯 Git 对象范围 `F..HEAD`），由宿主自动生成一份共享 Evidence Pack 供两轴复用。
+- 两轴评审为**建议型（Advisory）**：`PASS`、`ISSUES`、`NO_EVIDENCE` 均正常结算返回结构化报告，不会抛错锁死流程；由用户与父会话决定修复哪些 P0/P1、忽略哪些 P2。
+- 某轴若遇 429 或网络故障，直接传 `lanes: ["standards"]`（或 `["spec"]`）重跑该轴即可。
 
-解析优先级（强 → 弱）：单次 launch 覆盖 → `agentOverridesByProvider` → `agentOverrides.<name>.model` → agent frontmatter `model` → `subagents.defaultModel` → 父会话模型。`model: "inherit"` 表示显式跟随父会话模型。单次 launch 可用 `/run <agent>[model=<provider>/<model>:<thinking>]`。
+### 4. 控制命令
 
-每次 launch 只解析一个模型：provider、鉴权、配额、限流（含 HTTP 429）、流与空响应错误会直接返回，不会自动换模型重试，需要父会话显式重发。
+- `/matt-revoke`：撤销本会话写授权并取消尚未启动的派发队列。
+- `/matt-reset`：一键清除当前卡住的活跃派发跟踪与队列状态。
 
-修改 settings 后需要 `/reload`，再用 `/subagents-models`（或 `/subagents-models matt-worker`）核对实时映射，因为磁盘配置与运行中进程可能不一致。完整说明见已安装的 `pi-subagents/docs/models.md`。
+## 本地隐私与归档边界
 
-## Registry 与代码边界
+- 业务项目按 [业务项目隐私契约](.pi/skills/matt-setup/privacy.md) 通过本机 `.git/info/exclude` 排除整个 `.x-matt/` 与个人 `.pi/`，不修改团队 `.gitignore` 或 `AGENTS.md`，本地入口写在 `.pi/APPEND_SYSTEM.md`。插件源码仓库本身为例外，只排除整个 `.x-matt/`，`.pi/` 作为 package 源码保持跟踪。
+- 提交前检查 staged diff 与提交信息，不夹带私有路径或自动 AI 归因。
+- 已完成 feature 由用户显式运行 `/skill:matt-archive <feature-slug>` 本地移入 `.x-matt/work/shipped/`（不创建提交）；所有 skills 默认把 `shipped/` 视为不存在。
 
-每个 Pi-native `SKILL.md` 的标准 `metadata` 保存以下移植信息：
-
-- `pi-scope`：`parent` 或 `leaf`
-- `pi-class`：parent 为 `orchestration` 或 `interaction`；leaf 必须为 `executor` 或 `reviewer`
-- `pi-agent`：唯一允许接收其 leaf 闭包的 agent（仅 leaf）
-- `pi-dispatch`：执行型 parent 的 `workflow.json` 定义 `single`、`parallel` 或 `pipeline`；interaction parent 固定为 `none`
-- `pi-depends-on`：执行型 parent 的 lane leaf 依赖，或 interaction parent 的 interaction parent 依赖
-- `pi-upstream-path` / `pi-upstream-sha`：上游来源
-
-维护者运行：
+## 维护者命令
 
 ```bash
 npm run registry       # 生成 config/skill-registry.json
 npm run registry -- --check
-npm run drift          # 检查 vendored 上游是否影响已移植 skill
-npm run test           # 聚焦测试
-npm run check          # 测试 + registry freshness + upstream drift
-npm run pack:check     # 检查 package 文件清单
+npm run drift          # 检查 vendored 上游漂移
+npm run test           # 运行测试套件
+npm run check          # test + registry freshness + upstream drift
+npm run pack:check     # 检查发布包文件清单
 ```
-
-生成器会拒绝重复名、保留名、未知 agent、缺失依赖、依赖环、父依赖、跨 agent 依赖、错误 scope/class/dispatch、越出 vendored upstream 根目录的来源路径和 SHA 漂移。执行型 parent workflow 还必须定义有效的 lane、封闭 object `outputSchema` 与正数 `timeoutMs`；每个 workflow 至多包含一个 `acceptanceRole: writer` lane。interaction parent 必须没有 `workflow.json`，且只能依赖其他 interaction parent。pipeline 的 stage 必须从 1 连续编号；任何模式的 lane gate 都必须引用 schema 中声明的 enum 值，`matt-code-review` 与 `matt-tdd` 的 reviewer verdict 均由 gate 强制为 `PASS`；后续 stage 会收到前序 `structuredOutput` 作为可核验的过程证据。
-
-项目 extension `.pi/extensions/pi-matt-dispatch/index.ts` 是规范调度入口，宿主生命周期逻辑位于 `lib/implementation-runtime.mjs`。每次 dispatch 由 `buildRegistry` 校验 package 源文件、路径、digest 和路由，并将生成结果与磁盘 registry 逐字比较；只使用重新生成的对象，不按缓存中的路径读取文件。缓存被篡改或过期时拒绝调度，提示运行 `npm run registry`。
-
-授权前校验任务、计算 leaf 闭包并验证 agent 绑定。`matt-tdd` 按已批准的 `implementation.delivery` 运行对应的 laneTasks：`verified` 仅 implement，`reviewed` 或旧信封才运行三项；独立 `matt-code-review` 保留 standards/spec 两项。
-
-已验证 plan 在 `turn_end` 经进程内 RPC 异步启动。TDD 与 committed `matt-code-review` 使用 session-scoped `pi-x-matt.tdd` owned plan 和固定 collector；前者采集 worktree，后者从固定 F/H 采集 Git 对象。结构化结果、候选完整性和所选门禁不满足即停止；仅完成 repair 或待审阶段不代表可交付。
-
-TDD 必须提供限定的 `implementation`。宿主对新的单票范围或批次计划确认一次，将授权绑定到实际票据、项目/branch/HEAD 和精确范围；确认后不按时钟过期，同一会话和范围内的修复不会重复询问。Pi 的原生命令回调与本地文件都不能替代真实确认；也不为常规测试方案另弹确认。新范围或风险豁免仍须单独确认。详见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
-
-`preReviewCommands` 是随信封获批的本地确定性验收命令（最多 6 条，共享 10 分钟预算）；`verified` 必填，其他档可选。命令应在基线上通过、覆盖本次行为、不写工作区、不输出敏感数据。writer 完成后宿主对候选实测；能修则同一个 writer 纠正一次后重测。新信封检查仍失败就不启动 reviewer、不提交。检查与候选 worktree/index 绑定，不能用旧 PASS 或 writer 自述替代。细节见[宿主确定性校验](.pi/skills/matt-tdd/dispatch-contract.md#宿主确定性校验)。
-
-受限诊断可用可选的 `implementation.diagnosticFiles`（在获批写入边界内逐文件声明）与 `repair.diagnosis.testFiles` 提供内联复现内容；授权确认会展示这份隔离权限，缺省时保持既有范围对象形状。父流程必须在提交 `testFiles` 前完成脱敏，只使用合成或已脱敏 fixture；凭据只经环境变量，不写入测试、fixture 或输出。宿主先严格确认原工作区等于最近已审快照，再在自己的 OS temp 区从该已审状态（HEAD 加已审未提交变更，含删除/重命名）重建项目，只写入获批诊断文件并运行原批准命令；要求退出码 1、目标失败文本、原快照前后不变且隔离区生产文件未被改动，否则 fail closed 且不排 writer。成功、失败与取消都清理宿主临时区；GREEN、其他症状、超时、取消、快照漂移和越权改动都不能解锁。该隔离只用于本机故障隔离，不是安全 sandbox，不联网安装依赖，也不复制个人 ignored 资料（因此不含被忽略的 `.venv`，相对的 `.venv/bin/python` 会以 127 失败）。需要虚拟环境依赖时，由用户显式批准使用项目绝对解释器路径的命令（属于新的 `diagnosticCommands` 授权信封，同一 ticket 修复谱系不变），例如 `/absolute/project/.venv/bin/python -B -m pytest -p no:cacheprovider tests/repro.py`，含空格路径按 shell 规则加引号；`-B` 避免未获批的 `__pycache__` 写入，`-p no:cacheprovider` 避免 pytest 缓存。宿主不自动发现或替换解释器、不安装依赖、不挂载或复制 `.venv`，解释器与依赖本身并非 OS 强制只读。失败按真实退出状态归因：127 命令/解释器不存在、126 不可执行、其他非 1 为命令失败；退出 1 但无目标文本按症状不匹配提示检查解释器与依赖，持久化只保留退出状态与输出 sha256，不保留原始输出。宿主只在该次临时区使用正文，repair 证据与 implement lane handoff 仅保留准确 path 与内容 sha256。该门禁不自动识别任意 secret/PII，也不能从会话记录抹去已经提交的工具输入；没有 `testFiles` 时保留原项目根诊断路径。
-
-工具 allowlist 是真实的能力边界；SKILL.md 中的文字不是沙箱。直接调用底层 `subagent` 仍是管理员级逃生口，因此本项目的父 skills 统一要求使用 `pi_matt_dispatch`。
-
-报告契约支持 `path:line` / `path:line:column` / `path:start-end` 与单一 canonical finding ID；裸 ID 和本轴前缀写法不会再双写。跨轴 ID 仅用于有变化影响证据的 regression 因果关联，各轴条款与裁决仍独立。合法 reconsider 动作完成不等于交付通过：必须检查 effective 双轴及 `reviewPassed`，有剩余 blocker 就继续修复。旧宿主误判的完整 `review-evidence` 报告可经原 recovery 入口在原候选上重校验，不跑模型、不消耗或重置原预算；仍不合法或属于 schema/执行失败的报告不放行。具体恢复方式见 [Dispatch Lifecycle](.pi/skills/matt-tdd/dispatch-contract.md)。
-
-## 当前使用方式
-
-Follow-up 只提供实际执行的 lane task。committed `matt-code-review` 可用 `recovery: {dispatchId, lanes}` 一次恢复失败轴，省略 `reviewScope`，复用原 F/H、Pack 与另一轴结论；先解决额度/网络问题，不重试有效 FAIL。
-
-最新 repair 的 writer 执行失败且无结构化结果时，可显式使用 `writerRecovery: {dispatchId: "<最新失败 repair>"}`，只提供 implement task。宿主绑定首次观察失败终态时的 partial 快照，只 resume 同一个可恢复 writer 一次，保留失败、原修复契约/计数与累计评审基线；不自动追加 settlement，不换 fresh writer。成功仍为 `reviewPending=true`，必须用恢复返回的最新 dispatchId 正式 review；合法 BLOCKED、初次实现失败、不可恢复 writer 或恢复再次失败仍停止。详见 [writer 执行恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#失败-repair-的-writer-执行恢复)。extension/`.mjs` 更新后须完整重启 Pi 并恢复原会话，仅 `/reload` 不够。
-
-批次当前票的首次 writer 若因外部环境无法启动聚焦测试，且宿主保存了结构化环境阻塞及失败快照，可在环境修复后用 [`blockedRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次批次实现的环境阻塞恢复) 经显式确认续跑同一 writer 一次。范围与门禁不变，不重发 initial。
-
-单票或批次当前票的首次 writer 达到 20 分钟上限，且宿主已有可信快照、settlement 返回合格 `BLOCKED`、原 writer 可恢复时，宿主自动再给同一 writer 20 分钟。再次超时后，才可用 [`timeoutRecovery: {dispatchId}`](.pi/skills/matt-tdd/dispatch-contract.md#初次实现的-writer-超时续跑) 经用户确认续跑第二次。单票可以在原授权路径内继续未完成的代码和测试；批次仍只补验证和报告。越界、漂移、缺证或不可恢复就保留草稿并停止，交付门禁不变；未封存的旧单票不能补认。
-
-批次票通过实现门禁后若发现最终验证回归，可用 [`finalValidationRepair`](.pi/skills/matt-tdd/dispatch-contract.md#双-pass-后的最终验证续修)。未预批命令须确认，宿主核验基线通过、候选复现才续跑原 writer；旧候选立即停止交付。新候选用 `review` 结算宿主检查，`verified` 不跑 reviewer；`reviewed` 仍须增量复核。
-
-`acceptRisk` 不是日常减重手段。仅双轴路径中剩余 finding 都是普通 Standards P2 且 Spec PASS 时，才可为精确候选请求真实用户确认。原 FAIL 保留，不豁免失败检查、验收、安全、数据完整性或 P0/P1；单票收据不豁免整份 spec 评审。详见[显式风险接受](.pi/skills/matt-tdd/dispatch-contract.md#显式风险接受与收尾)。
-
-在目标代码库启动或 reload Pi，使项目级 package、`matt-*` agents、skills 和 extension 生效：
-
-```text
-/reload
-```
-
-首次使用发布链前运行 `matt-setup`，业务项目使用仅本地 Local Markdown，由用户确认 label mapping、领域布局与隐私迁移 draft；它只写本地 `.x-matt/`、`.pi/APPEND_SYSTEM.md` 入口和 Git exclude，不向团队 AGENTS/README 添加工具说明，不会创建远端 issue 或 label。源码维护例外选择 GitHub/GitLab 时，`gh repo view` / `glab repo view` 必须能从仓库内打印项目；缺少的 canonical label 只给出用户需执行的 `gh label create` / `glab label create` 命令，未创建即保持未配置。已有 legacy `.x-matt/context/CONTEXT.md` / `CONTEXT-MAP.md` 时，setup 会先列出精确路径、取得批准后用普通 `mv` 迁移到 `GLOSSARY` 名称；未迁移则报告未配置，不写入指向新名称的契约。Matt 管理的项目文档统一采用：
-
-```text
-.x-matt/
-├── agents/   # tracker、label 和 domain 契约
-├── context/  # GLOSSARY.md、GLOSSARY-MAP.md 与多 context glossary
-├── adr/      # single-context ADR；多 context 时按子目录分组
-└── work/     # active Local Markdown spec/tickets/map/decisions；shipped/ 是唯一归档子目录
-```
-
-未完成 setup 时，`matt-to-spec` 与 `matt-to-tickets` 保持 fail closed。本仓库当前已配置 Local Markdown tracker，active spec 与 tickets 写入 `.x-matt/work/<feature-slug>/`；parent spec 使用 `spec-ready`，可实现 ticket 使用 `ready-for-agent`。tracker 只在本机维护，不被 Git 跟踪、不暂存、不提交；完成后由 `matt-implement` 先提交代码，再在本地把 ticket 写为 `resolved`，Comments 记录 `Implementation commit: <完整 commit SHA>` 与验证/review 摘要。提交失败不写完成状态；本地写回失败则报告“代码已提交、tracker 待修复”，不重复提交。全部 tickets 为 `resolved` / `out-of-scope`、Comments 中相关实现提交已在当前 branch、持久知识已沉淀后，用户可在独立步骤显式运行 `matt-archive <feature-slug>`：它把 parent 改为 `shipped`，整体移动到 `.x-matt/work/shipped/<feature-slug>/`，改写 Parent/Blocked by 路径，仅本地归档，不创建提交；`matt-implement` 不得代做归档。
-
-**业务项目排除的是整个 `.x-matt/` 和个人 `.pi/`，不是仅 work/。** 包括 tracker、agent 契约、glossary、ADR、research、原型、settings、Pi package/extension/skill 声明、工具/harness 配置及本地入口；业务自己的 `package.json`、构建配置和锁文件不在其中。`matt-setup` 通过 `git rev-parse --git-path info/exclude` 与 `--show-prefix` 配置本机规则（根项目为 `/.x-matt/`、`/.pi/`），支持 nested project 与 linked worktree，不修改团队 `.gitignore`。规则不匹配或个人资料仍被跟踪时停止；ignored 文件按准确路径读取，不能用 Git-aware 搜索或 diff 缺失推断不存在。
-
-入口使用 Pi 原生 `.pi/APPEND_SYSTEM.md`，保留已有本地内容，不用 AGENTS override 遮蔽团队指令。若新建 project APPEND 会遮蔽全局同名文件，setup 会停止并要求先明确保留/合并方式。提交前检查完整 staged manifest、内容和最终提交信息，不自动附加 AI attribution、工具生成的 co-author、session、私有路径或模型/harness 说明；提交后若 hook 追加归因则停止、不 push，不伪造作者或绕过团队策略。完整规则见[业务项目隐私契约](.pi/skills/matt-setup/privacy.md)。
-
-已有项目重新运行 `matt-setup` 迁移整个个人 AI 资料范围，而不是只迁移 tracker。先展示准确清单：个人 tracked 文件经授权后仅取消索引跟踪、保留磁盘文件；旧 AGENTS/README 的个人入口 block 经批准后移入本地文件，团队原文不动。不能自动取消跟踪团队 `.pi/` 配置，也不重写历史。取消跟踪产生的索引删除需先作为一次迁移提交落地，再继续 implement/archive；此删除记录不删除本机文件。本机 exclude 不随 clone 传播，新 clone/worktree 需重新核验；本地资料需自行备份。实现追溯使用本地 Comments 的真实 commit SHA；blocker 必须核验该实现提交属于当前 `HEAD` ancestry，不能用其他 branch 的完成状态解锁。
-
-**插件源码仓库是例外**：只有目标 cwd 的真实路径等于已加载 package root 时，才保留 `.pi/` 与既有契约的版本控制；不能靠相同目录名或 package name 启用例外。本仓库只排除整个 `.x-matt/`，`.pi/` 作为 package 源码保持跟踪；已 tracked 契约不受忽略影响，新增需要分发的契约文件须显式 `git add -f`。这不意味着业务项目也能提交这些资料。忽略规则不能消除已有 Git 历史，也不能保证手动操作、第三方扩展、hook 或远端服务“绝对无痕”。
-
-旧项目迁移时，既有 `resolved` implementation ticket 若缺少 `Implementation commit`，只能核验真实实现提交与该 ticket 对应且属于当前 `HEAD` ancestry 后，在本地 Comments 追加完整 SHA 与核验依据，保留原有完成摘要；仅修改 ticket 状态的提交不算实现证据，不按状态或时间猜测。无法核验时保留现有状态，parent spec（如有）保持 `spec-ready`，报告待补证；对应 blocker 不得解锁，feature 不得归档。不伪造完成记录，不自动重做实现。
-
-所有 skills 默认把 `.x-matt/work/shipped/` 视为不存在：feature 枚举、Wayfinder frontier、`matt-to-spec` / `matt-to-tickets` 输入、`matt-implement` 入口与 `matt-code-review` Spec 轴都跳过归档内容，找不到 active spec 时返回“无可用 spec”，不回退到 shipped。只有用户在同一会话明确点名某个归档标题或路径时，才可只读对应对象作为历史依据；授权不允许重开 ticket、改状态、生成新 ticket、进入 frontier/implement 或成为 Spec 轴。
-
-需求尚未明确时，使用 `matt-grill-with-docs`。它会在当前父会话中分轮询问 decision tree；事实由代码库或 `matt-research` 调查，用户决定保留为用户决定；新术语即时写入 `.x-matt/context/GLOSSARY.md`，符合三项 gate 的决定在用户同意后写入 `.x-matt/adr/`。shared understanding 确认后必须停止并把控制权交还给用户，由用户显式选择 `/skill:matt-to-spec`、一个 `/skill:matt-implement` 单 slice 或暂停；不得在同一连续流程中直接确认测试切入点或启动 TDD。greenfield、多业务流程、多个测试切入点、部署/迁移、跨 session，或依赖用户提供且不能安全压缩的事实、说明、样例与约束的工作默认进入 spec → tickets；这些材料不限于任何项目或技术格式。目标可命名但路线仍有 fog、明显需要多个 session 时，手动进入 `matt-wayfinder`。
-
-讨论无法回答一个明确的状态/逻辑或 UI 设计问题时，使用 model-invoked `matt-prototype`。父会话先确认唯一 question 与 logic/UI branch，再由单 worker 构建：logic 是可双击的单文件 HTML；UI 是真实页面上下文中通过 `?variant=` 切换的 3–5 个结构差异方案。用户本人给出 verdict 后，artifact 只提交到本机 `prototype/<slug>` 分支，禁止 push、PR、merge 或 rebase 进共享分支；原 branch 只接收可核验 context pointer，生产实现仍进入 `matt-to-spec`/`matt-implement`。
-
-`matt-wayfinder` 先让用户确认整张 map 的 Destination，再 breadth-first 创建问题型 decision tickets、真实 blockers 与 `Not yet specified` fog。每个后续 session 先 claim frontier，再最多解决一张 HITL ticket；相互独立的 research tickets 是唯一并行例外。prototype ticket 调用上述 workflow，并在取得本地 prototype 分支 context pointer（不 push）与用户 verdict 后才 resolve。Local Markdown 的 map 位于 `.x-matt/work/<effort>/map.md`，decision tickets 位于独立 `decisions/`，不会和 implementation `issues/` 冲突。real tracker 的 map/child 只带 `wayfinder:map` / `wayfinder:<type>`，不附加 triage label；交叉引用只写第一遍创建得到的真实 identifier，不用占位符。地图只有在所有决定 resolved/out-of-scope 且 fog 清空后才标记 cleared，并交给 `matt-to-spec`；不得从 decision map 直接进入实现。
-
-需求已经在当前会话中确认，或已有 cleared Wayfinder map 时，使用 `matt-to-spec`。它不会重新访谈，而是先让用户确认最高层的测试切入点，再按当前会话或 linked decision answers、代码库、`.x-matt/context/`、`.x-matt/adr/` 和明确提供的 research note 综合规格；用户提供且后续工作依赖、不能安全压缩的事实、说明、样例与约束，脱敏后忠实写入 `Reference Inputs`，不以 SQL、API 或其他特定技术材料为限，Local Markdown 同时记录 `Source session: pi:<PI_SESSION_ID>`。只有配置了 `.x-matt/agents/issue-tracker.md`、用户确认 spec 且发布结果可核验时才发布 parent spec；Local Markdown 使用 `spec-ready`，remote tracker 使用 `ready-for-agent` 时必须让外部 runner 排除 parent spec，避免绕过 tickets 整体实现。随后使用 `matt-to-tickets`，先让用户批准 tracer-bullet breakdown 和 blocking edges，再按 tracker 配置发布 tickets；源是既有 issue 时把每张 ticket 建成它的 sub-issue，blocker 已用 native edges 表达时正文省略 `## Blocked by`。`matt-implement` 一次只实现一票，通过该票的交付门禁和最终验证后提交当前分支。缺少规划 artifact 不手写 `.x-matt/work/` 解阻；整批须显式使用 `matt-implement-spec`。
-
-整份 spec 已拆好 tickets、希望在同一父会话逐票执行时，使用串行轻量版：
-
-```text
-/skill:matt-implement-spec .x-matt/work/<feature-slug>/spec.md
-```
-
-它只支持 Local Markdown，在干净的当前分支按依赖顺序逐票实现。可以预先在 spec 同目录保存未跟踪且受 Git ignore 保护的 `spec.md.dispatch.json`；启动时宿主展示这份精确计划，确认一次后即可离开。其唯一顶层字段是 `tickets`，示例：
-
-```json
-{
-  "tickets": [
-    {
-      "ticket": ".x-matt/work/example/issues/01-parser.md",
-      "scope": "实现已批准的 parser 行为",
-      "allowedDirectories": ["src/parser", "test/parser"],
-      "delivery": "verified",
-      "preReviewCommands": ["node --test test/parser"]
-    }
-  ]
-}
-```
-
-按依赖顺序列票；用实际源码、测试目录和在基线上可运行的聚焦验收替换示例。普通票用 `verified` 和核实后的窄目录，目录内新文件无需逐个列出；高风险或关键验收不能充分自动化的票用 `reviewed`、`allowedDirectories: []` 和精确 `allowedFiles`。省略 `allowedDirectories` 的旧计划不自动升级，未写 `delivery` 仍按原双轴跑。`finalValidationCommands` 可选，只从本地计划读取；有声明就必须等当前候选的 `required final validation PASS`。续跑批次保留原始 fixed-point SHA。
-
-需要越出当前票的写入边界时，受控 writer 写前暂停，由 `scopeRecovery` 只确认这张票的新增范围。同一 writer 用剩余时间继续，不重批 spec、不改原计划、其他票不继承。基线漂移或实质需求改变时停下。用 `/matt-revoke` 撤销授权；已取得启动权的任务用 `/subagents-stop` 停止。若误改计划，恢复原文件可继续；撤销时保留未提交草稿，不自动重新绑定。
-
-前一票通过获批门禁，真实 commit 的 parent/tree 与候选精确一致，原始 fixed point ancestry、干净工作区和本地 `Status: resolved` / `Implementation commit` 写回均核验后才推进。全部票结束后跑一次尚未覆盖的完整测试和集成检查，再从原始 fixed point 到 HEAD 做一次 committed 集成评审。不自动 push、开 PR 或归档。
-
-具体 hard bug、间歇性失败或性能回归无法直接定位时，使用 model-invoked 的 `matt-diagnosing-bugs`。它在任何理论之前强制建立一个已实际运行的 red-capable command，随后最小化 repro、让用户检查 3–4 个可证伪假设、用单变量 probe 确认根因并清理 `[DEBUG-<id>]` instrumentation。存在正确回归测试切入点时，它把根因、循环命令和测试切入点作为当前会话单 slice 交给 `matt-implement`；需要新回归测试但不想移动原工作区快照时，使用上述宿主隔离的内联 `testFiles` 路径。没有正确测试切入点时停止并给出可供手动 `matt-improve-codebase-architecture` 固定 scope 的架构 finding，不写浅层测试或直接 refactor。
-
-周期性 architecture upkeep、实现前的可替换点评估或诊断确认缺少正确测试切入点时，手动运行 `matt-improve-codebase-architecture`。它按用户方向或近期 hot paths 限定 scope，调用 `architecture-scan` 在 OS temp 生成 deletion-test report；用户可以只保留报告，或选择一个 candidate 进入 `matt-grilling`/`matt-domain-modeling`。需要比较 interface 时再调用三个只读 `architecture-design` lanes。最终只产生可进入 `matt-to-spec` 的决定，不修改生产代码。
-
-```json
-{
-  "workflow": "matt-research",
-  "task": "明确问题、时间边界、必需来源、输出格式与停止条件"
-}
-```
-
-代码评审使用 `workflow: "matt-code-review"`。父会话声明 `reviewKind=worktree|committed|files`，优先提供 Review Evidence Pack：fixed point/current HEAD、状态、完整 manifest、完整 combined diff、新文件全文/hash、deleted/rename old/new 和注明来源的测试记录。Standards lane 只接收适用工程规范与安全/正确性边界，调度前必须搜索仓库标准文件，存在 `CODING_STANDARDS.md` / `CONTRIBUTING.md` 时必须在列；Spec lane 只接收 ticket acceptance matrix 和 parent spec 相关条款，issue 引用经 tracker 契约取回。两轴在一次 dispatch 中一起发出并前台聚合。独立评审指独立判断，不是重复发现上下文；已内联内容无需再次 `read`。没有 Pack 的 standalone review 按精确 allowlist 取证，允许一次完整、未截断的 combined diff，仅截断或需要深入检查时按文件补读；`worktree` 禁止以 `ref...HEAD` 替代当前工作区，`files` 不调用 Git。默认只读 manifest，仅在截断、symbol 不明、一层依赖待核验、hash 不符或安全/数据完整性风险时，说明缺口后定向扩展一层，不递归、不扫描整个 module。证据不足返回 `NO_EVIDENCE`。`matt-reviewer` 只保留 hard 50 的只读工具预算，不通过提高上限掩盖重复扫描。
-
-评审已提交范围时改用顶层 `reviewScope: { kind: "committed", fixedPoint: "<ref>" }`：宿主自行解析 F、核验 F 是 admission 时 HEAD 的祖先、固定 H，并在两个 reviewer 前执行一次 fixed collector，只从 Git 对象读取 `F..H` 的完整 manifest、combined diff 与变化文本/hash/type/mode/new/delete/rename old/new。调用方不提供 hash、HEAD、路径或命令；工作区 staged/unstaged/untracked 与项目外内容不进入 Pack，`fixedPoint` 等于 HEAD 允许空范围，不用 merge-base 替换范围；binary/不可读/子模块 fail closed，采集失败或 HEAD 漂移在 reviewer 前停止。省略 `reviewScope` 时保持既有手动 worktree/files Pack 行为。Spec 的内联原文只放在该轴 lane task，不复制给 Standards。
-
-TDD 复用 [Context Pack](.pi/skills/matt-tdd/context-packs.md) 的验收矩阵、真实基线、必读文件、公开测试切入点和命令分层。只在证据有缺口时扩一层，不重复取证。worker 的 RED/GREEN 是过程证据，不是宿主实测；父会话仍检查 Pack 新鲜度和实际 diff。候选采集或基线核验失败就停止。
-
-执行型 workflow 按角色保留运行余量：worker lane 为 20 分钟，reviewer lane 为 15 分钟，reader/researcher lane 为 10 分钟；timeout 缺少结构化结果后的 settlement-only resume 为 5 分钟执行预算。0.88.0 起 child 等待 supervisor 回复的时间不计入预算，但 progress update 不暂停；这些数值不是 wall-clock 总耗时上限。正常漏交由 runtime 在原 timeout 内补交，不增加 dispatcher 恢复轮次。预算只限制单个 lane，不替代任务范围、最小验证和 fail-closed gate。授权等待、证据准备、queue/RPC、执行与 settlement 分开记录；原生 trace 的 run-operation duration 也包含该次 runtime 操作的准备/收尾，不直接等同模型推理时间。阶段通过 `pi-matt:dispatch-phase` 事件报告，不要求模型轮询；原始 timeout 与恢复失败保留在 gate 前快照和 `recoveryHistory`。RPC 回应丢失只按原 alias 对账，不重新 spawn。
-
-TDD 使用内部 `workflow: "matt-tdd"`，该 skill 对 model invocation 隐藏，只能在 `matt-implement` 已核验 ticket/direct-slice handoff 后调度，不能从 grilling 或普通功能请求自动进入。原生命令或运行时确认只授予限定范围，权限无法核验时不会启动。宿主逐票签发 HEAD-bound grant；同票 follow-up 即使省略 `batch` 也保留宿主 binding，额外文件和宿主执行命令仍需显式重确认。batch-bound 候选在受信任 collector 中用 OS temp index 与临时 object store 生成 candidate tree，真实 repo/index/HEAD 不写。调度前父会话须记录公开测试切入点、待验证行为和测试价值判断；已确认范围内不再逐票询问，缺少依据或涉及新的实质决定时暂停。显式验收、缺陷回归、业务规则、状态分支、权限/数据完整性与公开 contract 必须测试；不为重复现有覆盖、无分支且无业务语义并可由编译/typecheck/现有 contract test 直接保障的低风险简单变更、框架自身行为、不可达或规格排除的假设性边缘情况机械新增独立测试，紧密相关的简单字段可以合并到一个行为级测试。task 还要包含固定基线、既有工作区变化、允许范围、RED/GREEN 最小命令、worker 相关回归命令、`reviewKind=worktree`、标准文件具体路径、当前 ticket/parent spec 路径、reviewer 初始证据边界和 module/package 搜索边界。完整测试套件、全量 build 与最终验证不下发给 worker，由父会话在 TDD workflow 完成后运行一次。`tdd-executor` 的依赖闭包会同时向 worker 授予 `codebase-design`，但 reviewer 只获得各自只读 review skill。
-
-`matt-implement` 默认普通票走 `verified`：宿主实测验收，**不启动模型评审**。高风险走 `reviewed`：先实测，再并行两轴；只让有证据的验收失败、可达回归或关键风险阻断，命名偏好、非关键规范和等价测试建议记为 notes。`matt-code-review` 仍可显式用于独立深审。
-
-单票和批次先只读核实源码与测试位置，再批准写入范围。受控 writer 写前拒绝越界；必要时一次报告所需路径、由宿主封存草稿，经用户同意后让同一 writer 用剩余时间继续。事后仍核对实际 Git diff 并执行原验收。受控 writer 只在原项目环境运行获批的原命令；测试不得改写 Git 候选或 index。见[范围授权契约](.pi/skills/matt-tdd/dispatch-contract.md#单票按范围授权与扩围)。
-
-`reviewed` 初审后最多修复一次（含最终验证续修），然后一次增量 `review`。只续跑原 writer，只复核原 findings、修复直接影响的行为及新安全/完整性风险；不重扫已通过的范围。仍失败就保留候选、暂停，不提交或自动重开评审。`reviewPending` 不是通过。失败轴恢复、报告纠错、存量计划诊断等例外见[宿主契约](.pi/skills/matt-tdd/dispatch-contract.md)。
-
-有效 FAIL 有异议时，父会话使用 `reconsider: {dispatchId, findings: [{findingId, reason, evidence}]}`，不能直接删除 finding。宿主只启动受影响轴的 fresh 只读 reviewer，沿用原 Evidence Pack；reviewer 对每条争议明确 `uphold`/`withdraw`，未争议 findings 与另一轴原样保留，最终仍须 effective 双轴 PASS。每个候选快照每轴最多一次异议复核，可一次提交多条争议；原报告、决定和根因计数保留。报告契约错误通过同一 `recovery` 接口有界纠正，每轴每候选最多两次，与 execution recovery 分开计数；不自动剔除非法引用，不把错误报告变成 PASS。无效异议决定的纠错保持原目标集合，reload 或重新授权不重置额度。后续 repair 使用 effective remaining findings。
-
-把 task 传给 `pi_matt_dispatch`。调度是异步的；父会话不应轮询等待，完成后由 pi-subagents 自动回传。RPC 使用 inline `script`；TDD 与 committed `matt-code-review` 使用 named `pi-x-matt.tdd` workflow（session-scoped owned plan），两者不能同时发送。每条 lane 必须 `ok === true`，失败后保留的结构化结果不能通过 gate 或启动后续 stage。
-
-父会话按 [Workflow Result Reading](.pi/skills/matt-tdd/results.md) 读取每个 lane 的 `structuredOutput`：completion/targeted status 的 Preview 有界且可能被截断，必须读取通知指向的 retention-managed `status.json`。成功时仍读取完整 `workflow.value`；失败时读取 `workflow.emits` 中最后一个 `pi-x-matt.stage-results` 累积快照（在阶段 gate 前发布），保留两个复核轴的全部结果。复核结论不通过与执行失败/结果缺失/schema 无效分别报告，均不授权提交或自动重跑实现。不解析普通 `output`、`outputReference`，也不从 receipt、通知或旧 transcript 拼装结果。
-
-## 已验证行为
-
-### 信封越界的原地恢复
-
-旧精确文件信封（含旧批次）的完整候选仅因越界失败时，仍可按[旧恢复契约](.pi/skills/matt-tdd/dispatch-contract.md#信封越界后的仅重采集)重新确认后用 `recollect` 只重采集、不重跑 writer。受控 writer 不采用这种事后补批。
-
-`0.90.0` 契约测试使用已安装 runtime 的脚本 sandbox、bundled resource 注册、原生 agent discovery 和 MCP 精确选择。宿主回归覆盖完成通知早于终态落盘、原结果被回收后的拒绝恢复，以及既有 lane 标签和 orphaned runner 的 `unknown` 证明；child/model 与 PID liveness 使用 mock，不替代真实模型、Windows 锁文件或 Fleet 交互验证。
-
-历史真实只读冒烟基于 `pi-subagents@0.88.1` + Pi `1.5.2`（本机 pi-fff 为 `override` 模式），运行 Research 与 Code Review 正/负例，共 5 个真实模型 child，全部 fresh context、模型匹配 override 映射、无 settlement 与自动重试，仓库与夹具在运行前后未变。`matt-reader` 和 TDD writer/repair 链未实跑。原生 completion notice 可唤醒空闲父会话；完整结果仍按通知中的路径读取，不能将 Preview 当作完整结果。
-
-- Research 真实冒烟（0.88.1 + Pi 1.5.2）：`state=complete`、research `ok=true`、fresh context，模型匹配 researcher override。子会话只持有 `read`、`mcp__exa__web_search_exa`、`mcp__exa__web_fetch_exa` 与 `structured_output`，实际只用 `read`、`mcp__exa__web_fetch_exa` 和 `structured_output`，未获得任何未授权 MCP 工具。父会话从完整 `workflow.value` 核验 5 条 claim 与 2 个固定版本官方来源（`raw.githubusercontent.com`），schema 合法，无 settlement 或重试。
-- Code Review 真实冒烟（0.88.1 + Pi 1.5.2）：OS temp 两组独立合成夹具，正例 Standards/Spec 均 PASS（0 findings）。负例 Standards 报告 1 项 P1 授权绕过、Spec 报告 2 项 P1 金额计算，负例 workflow 按 gate `standards.verdict` 失败、不产生 `workflow.value`，两轴完整报告仍可从最后一个阶段快照读取；正例为 complete。四个 reviewer 均为 fresh、匹配 reviewer 模型 override、`ok=true`，两组的两个轴经 `startedAt`/`endedAt` 核对确实重叠并行（正例 20.8s、负例 19.5s），无 writer、settlement 或自动重试。全部结果重新通过 schema 检查，夹具 hash、仓库 HEAD/status 在子代理运行前后一致。
-- 工具修复验证：本机 pi-fff 为 `override` 模式，reviewer 子会话实际注册到的是 `grep`/`find`（无 `ffgrep`/`fffind`）并成功启动，证明共享 agent 不再依赖本机 pi-fff 模式。
-
-- Research 单 lane 异步冒烟（0.83.1 + Pi 1.4.0，重启并重新配置模型后实跑）：workflow `state=complete`、research lane `ok=true`、`resolvedContext=fresh`；runtime 请求模型与 child session 的实际回复模型均匹配 researcher override，未继承父会话模型。已核实 `web_search`、`web_fetch` 与 `structured_output` 各实际调用成功一次，没有额外 settlement/relaunch。异步完成通知已返回，父会话从 `status.json` 的完整 `workflow.value` 核验了两项 findings、官方来源与空 gaps。
-- Code Review 双轴失败分支真实冒烟（0.83.1 + Pi 1.4.0，重启后实跑）：OS temp 负例夹具令两个 reviewer 均返回 `FAIL`，workflow 保持 `state=failed` 且不生成 `workflow.value`；父会话从实际 `status.json → workflow.emits` 的最后一个阶段快照完整读取 Standards 1 项与 Spec 2 项 findings，两个结果均 `ok=true` 且 schema 有效。仅启动两个只读 reviewer，无实现重跑或仓库改动。
-- Code Review 并行冒烟：`standards` 与 `spec` 两个 reviewer 均以 fresh context 完成，分别生成结构化结果，且未修改项目文件。
-- TDD pipeline 真实冒烟：worker 加载 `codebase-design` + `tdd-executor`，取得一轮真实 RED/GREEN；随后两个 fresh reviewer 只读复核。registry、依赖闭包、唯一写者、lane gate、stage 顺序与前序证据传递另有聚焦测试覆盖。
-
-## 上游与许可证
-
-上游快照位于 `vendor/mattpocock-skills/`，固定 commit 记录于 `vendor/UPSTREAM_SHA`。vendor 不在 Pi skill discovery 或 agent `skillPath` 中，但它是可追踪的项目源文件，并非路径级安全沙箱。
-
-上游使用 MIT License，原文保留在 `vendor/mattpocock-skills/LICENSE`；归属说明见 `NOTICE.md`。
-
-## 当前边界
-
-当前刻意不实现万能 router、动态多写者、自动导入全部 skills 或跨 harness 兼容。TDD 遵循上游方法：refactor 不混入 red→green 循环；fresh review 发现需要重构时，由父会话取得授权后再启动下一次受限实现。

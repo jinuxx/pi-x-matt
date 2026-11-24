@@ -164,8 +164,10 @@ test("committed admission and collection fail closed for invalid refs, non-ances
     assert.equal(binary.manifest.find(entry => entry.path === "binary.bin").binary, true);
     const evidence = await prepareCommittedReviewEvidence(cwd, ROOT, control);
     try {
-      assert.throws(() => execSync(evidence.command, { cwd, stdio: "pipe" }), /incomplete|Command failed/);
-      await assert.rejects(() => readFile(evidence.path, "utf8"), /ENOENT/);
+      const cli = JSON.parse(execSync(evidence.command, { cwd, encoding: "utf8" }));
+      assert.equal(cli.complete, false);
+      const written = JSON.parse(await readFile(evidence.snapshotPath, "utf8"));
+      assert.equal(written.manifest.find(entry => entry.path === "binary.bin").binary, true);
     } finally {
       await rm(dirname(evidence.path), { recursive: true, force: true });
     }

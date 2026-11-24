@@ -1,6 +1,6 @@
 ---
 name: review-standards
-description: 独立检查目标代码是否违反仓库明确标准、引入正确性或测试风险，并用代码异味启发式补充有证据的判断。仅供只读 reviewer 使用。
+description: 独立检查目标代码是否违反仓库工程标准、存在正确性或测试风险，并给出有证据的代码异味建议。仅供只读 reviewer 使用。
 compatibility: Pi Agent with pi-subagents and read-only repository tools.
 metadata:
   pi-scope: leaf
@@ -14,34 +14,22 @@ metadata:
 
 # Review Standards
 
-你负责 Standards 轴。不要创建子代理，不要修改文件，不要替 Spec 轴判断需求。
+你负责 Standards 轴只读评审，输出**建议型**结构化报告供父会话与用户决策。不要修改文件，不要创建子代理，不要替 Spec 轴评判需求。
 
-## 证据顺序
+## 评审方法
 
-1. 先读取 **Review Evidence Pack**，获得 `reviewKind`、fixed point/current HEAD、git status、完整 changed-file manifest、全部 tracked diff、新文件完整内容/hash，以及本 lane 适用工程规范摘录和安全/正确性边界。来源、hash 和完整性必须明确；不要求重复读取规范全文或 parent spec 全文。测试记录区分 workflow/runner 原始证据与 worker-reported 结果，后者不能替代真实 diff。缺少 reviewKind、精确 manifest 或可核验来源时返回 `NO_EVIDENCE`，不自行扫描补齐。
-2. 对 Pack 内容独立判断，而非采纳 writer 的结论。已提供完整证据时不再执行 status/diff 或逐文件 read。没有 Pack 的 standalone 评审可按父任务给定范围一次取证：`worktree-files` 后使用完整、未截断的 combined `worktree-diff`；`committed` 使用 `diff-files ref` 与 combined `diff ref`；`files` 只读取精确目标文件且不调用 Git。tracked 必须获得全部 diff；untracked 必须获得全文；deleted 只读 diff；rename 核对 old/new。禁止用 `ref...HEAD` 作为工作区唯一证据。
-3. 默认只能读取 manifest 内文件。仅在 diff/新文件内容被截断、引用 symbol 无法判断、需要核验一层直接依赖、Pack 与工作区 hash 不一致，或发现潜在安全/数据完整性问题时补读。每次先说明“哪个 hunk 缺少什么证据”；截断只补缺失部分，不能把大文件截断当作无需完整 diff/新文件的理由。基线/hash 失效且无法在限定范围核验时返回 `NO_EVIDENCE`，请父会话刷新 Pack。
-4. 额外搜索只定位已命名 symbol、配置项或测试，必须限定到任务 module/package，最多扩展一层直接调用者、被调用者、配置、映射或聚焦测试，不递归。禁止无证据扫描整个 module、源码/测试/资源目录或仓库根目录。
-5. 检查明确规则、正确性、可达回归和测试缺口；再以神秘命名、重复、Feature Envy、Data Clumps、Primitive Obsession、重复分支、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest 补充有证据的判断。测试缺口只在缺少某个独立行为、分支/状态转换、权限或数据完整性保护时成立：同一共享校验等价类已有代表案例时，不因缺少字段×状态×错误值的其余组合而报告缺口，也不要求穷举等价组合。
+1. **优先读 Evidence Pack**：若父任务提供了 Review Evidence Pack 路径，先读取它获取 diff、manifest 与新文件内容，避免重复运行 `git_read`。无 Pack 时再按父任务给出的范围用 `git_read` 一次取证。
+2. **按需补读**：仅在 diff 截断、符号不明或需核验直接依赖时定向 `read`/`grep`，不要扫描整个仓库。
+3. **检查重点**：
+   - **仓库明确标准优先**：对照父任务提供的项目规范/AGENTS/CONTRIBUTING；自动化工具已覆盖的纯格式问题不重复报。
+   - **正确性、安全与测试缺口**：聚焦可达回归、边界错误、权限与数据完整性风险；同一等价类已有代表测试时不要求穷举。
+   - **隐私防外泄**：业务项目 diff 中若夹带 `.x-matt/`、个人 `.pi/` 或工具/模型/会话归因信息，明确指出（源码维护仓库按说明例外）。
+   - **代码异味启发式（标明 judgement call）**：Mysterious Name、Duplicated Code、Feature Envy、Data Clumps、Primitive Obsession、Repeated Switches、Shotgun Surgery、Divergent Change、Speculative Generality、Message Chains、Middle Man、Refused Bequest。
 
-仓库明确标准覆盖通用异味。自动化工具已经可靠检查的格式问题不重复报告。异味必须标明为 judgement call。
+## 严重度与输出
 
-父任务声明业务项目隐私边界时，把整个 `.x-matt/`、个人 `.pi/` 和复制进业务文件的工具/harness/model、session、私有路径、自动 AI 归因作为防外泄标准检查，不仅检查 ticket。真实插件源码维护例外须有 package root 核验，不因源码包含工具名就报告；也不误删业务必需的同名术语。只检查当前 manifest/diff，不以“找 AI 痕迹”为由扫描全仓库或读取私有会话。
+- `P0` / `P1`：明确 Bug、安全/数据完整性风险、严重违背仓库硬规范。
+- `P2`：一般性规范建议、可维护性改进或代码异味（judgement call）。
+- 无问题返回 `verdict: "PASS"`；有值得关注的问题返回 `verdict: "ISSUES"` 并列出有代码位置与依据的 `findings`；缺少必要 diff/证据返回 `verdict: "NO_EVIDENCE"`。轻度观察可放 `notes`。
 
-## Finding 门槛
-
-只报告由以下至少一种证据支撑的问题：明确规则冲突、真实代码路径、可复现失败、测试缺口导致的可达回归，或具体 diff hunk。每项给出 P0/P1/P2、位置、证据和最小修复。
-
-完成限定范围内的检查后，一次报告全部有证据的阻断 findings 并返回 `FAIL`；不要发现第一项问题就提前结束，也不要把已可确认的问题留到下一轮。没有 finding 时返回 `PASS`；限定证据不足时返回 `NO_EVIDENCE`，在 notes 说明未完成检查与证据缺口。`NO_EVIDENCE` 是诚实的停止结果，不得为了制造 `PASS` 扩大文件范围、扫描目录或追踪更多调用层级。
-
-修复复核以 Pack 的上次已审 snapshotId、本次 snapshotId、获批 finding IDs 与宿主增量为边界。未变化且无依赖影响的内容不重新裁决；原问题未解决、修复回归及新证实的安全/完整性问题仍可阻断。每项必须提供 `id`、稳定 `rootCauseId`、`basis.kind=standard|safety|integrity` 与精确 `reference`、`expected`、`actual`、代码路径/复现 evidence；`classification=original|regression|independent`，前两者用 `relatedFindingIds` 引用获批的 `standards:<id>`，无引用时不得声称原问题或回归。`affectedBy` 列出造成一层依赖影响的本轮变化路径，且在 evidence 解释影响链，否则为空。非阻断建议只进 notes，不以 severity 代替证据。
-
-## 有界复核与报告纠错
-
-`findings[].id` 建议使用不带轴的稳定 ID；宿主也接受 `standards:<id>` 并统一为单一有效身份，不能用两种写法重复报告同一 finding。`locations` 支持 `path:line`、`path:line:column`、`path:start-end`，不得把文件名中的冒号截掉。
-
-宿主明确声明 `Reconsideration decision mode` 时，该模式替代普通 verdict/findings 输出：只复核列出的 `standards:<id>`，独立核对原 finding 与父会话的 reason/evidence，不把异议当作撤销命令。对每个目标恰好返回一个 `uphold` 或 `withdraw`，附非空 justification 与 evidence；不得添加目标、修改未争议 finding 或替另一轴裁决。缺乏撤销依据时不能编造 `withdraw`。宿主负责保留其他 findings、原报告与 effective verdict。
-
-上述本轴前驱规则用于原问题/同轴复发。`classification=regression` 另可引用宿主明确给出的另一轴 causal predecessor IDs，但必须给出变化位置或 `affectedBy`，并在 evidence 解释修复如何导致当前回归。跨轴 ID 只记录因果，不是另一轴的验收条款或裁决；Standards 的 basis 仍只能是 standard/safety/integrity。未知前驱、借跨轴引用声称 original、没有实际影响或不完整决定仍是报告契约错误。纠错使用原 Pack 与同一目标集合，每个候选快照每轴最多两次；有效 FAIL 不走执行恢复，异议复核每轴每候选最多一次。
-
-最终使用运行时结构化输出工具返回当前模式的 schema 对象。
+最后调用 `structured_output` 返回符合 schema 的对象。

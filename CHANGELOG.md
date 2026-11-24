@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- **彻底减负重构（Breaking）**：移除过度防御的跨轮状态机与 12 种特化恢复通道（`batch-authorization`、`diagnostic-workspace`、`repair-contract`、`review-contract`、`final-validation`、`risk-acceptance`、`writer-scope`、`scoped-writer`），将运行时核心重写为轻量 `dispatch-service.mjs` 与精简版 `dispatcher-core.mjs`。
+- **简化 `pi_matt_dispatch` 接口**：从 14 个互斥控制块精简为 7 个正交参数（`workflow`、`task`、`laneTasks`、`lanes`、`resumeRunId`、`verifyCommands`、`reviewScope`）；新增 `/matt-reset` 一键清理卡住状态。
+- **解耦 TDD 与 Code Review**：`matt-tdd` 改为纯单写者 `single` lane（默认只跑确定性 `verifyCommands`，不再每票自动触发双轴评审）；支持随时传 `resumeRunId` 续跑或直接开 fresh writer，彻底消除自锁。
+- **建议型（Advisory）双轴评审**：`matt-code-review` 移除硬性 `verdict === PASS` gate，简化 findings schema（5 字段），支持 `reviewScope: { kind: "worktree" | "committed" }` 与 `lanes` 单轴重跑，由用户与父会话决定修复或忽略。
+- **回归标准 `matt-worker` 与轻量会话授权**：取消写前路径猜测与受控写工具限制，恢复完整 `apply_patch`/`edit`/`write`/`bash`；写授权改为同会话同项目一次确认，调用其他 `/skill` 不再静默撤销授权。
+- **打通前置需求链**：`matt-grill-with-docs`、`matt-to-spec`、`matt-to-tickets` 经用户确认后可直接衔接下一阶段，取消强制停机手敲命令壁垒，同时完整保留 `.x-matt/` 与个人 `.pi/` 本地隐私边界及 `shipped/` 默认不可见规则。
+
 ## 0.2.53
 
 - 新单票和 `matt-implement-spec` 批次先核实源码/测试目录，再一次批准每票的窄目录或精确文件。目录内新文件无需逐个授权。越界写入前暂停；只确认当前票新增范围，原 writer 用剩余预算继续，其他票不继承。既有精确清单不自动升级，验收、候选提交核验与整批集成评审门禁不变。

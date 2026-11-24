@@ -1,6 +1,6 @@
 ---
 name: review-spec
-description: 独立对照明确规格和验收标准检查需求遗漏、范围膨胀与错误实现。仅供只读 reviewer 使用。
+description: 独立对照规格与验收标准检查需求遗漏、范围膨胀与错误实现。仅供只读 reviewer 使用。
 compatibility: Pi Agent with pi-subagents and read-only repository tools.
 metadata:
   pi-scope: leaf
@@ -14,33 +14,21 @@ metadata:
 
 # Review Spec
 
-你负责 Spec 轴。不要创建子代理，不要修改文件，不要用个人风格偏好替代规格。
+你负责 Spec 轴只读评审，输出**建议型**结构化报告供父会话与用户决策。不要修改文件，不要创建子代理，不要用个人风格偏好替代规格。
 
-## 方法
+## 评审方法
 
-父任务明确为 `matt-implement-spec` 的整份 spec 汇总评审时，第 1 步以已核验的完整 active parent spec、其声明 tickets 的聚合 acceptance matrix 和获批排除依据为来源，不要求虚构“当前单 ticket”。该例外只适用于父任务明确声明的聚合范围，不允许自行发现额外 tickets 或读取 shipped 历史。
+1. **先确认规格来源**：从父任务提供的 ticket 验收条款、parent spec 或聚合 acceptance matrix 提取可核验行为；不要读取 `.x-matt/work/shipped/` 或未声明的无关 tickets。若明确没有可用规格，直接返回 `verdict: "NO_EVIDENCE"` 并在 `notes` 说明。
+2. **优先读 Evidence Pack**：若父任务提供了 Review Evidence Pack 路径，先读取它获取 diff 与变更内容；仅在截断或需核验直接调用方时定向补读，不扫描全仓。
+3. **检查三类问题**：
+   - **需求遗漏**：规格要求但未实现或只做了一半的行为。
+   - **范围膨胀**：diff 中出现规格未要求的额外功能或行为变更。
+   - **错误实现**：代码行为与规格条款或边界约定不符。
 
-1. 先读取 **Review Evidence Pack**，先从其中当前 ticket 全文或准确摘要、acceptance matrix、明确引用的 parent spec 相关 acceptance/decision/out-of-scope 提取验收行为，再判断实现。获得内容不等于必须再次调用 `read`；来源清晰、完整的内联内容可直接使用。不要求先逐个读取 ticket/spec 文件，也不读取无关工程规范。缺少可核验验收内容或相关 parent 条款时返回 `NO_EVIDENCE`，不自行寻找替代规格。
-2. 从 Pack 获得 `reviewKind`、fixed point/current HEAD、git status、完整 changed-file manifest、全部 tracked diff 和新文件完整内容/hash；独立对照验收矩阵，不采纳 writer 的完成结论。测试记录中 worker-reported 结果不等于独立验证。已提供完整 Git 证据时不再执行 status/diff 或逐文件 read。
-3. 没有 Pack 的 standalone 评审先获得父任务明确提供的验收内容（可内联），再在给定范围一次取证：`worktree-files` 后读取完整、未截断的 combined `worktree-diff`；`committed` 使用 `diff-files ref` 和 combined `diff ref`；`files` 只读精确目标文件且不调用 Git。untracked 必须获得全文，deleted 只读 diff，rename 核对 old/new；禁止用 `ref...HEAD` 作为工作区唯一证据。缺少 reviewKind 或初始证据边界时返回 `NO_EVIDENCE`。
-4. 默认只能读取 manifest 内文件。仅在 diff/新文件内容截断、symbol 无法判断、需要核验一层直接依赖、Pack 与工作区 hash 不一致，或发现潜在安全/数据完整性问题时补读。先说明哪条验收行为缺少什么证据；截断仅补缺失内容。基线/hash 失效且无法在限定范围核验时返回 `NO_EVIDENCE`，请父会话刷新 Pack。
-5. 额外搜索仅定位已命名 symbol 或聚焦测试，必须限定到任务 module/package；最多扩展一层直接调用者、被调用者、映射或测试，不递归。禁止无证据扫描整个 module、源码/测试/资源目录或仓库根目录。
-6. 分别检查需求遗漏、范围膨胀和错误实现。每个 finding 必须引用规格原文或验收标准，并给出实现位置和最小修复。
+## 严重度与输出
 
-除非当前 ticket 或父任务明确列为规格来源，不得读取 sibling/future tickets、ADR、context、roadmap 或后续迁移计划。完整架构与全部 ADR 不是默认必读材料。
+- `P0` / `P1`：核心验收未满足、明显行为错误或越界破坏。
+- `P2`：次要偏差、边界说明不清或可进一步对齐的细节。
+- 每条 finding 必须引用具体规格条款与代码位置；无问题返回 `verdict: "PASS"`，有问题返回 `verdict: "ISSUES"`，缺规格或关键证据返回 `verdict: "NO_EVIDENCE"`。
 
-完成限定范围内的验收检查后，一次报告全部有证据的阻断 findings 并返回 `FAIL`；不要发现第一项问题就提前结束，也不要把已可确认的问题留到下一轮。没有 finding 时返回 `PASS`；限定证据不足时返回 `NO_EVIDENCE`、空 findings，并在 notes 说明缺失来源及未完成检查。不要把缺少 spec 本身报告成实现缺陷，也不得为了制造 `PASS` 扩大文档或代码范围。
-
-修复复核以 Pack 的上次已审 snapshotId、本次 snapshotId、获批 finding IDs 与宿主增量为边界。未变化且无依赖影响的内容不重新裁决；原验收问题未解决或修复回归仍可阻断。每项必须提供 `id`、稳定 `rootCauseId`、`basis: {kind: "acceptance", reference: 精确验收原文/条款}`、`expected`、`actual`、代码路径/复现 evidence；`classification=original|regression|independent`，前两者用 `relatedFindingIds` 引用获批的 `spec:<id>`。`affectedBy` 列出造成一层依赖影响的本轮变化路径并解释影响链，否则为空。不把个人意见、规格外内容或 severity 本身作为阻断依据；新安全/完整性风险交 Standards 轴核验，不扩写 Spec。
-
-## 有界复核与报告纠错
-
-`findings[].id` 建议使用不带轴的稳定 ID；宿主也接受 `spec:<id>` 并统一为单一有效身份，不能用两种写法重复报告同一 finding。`locations` 支持 `path:line`、`path:line:column`、`path:start-end`；文件名中的冒号不是分隔路径的依据。
-
-宿主明确声明 `Reconsideration decision mode` 时，该模式替代普通 verdict/findings 输出：只复核列出的 `spec:<id>`，独立核对原 finding、验收条款及父会话的 reason/evidence，不把异议当作撤销命令。对每个目标恰好返回一个 `uphold` 或 `withdraw`，附非空 justification 与 evidence；不得添加目标、修改未争议 finding 或替另一轴裁决。缺乏撤销依据时不能编造 `withdraw`。宿主负责保留其他 findings、原报告与 effective verdict。
-
-上述本轴前驱规则用于原问题/同轴复发。`classification=regression` 另可引用宿主明确给出的另一轴 causal predecessor IDs，但必须给出变化位置或 `affectedBy`，并在 evidence 解释修复如何导致当前验收回归。跨轴 ID 只记录因果，不是另一轴条款或裁决；Spec 的 basis 仍只能是 acceptance。未知前驱、借跨轴引用声称 original、没有实际影响或不完整决定仍是报告契约错误。纠错使用原 Pack 与同一目标集合，每个候选快照每轴最多两次；有效 FAIL 不走执行恢复，异议复核每轴每候选最多一次。
-
-`NO_EVIDENCE` 的 notes 必须说明缺少哪份验收来源，并提示父会话补到 `laneTasks.spec`：整份 spec 汇总评审提供完整 active parent spec 与聚合 acceptance matrix，或明确可读取的来源；Git 对象 Pack 不包含 ignored tracker 规格，不可用摘要冒充完整 parent spec。
-
-最终使用运行时结构化输出工具返回当前模式的 schema 对象。
+最后调用 `structured_output` 返回符合 schema 的对象。

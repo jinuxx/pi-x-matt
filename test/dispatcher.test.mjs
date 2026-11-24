@@ -1,27 +1,21 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { authorizeWorkflowDispatch as authorizeDispatch, createDispatchAuthorization as createAuthorization, parseInvokedSkill } from "../lib/dispatch-authorization.mjs";
+import {
+  authorizeWriterDispatch,
+  createDispatchAuthorization,
+  normalizeVerifyCommands,
+} from "../lib/dispatch-authorization.mjs";
+import { findProjectRoot, loadCurrentRegistry, prepareDispatchRequest } from "../lib/dispatcher-core.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
-import { findProjectRoot, loadCurrentRegistry, verifyFindingResolutions } from "../lib/dispatcher-core.mjs";
 import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const REVIEW_LANE_TASKS = { standards: "Standards evidence only", spec: "Spec evidence only" };
-const AUTH_SCOPE = { ticket: "slice:test", scope: "test contract", allowedFiles: ["file.mjs"], ticketDigest: "host-digest" };
-const AUTH_IDENTITY = { sessionId: "session", projectRoot: ROOT, branch: "main", head: "fixed" };
-function createDispatchAuthorization() {
-  const authorization = createAuthorization();
-  authorization.start("session");
-  return authorization;
-}
-const authorizeWorkflowDispatch = (name, signal, ctx, authorization) =>
-  authorizeDispatch(name, signal, ctx, authorization, AUTH_SCOPE, AUTH_IDENTITY);
 
-async function withTempDispatcherProject(run) {
+async function withTempProject(run) {
   const temp = await mkdtemp(join(tmpdir(), "pi-x-matt-dispatcher-"));
   try {
     for (const source of [".pi/agents", ".pi/skills", "skillpacks", "vendor", "config"]) {
@@ -34,791 +28,127 @@ async function withTempDispatcherProject(run) {
   }
 }
 
-function parseWorkflowItems(workflowScript) {
-  const firstLine = workflowScript.split("\n", 1)[0];
-  const prefix = "const results = await runs.all(";
-  assert.ok(firstLine.startsWith(prefix));
-  assert.ok(firstLine.endsWith(");"));
-  return JSON.parse(firstLine.slice(prefix.length, -2));
-}
-
-function parsePipelineStages(workflowScript) {
-  return [...workflowScript.matchAll(/^const stage\d+Items = (\[.*\]);$/gm)]
-    .map((match) => JSON.parse(match[1]));
-}
-
-function completeWorkerOutput() {
-  return {
-    status: "COMPLETE",
-    summary: "done",
-    confirmedSeams: [{ name: "module", interface: "public", behaviors: ["works"] }],
-    cycles: [{ test: "works", redEvidence: "failed first", greenEvidence: "passed next", files: ["file.mjs"] }],
-    changedFiles: ["file.mjs"],
-    commands: [
-      { command: "test red", phase: "RED", exitCode: 1, testCount: 1, outcome: "failed as expected" },
-      { command: "test green", phase: "GREEN", exitCode: 0, testCount: 1, outcome: "passed" },
-    ],
-    residualRisks: [],
-  };
-}
-
-test("dispatcher authorization allows ordinary workflows without prompting", async () => {
-  let prompted = false;
-  const reason = await authorizeWorkflowDispatch("matt-research", undefined, {
-    hasUI: false,
-    ui: { confirm: async () => { prompted = true; return true; } },
-  }, createDispatchAuthorization());
-
-  assert.equal(reason, "not-required");
-  assert.equal(prompted, false);
-});
-
-test("dispatcher parses explicit skill invocations like Pi does", () => {
-  assert.equal(parseInvokedSkill("/skill:matt-implement"), "matt-implement");
-  assert.equal(parseInvokedSkill("/skill:matt-implement 处理 ticket 003"), "matt-implement");
-  assert.equal(parseInvokedSkill("/skill:matt-grilling"), "matt-grilling");
-  assert.equal(parseInvokedSkill("请运行 /skill:matt-implement"), null);
-  assert.equal(parseInvokedSkill("/template:foo"), null);
-  assert.equal(parseInvokedSkill("/skill:"), null);
-  assert.equal(parseInvokedSkill(undefined), null);
-});
-
-test("dispatcher cannot grant from input, even in interactive or RPC mode", async () => {
-  for (const source of ["extension", "interactive", "rpc"]) {
-    const authorization = createDispatchAuthorization();
-    authorization.observeInput("/skill:matt-implement", source);
-    await assert.rejects(() => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false }, authorization),
-      /requires explicit user authorization/);
-  }
-});
-
-test("a later skill revokes the current single-ticket grant", async () => {
-  const authorization = createDispatchAuthorization();
-  await authorizeWorkflowDispatch("matt-tdd", undefined, {
-    hasUI: true, ui: { confirm: async () => true },
-  }, authorization);
-  authorization.observeInput("/skill:matt-grilling", "interactive");
-  assert.equal(authorization.current().kind, "revoked");
-});
-
-test("dispatcher authorization fails closed for matt-tdd without UI or confirmation", async () => {
-  await assert.rejects(
-    () => authorizeWorkflowDispatch("matt-tdd", undefined, { hasUI: false, ui: {} }, createDispatchAuthorization()),
-    /requires explicit user authorization/,
-  );
-
-  let prompt;
-  await assert.rejects(
-    () => authorizeWorkflowDispatch("matt-tdd", undefined, {
-      hasUI: true,
-      ui: {
-        confirm: async (title, message) => {
-          prompt = { title, message };
-          return false;
-        },
-      },
-    }, createDispatchAuthorization()),
-    /was not authorized by the user; no workflow was queued/,
-  );
-  assert.equal(prompt.title, "Authorize matt-tdd?");
-  assert.match(prompt.message, /continuous repairs within the SAME scope/);
-  assert.match(prompt.message, /slice:test/);
-  assert.match(prompt.message, /Cancel to pause/);
-});
-
-test("dispatcher authorization records an explicit matt-tdd confirmation", async () => {
-  const reason = await authorizeWorkflowDispatch("matt-tdd", undefined, {
-    hasUI: true,
-    ui: { confirm: async () => true },
-  }, createDispatchAuthorization());
-  assert.equal(reason, "user-confirmed");
-});
-
-test("implement-spec cannot turn one ticket approval into a batch grant", async () => {
-  const authorization = createDispatchAuthorization();
-  const prompts = [];
-  const ctx = {
-    hasUI: true,
-    ui: { confirm: async (_title, message) => { prompts.push(message); return true; } },
-  };
-  assert.equal(await authorizeDispatch("matt-tdd", undefined, ctx, authorization, AUTH_SCOPE, AUTH_IDENTITY),
-    "user-confirmed");
-  assert.equal(await authorizeDispatch("matt-tdd", undefined, { hasUI: false }, authorization, AUTH_SCOPE, AUTH_IDENTITY),
-    "reused-implement-grant");
-  assert.equal(prompts.length, 1, "continuous repairs keep the current ticket grant");
-
-  const nextScope = { ...AUTH_SCOPE, ticket: ".x-matt/work/demo/issues/02-next.md", ticketDigest: "next-digest" };
-  const nextIdentity = { ...AUTH_IDENTITY, head: "first-ticket-committed" };
-  await assert.rejects(() => authorizeDispatch("matt-tdd", undefined, { hasUI: false },
-    authorization, nextScope, nextIdentity), /requires explicit user authorization/);
-  await assert.rejects(() => authorizeDispatch("matt-tdd", undefined, {
-    hasUI: true,
-    ui: { confirm: async (_title, message) => { prompts.push(message); return false; } },
-  }, authorization, nextScope, nextIdentity), /was not authorized/);
-  assert.equal(prompts.length, 2);
-  assert.match(prompts[1], /02-next\.md/);
-  assert.equal(authorization.matches(nextIdentity, nextScope), false);
-  assert.equal(authorization.current().kind, "revoked");
-});
-
-test("dispatcher uses the inline script RPC contract for every workflow mode", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const modes = new Set();
-  for (const workflow of Object.values(registry.skills)) {
-    if (workflow.scope !== "parent" || workflow.class !== "orchestration") continue;
-    const laneTasks = Object.fromEntries(workflow.workflow.lanes.map((lane) => [lane.key, "Lane-specific task"]));
-    const { rpcParams } = buildDispatchRequest(registry, workflow, "Shared task", ROOT, laneTasks);
-
-    assert.deepEqual(Object.keys(rpcParams).sort(), ["async", "cwd", "mission", "script"], workflow.name);
-    assert.equal(typeof rpcParams.script, "string", workflow.name);
-    assert.ok(rpcParams.script.trim(), workflow.name);
-    modes.add(workflow.workflow.mode);
-  }
-  assert.deepEqual([...modes].sort(), ["parallel", "pipeline", "single"]);
-});
-
-test("dispatcher verifies package resources separately from the target project", async () => {
-  const packageRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-package-"));
-  const targetRoot = await mkdtemp(join(tmpdir(), "pi-x-matt-target-"));
+test("findProjectRoot locates nearest .pi/settings.json and fails outside projects", async () => {
+  assert.equal(await findProjectRoot(join(ROOT, "lib")), ROOT);
+  const isolated = await mkdtemp(join(tmpdir(), "pi-no-project-"));
   try {
-    for (const source of [".pi/agents", ".pi/skills", "skillpacks", "vendor", "config"]) {
-      await cp(join(ROOT, source), join(packageRoot, source), { recursive: true });
-    }
-    const registry = await loadCurrentRegistry(packageRoot);
-    const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "调查一个明确问题", targetRoot);
-
-    assert.equal(plan.rpcParams.cwd, targetRoot);
-    assert.deepEqual(plan.lanes.map(({ key, agent }) => ({ key, agent })), [{ key: "research", agent: "matt-researcher" }]);
-    assert.match(plan.rpcParams.script, /research-executor/);
+    await assert.rejects(() => findProjectRoot(isolated), /\.pi\/settings\.json/);
   } finally {
-    await rm(packageRoot, { recursive: true, force: true });
-    await rm(targetRoot, { recursive: true, force: true });
+    await rm(isolated, { recursive: true, force: true });
   }
 });
 
-test("dispatcher builds one guarded fresh child for research", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-research"];
-  const plan = buildDispatchRequest(registry, workflow, "调查一个明确问题", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.script);
-
-  assert.equal(plan.lanes.length, 1);
-  assert.equal(items.length, 1);
-  assert.equal(items[0].key, "research");
-  assert.equal(items[0].agent, "matt-researcher");
-  assert.equal(items[0].context, "fresh");
-  assert.deepEqual(items[0].skill, ["research-executor"]);
-  assert.equal(items[0].output, false);
-  assert.equal("turnBudget" in items[0], false);
-  assert.equal(items[0].outputSchema.type, "object");
-  assert.deepEqual(
-    { async: plan.rpcParams.async, mission: plan.rpcParams.mission, cwd: plan.rpcParams.cwd },
-    { async: true, mission: false, cwd: ROOT },
-  );
-});
-
-test("dispatcher builds one guarded prototype writer with private branch skills", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-prototype"];
-  const plan = buildDispatchRequest(registry, workflow, "构建一个已确认问题的 logic prototype", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.script);
-
-  assert.equal(plan.lanes.length, 1);
-  assert.deepEqual(plan.lanes[0].skills, ["prototype-logic", "prototype-ui", "prototype-executor"]);
-  assert.deepEqual(
-    items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })),
-    [{
-      key: "prototype",
-      agent: "matt-worker",
-      context: "fresh",
-      skill: ["prototype-logic", "prototype-ui", "prototype-executor"],
-      output: false,
-    }],
-  );
-  assert.deepEqual(plan.lanes[0].gate, {
-    field: "status",
-    equals: "BUILT",
-    nonEmpty: ["artifactPaths", "runInstructions", "reviewTargets", "changedFiles", "commands", "cleanupPlan"],
-  });
-});
-
-test("dispatcher builds a temp-only architecture scan writer", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["architecture-scan"], "扫描固定 scope", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.script);
-
-  assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [{
-    key: "scan",
-    agent: "matt-worker",
-    skills: ["codebase-design", "architecture-html-report", "architecture-scan-executor"],
-  }]);
-  assert.deepEqual(items[0].skill, ["codebase-design", "architecture-html-report", "architecture-scan-executor"]);
-  assert.equal(items[0].output, false);
-  assert.deepEqual(plan.lanes[0].gate, {
-    field: "status",
-    equals: "REPORTED",
-    nonEmpty: ["scopeEvidence", "commands"],
-  });
-});
-
-test("dispatcher builds three guarded read-only architecture design lanes", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["architecture-design"], "为固定 candidate 设计 interfaces", ROOT);
-  const items = parseWorkflowItems(plan.rpcParams.script);
-  const closure = ["architecture-vocabulary-reader", "architecture-deepening-reader", "architecture-interface-design"];
-
-  assert.deepEqual(plan.lanes.map(({ key, agent, skills }) => ({ key, agent, skills })), [
-    { key: "minimal", agent: "matt-reader", skills: closure },
-    { key: "flexible", agent: "matt-reader", skills: closure },
-    { key: "common-caller", agent: "matt-reader", skills: closure },
-  ]);
-  assert.deepEqual(items.map((item) => item.context), ["fresh", "fresh", "fresh"]);
-  assert.ok(items.every((item) => item.agent === "matt-reader" && item.output === false));
-  assert.deepEqual(items.map((item) => item.outputSchema.properties.strategy.enum[0]), ["minimal", "flexible", "common-caller"]);
-});
-
-test("dispatcher builds two independent guarded review lanes", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-code-review"];
-  const plan = buildDispatchRequest(registry, workflow, "评审固定范围", ROOT, REVIEW_LANE_TASKS);
-  const items = parseWorkflowItems(plan.rpcParams.script);
-
-  assert.deepEqual(items.map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
-    { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
-    { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
-  ]);
-  assert.match(items[0].task, /Standards evidence only/);
-  assert.doesNotMatch(items[0].task, /Spec evidence only/);
-  assert.match(items[1].task, /Spec evidence only/);
-  assert.doesNotMatch(items[1].task, /Standards evidence only/);
-  assert.ok(items.every((item) => item.timeoutMs === 900000));
-  assert.ok(items.every((item) => !("turnBudget" in item)));
-  assert.deepEqual(items.map((item) => item.outputSchema.properties.axis.enum[0]), ["standards", "spec"]);
-  assert.deepEqual(plan.lanes.map((lane) => lane.gate), [
-    { field: "verdict", equals: "PASS" },
-    { field: "verdict", equals: "PASS" },
-  ]);
-
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
-  await assert.rejects(
-    () => execute({ all: async (lanes) => lanes.map((lane) => ({
-      key: lane.key,
-      ok: true,
-      structuredOutput: { axis: lane.key, verdict: lane.key === "standards" ? "FAIL" : "PASS" },
-    })) }),
-    /standards\.verdict/,
-  );
-});
-
-test("dispatcher builds a gated worker-to-reviewer TDD pipeline", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "已确认测试切入点的实现任务", ROOT, {
-    implement: "已确认测试切入点的实现任务；执行 RED/GREEN",
-    standards: "按当前 worktree diff 执行 Standards 复核",
-    spec: "读取 ticket/spec 后按当前 worktree diff 执行 Spec 复核",
-  });
-  const stages = parsePipelineStages(plan.rpcParams.script);
-
-  assert.deepEqual(plan.lanes.map(({ key, stage, agent, skills }) => ({ key, stage, agent, skills })), [
-    { key: "implement", stage: 1, agent: "matt-worker", skills: ["codebase-design", "tdd-executor"] },
-    { key: "standards", stage: 2, agent: "matt-reviewer", skills: ["review-standards"] },
-    { key: "spec", stage: 2, agent: "matt-reviewer", skills: ["review-spec"] },
-  ]);
-  assert.equal(stages.length, 2);
-  assert.deepEqual(stages[0].map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
-    { key: "implement", agent: "matt-worker", context: "fresh", skill: ["codebase-design", "tdd-executor"], output: false },
-  ]);
-  assert.deepEqual(stages[1].map(({ key, agent, context, skill, output }) => ({ key, agent, context, skill, output })), [
-    { key: "standards", agent: "matt-reviewer", context: "fresh", skill: ["review-standards"], output: false },
-    { key: "spec", agent: "matt-reviewer", context: "fresh", skill: ["review-spec"], output: false },
-  ]);
-  assert.equal(stages[0][0].timeoutMs, 1200000);
-  assert.ok(stages[1].every((item) => item.timeoutMs === 900000));
-
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
-  let calls = 0;
-  await assert.rejects(
-    () => execute({ all: async () => {
-      calls += 1;
-      return [{ key: "implement", ok: true, structuredOutput: { status: "BLOCKED" } }];
-    } }),
-    /implement\.status/,
-  );
-  assert.equal(calls, 1, "review stage must not launch after a blocked implementation");
-
-  calls = 0;
-  await assert.rejects(
-    () => execute({ all: async () => {
-      calls += 1;
-      return [{
-        key: "implement",
-        ok: true,
-        structuredOutput: {
-          status: "COMPLETE",
-          summary: "",
-          confirmedSeams: [],
-          cycles: [],
-          changedFiles: [],
-          commands: [],
-          residualRisks: [],
-        },
-      }];
-    } }),
-    /requires non-empty 'confirmedSeams'/,
-  );
-  assert.equal(calls, 1, "review stage must not launch without TDD evidence");
-
-  calls = 0;
-  const results = await execute({ all: async (items) => {
-    calls += 1;
-    if (calls === 2) {
-      assert.ok(items.every((item) => item.task.includes("前序阶段结构化结果")));
-      assert.ok(items.every((item) => item.task.includes('"status":"COMPLETE"')));
-    }
-    return items.map((item) => ({
-      key: item.key,
-      ok: true,
-      structuredOutput: item.key === "implement" ? completeWorkerOutput() : { axis: item.key, verdict: "PASS" },
-    }));
-  } });
-  assert.equal(calls, 2);
-  assert.deepEqual(results.map((result) => result.key), ["implement", "standards", "spec"]);
-
-  calls = 0;
-  await assert.rejects(
-    () => execute({ all: async (items) => {
-      calls += 1;
-      return items.map((item) => ({
-        key: item.key,
-        ok: true,
-        structuredOutput: item.key === "implement"
-          ? completeWorkerOutput()
-          : { axis: item.key, verdict: item.key === "standards" ? "FAIL" : "PASS" },
-      }));
-    } }),
-    /standards\.verdict/,
-  );
-  assert.equal(calls, 2);
-
-  calls = 0;
-  await assert.rejects(
-    () => execute({ all: async (items) => {
-      calls += 1;
-      if (calls === 1) return [{ key: "implement", ok: true, structuredOutput: completeWorkerOutput() }];
-      return [{ key: items[0].key, ok: true, structuredOutput: { axis: items[0].key, verdict: "PASS" } }];
-    } }),
-    /expected 2 lane result/,
-  );
-  assert.equal(calls, 2);
-});
-
-test("TDD host evidence is captured once after implement and before both reviewers, failing closed", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const evidence = { command: "trusted-collector", path: "/tmp/workflow-owned/review.md" };
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, {
-    implement: "Implementation Context Pack", standards: "Applicable standards", spec: "Acceptance matrix",
-  }, evidence);
-  assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: evidence.command }]);
-  const plans = new Map([["validated-id", plan]]);
-  assert.equal(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).script, plan.rpcParams.script);
-  assert.match(resolveReviewWorkflow(plans, { dispatchId: "validated-id" }).error, /expired/, "validated plans are one-shot");
-  assert.match(resolveReviewWorkflow(plans, { dispatchId: "unknown" }).error, /Unknown/);
-  assert.match(resolveReviewWorkflow(plans, { dispatchId: "validated-id", command: "untrusted" }).error, /Expected only/);
-
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit", plan.rpcParams.script);
-  const order = [];
-  const emitted = [];
-  const runs = {
-    all: async (items) => {
-      order.push(items.map(item => item.key).join(","));
-      if (items[0].key === "standards") {
-        assert.ok(items.every(item => item.task.includes(evidence.path)));
-        assert.ok(items.every(item => item.task.includes("worker-reported")));
-        assert.ok(items.every(item => item.task.includes('"exitCode":1')));
-        assert.ok(items.every(item => !item.task.includes('"summary":"done"')), "do not inject the writer's completion narrative");
-      }
-      return items.map(item => ({ key: item.key, ok: true, structuredOutput: item.key === "implement"
-        ? completeWorkerOutput() : { axis: item.key, verdict: "PASS" } }));
-    },
-    host: async (key, options) => {
-      order.push(key);
-      assert.equal(options.command, evidence.command);
-      assert.equal(options.kind, "command");
-    },
-  };
-  const results = await execute(runs, value => emitted.push(value));
-  assert.ok(results.slice(1).every(result => result.artifactPaths.includes(evidence.path)));
-  assert.deepEqual(order, ["implement", "review-evidence", "standards,spec"]);
-  assert.deepEqual(emitted.filter(value => value.type !== "pi-x-matt.stage-results"), [{ reviewEvidencePath: evidence.path }]);
-  const snapshots = emitted.filter(value => value.type === "pi-x-matt.stage-results");
-  assert.deepEqual(snapshots.map(value => value.stage), [1, 1, 2, 2]);
-  assert.deepEqual(snapshots.at(-1).results, results);
-  order.length = 0;
-  await assert.rejects(() => execute({ ...runs, host: async () => { throw new Error("capture failed"); } }, () => {}), /capture failed/);
-  assert.deepEqual(order, ["implement"], "no reviewer can launch without current Git evidence");
-});
-
-test("finding accounting checks that every approved finding is answered, not that the answer is true", () => {
-  const approved = ["standards:F1", "spec:F2", "spec:F3"];
-  const account = findingResolutions => verifyFindingResolutions({ structuredOutput: {
-    cycles: [{ test: "rejects empty input" }], findingResolutions } }, approved);
-  const row = (findingId, extra = {}) => ({ findingId, cycleTest: "rejects empty input", evidence: "covered by the new cycle", ...extra });
-
-  const valid = [row("standards:F1"), row("F2"), row("spec:F3", { cycleTest: null })];
-  const complete = account(valid);
-  assert.deepEqual([complete.ok, complete.resolvedFindingIds, complete.unresolvedFindingIds, complete.invalid],
-    [true, approved, [], []], "a bare id is accepted when it names exactly one approved finding; null marks a non-behavioural fix");
-
-  for (const [extra, reason] of [
-    [row("spec:F2"), "duplicate finding id"],
-    [row("spec:F9"), "unknown finding id"],
-    [row("standards:F1", { evidence: "" }), "missing evidence"],
-  ]) {
-    const rejected = account([extra, ...valid]);
-    assert.deepEqual(rejected.unresolvedFindingIds, []);
-    assert.deepEqual(rejected.invalid.map(item => item.reason), [reason]);
-    assert.equal(rejected.ok, false, `complete coverage must not excuse ${reason}`);
-  }
-
-  for (const missing of [undefined, [], "F1"]) {
-    assert.deepEqual(account(missing).unresolvedFindingIds, approved);
-    assert.equal(account(missing).ok, false);
-  }
-  const rejected = account([
-    row("spec:F2"), row("F2"), row("spec:F9"), row("standards:F1", { evidence: "  " }),
-    row("spec:F3", { cycleTest: "a test no cycle reported" }), null,
-  ]);
-  assert.equal(rejected.ok, false);
-  assert.deepEqual(rejected.resolvedFindingIds, ["spec:F2"]);
-  assert.deepEqual(rejected.unresolvedFindingIds, ["standards:F1", "spec:F3"]);
-  assert.deepEqual(rejected.invalid, [
-    { findingId: "F2", reason: "duplicate finding id" }, { findingId: "spec:F9", reason: "unknown finding id" },
-    { findingId: "standards:F1", reason: "missing evidence" }, { findingId: "spec:F3", reason: "unknown cycle test" },
-    { findingId: "undefined", reason: "unknown finding id" },
-  ]);
-  assert.deepEqual(verifyFindingResolutions({ structuredOutput: { findingResolutions: [row("F1", { cycleTest: null })] } },
-    ["standards:F1", "spec:F1"]).invalid, [{ findingId: "F1", reason: "ambiguous finding id" }]);
-  assert.equal(verifyFindingResolutions(undefined, []).ok, true);
-});
-
-test("dispatcher supports complete per-lane task replacements", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(
-    registry,
-    registry.skills["matt-tdd"],
-    "共享任务不应覆盖显式 lane task",
-    ROOT,
-    {
-      implement: "只执行 report-only 结构化恢复",
-      standards: "只按当前 worktree diff 执行 Standards 复核",
-      spec: "先读取 ticket/spec，再按当前 worktree diff 执行 Spec 复核",
-    },
-  );
-  const stages = parsePipelineStages(plan.rpcParams.script);
-
-  assert.match(stages[0][0].task, /只执行 report-only 结构化恢复/);
-  assert.doesNotMatch(stages[0][0].task, /Standards 复核/);
-  assert.match(stages[1][0].task, /只按当前 worktree diff 执行 Standards 复核/);
-  assert.doesNotMatch(stages[1][0].task, /report-only 结构化恢复/);
-  assert.match(stages[1][1].task, /先读取 ticket\/spec/);
-  assert.doesNotMatch(stages[1][1].task, /report-only 结构化恢复/);
-
-  assert.throws(
-    () => buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, { unknown: "task" }),
-    /unknown lane 'unknown'/,
-  );
-  assert.throws(
-    () => buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT, { implement: "task" }),
-    /requires complete laneTasks for \[standards, spec\]/,
-  );
-  assert.throws(
-    () => buildDispatchRequest(registry, registry.skills["matt-code-review"], "shared", ROOT, { standards: "task" }),
-    /matt-code-review.*requires complete laneTasks for \[spec\]/,
-  );
-});
-
-test("dispatcher workflow guard rejects missing structured output", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
-
-  await assert.rejects(
-    () => execute({ all: async () => [] }),
-    /expected 1 lane result/,
-  );
-  await assert.rejects(
-    () => execute({ all: async () => [{ key: "research", ok: true, output: "prose only" }] }),
-    /completed without valid structuredOutput/,
-  );
-
-  const failureCases = [
-    {
-      name: "timeout error",
-      result: { error: "Subagent timed out after 600000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
-      reason: "Subagent timed out after 600000ms.",
-    },
-    { name: "provider error", result: { error: "fetch failed" }, reason: "fetch failed" },
-    {
-      name: "timeout terminal outcome without error text",
-      result: { terminalOutcome: { state: "partial", reason: "timeout" } },
-      reason: "Subagent timed out.",
-    },
-    {
-      name: "budget terminal outcome",
-      result: { terminalOutcome: { state: "partial", reason: "budget_exhausted" } },
-      reason: "Subagent exceeded its budget.",
-    },
-    { name: "stopped", result: { stopped: true }, reason: "Subagent stopped before completion." },
-    { name: "interrupted", result: { interrupted: true }, reason: "Subagent was interrupted before completion." },
-    { name: "detached", result: { detached: true }, reason: "Subagent detached before completion." },
-  ];
-  for (const { name, result, reason } of failureCases) {
-    await assert.rejects(
-      () => execute({ all: async () => [{ key: "research", ...result }] }),
-      (error) => {
-        assert.equal(error.message, `Workflow lane research failed before structuredOutput: ${reason}`, name);
-        return true;
-      },
-    );
-  }
-
-  const structuredOutput = { question: "q" };
-  const result = await execute({ all: async () => [{ key: "research", ok: true, structuredOutput }] });
-  assert.deepEqual(result[0].structuredOutput, structuredOutput);
-});
-
-test("dispatcher rejects failed children even when structured output passes the gate", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  for (const name of ["matt-research", "matt-code-review", "matt-tdd"]) {
-    const workflow = registry.skills[name];
-    const laneTasks = Object.fromEntries(workflow.workflow.lanes.map((lane) => [lane.key, "Bounded task"]));
-    const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks);
-    const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
-    for (const ok of [false, undefined]) {
-      let calls = 0;
-      await assert.rejects(() => execute({ all: async (items) => {
-        calls += 1;
-        return items.map((item, index) => ({
-          key: item.key,
-          ok: index === 0 ? ok : true,
-          error: index === 0 ? "provider failed after structured_output" : undefined,
-          structuredOutput: item.key === "implement"
-            ? completeWorkerOutput()
-            : { verdict: "PASS", question: "q" },
-        }));
-      } }), /provider failed after structured_output/, `${name}: ok=${ok}`);
-      assert.equal(calls, 1, "a failed stage must not start reviewers or settlement");
-    }
-  }
-});
-
-test("dispatcher resumes a timed-out retained child once for structured-output settlement", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "matt-research", ROOT);
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
-  const failures = [
-    { error: "Subagent timed out after 300000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
-    // The runtime can wrap the timeout message inside the child receipt, so the
-    // structured terminalOutcome is what identifies a real timeout.
-    { error: "Child run failed.\n\nError: Subagent timed out after 300000ms.", terminalOutcome: { state: "partial", reason: "timeout" } },
-    { terminalOutcome: { state: "partial", reason: "timeout" } },
-  ];
-
-  for (const failure of failures) {
-    let calls = 0;
-    const results = await execute({ all: async (items) => {
-      calls += 1;
-      if (calls === 1) {
-        return [{
-          key: "research",
-          ok: false,
-          runId: "retained-run",
-          resumability: { state: "resumable" },
-          ...failure,
-        }];
-      }
-      assert.equal(items.length, 1);
-      assert.equal(items[0].key, "research-settlement");
-      assert.equal(items[0].resume, "retained-run");
-      assert.equal(items[0].timeoutMs, 300000);
-      assert.match(items[0].task, /立即调用 structured_output/);
-      assert.match(items[0].task, /不得编造 COMPLETE 或 PASS/);
-      return [{
-        key: "research-settlement",
-        ok: true,
-        structuredOutput: { question: "q", summary: "done", findings: [], sources: [], gaps: [] },
-      }];
-    } });
-
-    assert.equal(calls, 2);
-    assert.equal(results[0].key, "research");
-    assert.equal(results[0].structuredOutput.summary, "done");
-  }
-});
-
-test("dispatcher never settles a workflow child based on legacy flags or error prose", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "bounded research", ROOT);
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  for (const failure of [
-    { timedOut: true },
-    { error: "Provider diagnostic quoted: Subagent timed out after 300000ms." },
-    { timedOut: true, error: "Subagent timed out after 300000ms.",
-      terminalOutcome: { state: "partial", reason: "budget_exhausted" } },
-  ]) {
-    let calls = 0;
-    await assert.rejects(() => new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script)({
-      all: async () => {
-        calls += 1;
-        return [{ key: "research", ok: false, runId: "retained-run",
-          resumability: { state: "resumable" }, ...failure }];
-      },
-    }), /before structuredOutput|without valid structuredOutput/);
-    assert.equal(calls, 1, "only the public terminalOutcome may authorize timeout settlement");
-  }
-});
-
-test("dispatcher does not repeat the runtime's structured-output recovery", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-research"], "bounded research", ROOT);
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const execute = new AsyncFunction("runs", "emit = () => {}", plan.rpcParams.script);
-  let calls = 0;
-  await assert.rejects(() => execute({ all: async () => {
-    calls += 1;
-    return [{
-      key: "research",
-      ok: false,
-      runId: "retained-run",
-      resumability: { state: "resumable" },
-      error: "Missing structured_output call; this step has outputSchema and must finish by calling structured_output.",
-    }];
-  } }), /Missing structured_output call/);
-  assert.equal(calls, 1, "the runtime already owns the one-shot missing-output follow-up");
-});
-
-test("review timeout and failed settlement retain both causes and never add another retry", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-code-review"], "review", ROOT, REVIEW_LANE_TASKS);
-  const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-  for (const throws of [false, true]) {
-    let calls = 0;
-    const emits = [];
-    await assert.rejects(() => new AsyncFunction("runs", "emit", plan.rpcParams.script)({
-      all: async () => {
-        if (++calls === 1) return [
-          { key: "standards", ok: true, structuredOutput: { verdict: "PASS" } },
-          { key: "spec", ok: false, error: "Child run failed.\n\nError: Subagent timed out after 900000ms.",
-            terminalOutcome: { state: "partial", reason: "timeout" },
-            runId: "retained", resumability: { state: "resumable" } },
-        ];
-        if (throws) throw new Error("fetch failed");
-        return [{ key: "spec-settlement", ok: false, error: "fetch failed" }];
-      },
-    }, value => emits.push(structuredClone(value))), /900000ms.*settlement failed.*fetch failed/);
-    assert.equal(calls, 2);
-    const snapshots = emits.filter(value => value.type === "pi-x-matt.stage-results");
-    assert.match(snapshots[0].results[1].error, /Subagent timed out after 900000ms\./);
-    assert.deepEqual(snapshots.at(-1).results[1].recoveryHistory[0].terminalOutcome, { state: "partial", reason: "timeout" });
-    assert.equal(snapshots.at(-1).results[0].structuredOutput.verdict, "PASS");
-  }
-});
-
-test("dispatcher fails closed on malformed lanes and cross-agent grants", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const duplicate = structuredClone(registry.skills["matt-code-review"]);
-  duplicate.workflow.lanes[1].key = duplicate.workflow.lanes[0].key;
-  assert.throws(() => buildDispatchRequest(registry, duplicate, "review", ROOT, REVIEW_LANE_TASKS), /duplicate lane/);
-
-  const reserved = structuredClone(registry.skills["matt-code-review"]);
-  reserved.workflow.lanes[0].key = "standards-settlement";
-  assert.throws(() => buildDispatchRequest(registry, reserved, "review", ROOT, REVIEW_LANE_TASKS), /reserved settlement suffix/);
-
-  const crossAgentRegistry = structuredClone(registry);
-  crossAgentRegistry.skills["review-spec"].agent = "matt-worker";
-  assert.throws(
-    () => buildDispatchRequest(crossAgentRegistry, crossAgentRegistry.skills["matt-code-review"], "review", ROOT, REVIEW_LANE_TASKS),
-    /cannot grant 'review-spec' to agent 'matt-reviewer'/,
-  );
-});
-
-test("dispatcher rejects interaction parents", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  for (const name of ["matt-grill-with-docs", "matt-implement-spec"]) {
-    assert.ok(registry.skills[name], `${name} is registered`);
-    assert.throws(
-      () => buildDispatchRequest(registry, registry.skills[name], "不要委派 interaction parent", ROOT),
-      /not a parent orchestration workflow/,
-    );
-  }
-});
-
-test("dispatcher validates runtime gate shape for every workflow mode", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const invalid = structuredClone(registry.skills["matt-code-review"]);
-  invalid.workflow.lanes[0].gate.equals = "NOT_DECLARED";
-  assert.throws(
-    () => buildDispatchRequest(registry, invalid, "review", ROOT),
-    /lane 'standards' has invalid gate/,
-  );
-});
-
-test("dispatcher finds the nearest project root and fails without one", async () => {
-  await withTempDispatcherProject(async (temp) => {
-    const nested = join(temp, "nested", "child");
-    await mkdir(nested, { recursive: true });
-    assert.equal(await findProjectRoot(nested), temp);
-  });
-
-  const empty = await mkdtemp(join(tmpdir(), "pi-x-matt-no-root-"));
-  try {
-    await assert.rejects(() => findProjectRoot(empty), /requires a project \.pi\/settings\.json/);
-  } finally {
-    await rm(empty, { recursive: true, force: true });
-  }
-});
-
-test("dispatcher rejects registry tampering rather than trusting generated routing or paths", async () => {
-  await withTempDispatcherProject(async (temp) => {
+test("loadCurrentRegistry rejects stale on-disk registry cache", async () => {
+  await withTempProject(async (temp) => {
     const registryPath = join(temp, "config", "skill-registry.json");
-    const original = JSON.parse(await readFile(registryPath, "utf8"));
-    const mutations = [
-      registry => { registry.skills["matt-research"].workflow.lanes[0].timeoutMs = 1; },
-      registry => { registry.skills["matt-grilling"].dispatch = "parallel"; },
-      registry => { registry.skills["matt-grilling"].class = "unsupported"; },
-      registry => { registry.skills["matt-research"].sourcePath = "../outside.md"; },
-      registry => { registry.skills["matt-research"].workflowPath = "/tmp/outside.json"; },
-      registry => { registry.skills["review-spec"].agent = "matt-worker"; },
-      registry => { delete registry.skills["review-spec"]; },
-      registry => { registry.skills["research-executor"].sourceDigest = "forged"; },
-      registry => { registry.version = 2; },
-    ];
-    for (const mutate of mutations) {
-      const registry = structuredClone(original);
-      mutate(registry);
-      await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
-      await assert.rejects(() => loadCurrentRegistry(temp));
-    }
-    await writeFile(registryPath, "{invalid JSON");
+    const raw = await readFile(registryPath, "utf8");
+    await writeFile(registryPath, `${raw}\n`);
     await assert.rejects(() => loadCurrentRegistry(temp), /run npm run registry/);
   });
 });
 
-test("dispatcher rejects stale skill and workflow digests until the registry is regenerated", async () => {
-  await withTempDispatcherProject(async (temp) => {
-    for (const source of [".pi/skills/matt-research/SKILL.md", ".pi/skills/matt-research/workflow.json"]) {
-      const path = join(temp, source);
-      const original = await readFile(path, "utf8");
-      await writeFile(path, `${original}\n`);
-      await assert.rejects(() => loadCurrentRegistry(temp));
-      await writeFile(path, original);
-    }
-    await loadCurrentRegistry(temp);
+test("session authorization confirms once per project, reuses across dispatches, and prompts only for new verifyCommands", async () => {
+  const entries = [];
+  const auth = createDispatchAuthorization({ persist: (data) => entries.push({ type: "custom", customType: "pi-x-matt.authorization", data }) });
+  auth.start("s1");
+
+  let prompts = 0;
+  const ctx = { hasUI: true, ui: { confirm: async () => { prompts++; return true; } } };
+
+  assert.equal(await authorizeWriterDispatch({
+    workflowName: "matt-tdd", projectRoot: ROOT, branch: "main", verifyCommands: ["npm test"], ctx, authorization: auth,
+  }), "user-confirmed");
+  assert.equal(prompts, 1);
+
+  assert.equal(await authorizeWriterDispatch({
+    workflowName: "matt-tdd", projectRoot: ROOT, branch: "main", verifyCommands: ["npm test"], ctx: { hasUI: false }, authorization: auth,
+  }), "reused-session-grant");
+  assert.equal(prompts, 1);
+
+  // Adding a new verifyCommand prompts once more and merges it into the session grant.
+  assert.equal(await authorizeWriterDispatch({
+    workflowName: "matt-tdd", projectRoot: ROOT, branch: "main", verifyCommands: ["npm test", "npm run lint"], ctx, authorization: auth,
+  }), "user-confirmed");
+  assert.equal(prompts, 2);
+
+  // Restoring from custom session entries preserves the grant.
+  const restored = createDispatchAuthorization();
+  restored.start("s1", entries, true);
+  assert.equal(restored.matches(ROOT, ["npm test", "npm run lint"]), true);
+
+  restored.revoke("user-cancelled");
+  assert.equal(restored.matches(ROOT, []), false);
+});
+
+test("authorization fails cleanly without UI or when declined, and validates verifyCommands", async () => {
+  const auth = createDispatchAuthorization();
+  auth.start("s1");
+  await assert.rejects(() => authorizeWriterDispatch({
+    workflowName: "matt-tdd", projectRoot: ROOT, ctx: { hasUI: false }, authorization: auth,
+  }), /interactive session/);
+  await assert.rejects(() => authorizeWriterDispatch({
+    workflowName: "matt-tdd", projectRoot: ROOT, ctx: { hasUI: true, ui: { confirm: async () => false } }, authorization: auth,
+  }), /not authorized/);
+
+  assert.deepEqual(normalizeVerifyCommands(["npm test", " npm test ", "npm run lint"]), ["npm test", "npm run lint"]);
+  assert.throws(() => normalizeVerifyCommands(["bad\ncommand"]), /single-line/);
+  assert.throws(() => normalizeVerifyCommands(Array(9).fill("echo hi")), /at most 8/);
+});
+
+test("prepareDispatchRequest resolves leaf closures, rejects interaction parents, and supports lane subset filtering", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  assert.throws(
+    () => prepareDispatchRequest(registry, registry.skills["matt-grilling"], "hi", ROOT),
+    /not a parent orchestration workflow/,
+  );
+
+  const review = prepareDispatchRequest(registry, registry.skills["matt-code-review"], "shared", ROOT, {
+    lanes: ["standards"],
+    laneTasks: { standards: "Check coding rules" },
   });
+  assert.deepEqual(review.lanes.map((lane) => lane.key), ["standards"]);
+  assert.deepEqual(review.lanes[0].skills, ["review-standards"]);
+  assert.match(review.lanes[0].task, /Check coding rules/);
+
+  assert.throws(
+    () => prepareDispatchRequest(registry, registry.skills["matt-code-review"], "shared", ROOT, { lanes: ["unknown"] }),
+    /unknown lane 'unknown'/,
+  );
+});
+
+test("buildDispatchRequest supports matt-tdd fresh/resume, verifyCommands, and matt-code-review shared evidence pack", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+
+  const tddFresh = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Implement parser", ROOT, {
+    hostControls: { claimCommand: "claim-cmd", verifyCommand: "verify-cmd" },
+  });
+  assert.deepEqual(tddFresh.lanes.map((lane) => lane.key), ["implement"]);
+  assert.deepEqual(tddFresh.lanes[0].skills, ["codebase-design", "tdd-executor"]);
+  assert.deepEqual(tddFresh.hostCommands, [
+    { key: "implement-claim", command: "claim-cmd" },
+    { key: "verify", command: "verify-cmd" },
+  ]);
+  assert.match(tddFresh.rpcParams.script, /"agent":"matt-worker"/);
+  assert.match(tddFresh.rpcParams.script, /runs\.host\("verify"/);
+
+  const tddResume = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Fix failing test", ROOT, {
+    resumeRunId: "prev-writer-run",
+    hostControls: { claimCommand: "claim-cmd" },
+  });
+  assert.match(tddResume.rpcParams.script, /"resume":"prev-writer-run"/);
+  assert.doesNotMatch(tddResume.rpcParams.script, /"agent":"matt-worker"/);
+
+  const review = buildDispatchRequest(registry, registry.skills["matt-code-review"], "Review diff", ROOT, {
+    laneTasks: { standards: "Standards rules", spec: "Spec criteria" },
+    hostControls: { evidenceKind: "worktree", evidenceCommand: "collect-cmd", evidencePath: "/tmp/review.md" },
+  });
+  assert.deepEqual(review.hostCommands, [{ key: "review-evidence", command: "collect-cmd" }]);
+  assert.equal(review.reviewEvidencePath, "/tmp/review.md");
+  assert.doesNotMatch(review.rpcParams.script, /did not equal 'PASS'/);
+
+  const plans = new Map([["d1", review]]);
+  const resolved = resolveReviewWorkflow(plans, { dispatchId: "d1" });
+  assert.equal(resolved.script, review.rpcParams.script);
+  assert.deepEqual(resolved.hostCommands, review.hostCommands);
+  assert.match(resolveReviewWorkflow(plans, { dispatchId: "d1" }).error, /Unknown or expired/);
 });

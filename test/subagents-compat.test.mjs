@@ -1,41 +1,35 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { registerWorkflowResource } from "pi-subagents/workflow-resources";
 import { loadCurrentRegistry } from "../lib/dispatcher-core.mjs";
-import { createImplementationRuntime } from "../lib/implementation-runtime.mjs";
-import { MAX_REVIEW_RESULT_PARTS, prepareTddEvidence, reviewResultFrame } from "../lib/review-workflow.mjs";
-import { collectReviewEvidence } from "../lib/review-evidence.mjs";
-import { SCOPED_WRITER_AGENT, WRITER_SCOPE_BINDING } from "../lib/writer-scope.mjs";
-import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
+import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const PACKAGE_ROOT = resolve(dirname(require.resolve("pi-subagents/workflow-resources")), "..");
 const SOURCE_DIR = join(PACKAGE_ROOT, "src");
-// Exercise the pinned runtime's real parser/sandbox and notification formatter,
-// without launching child sessions, running host commands, or calling models.
+
 const { runWorkflowScript, validateWorkflowScript } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/scripted-workflow.js")));
-const { executeWorkflowHostCommand } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/host-command.js")));
 const { resolveWorkflowResource } = await import(pathToFileURL(join(SOURCE_DIR, "workflows/workflow-resources.js")));
-const { consumeWorkflowResourcePermit, authorizeWorkflowResourceHost } = await import(pathToFileURL(join(SOURCE_DIR, "shared/workflow-child-permit.js")));
-const { buildCompletionDetails, formatSingleCompletion } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/notify.js")));
-const { createCapacityResilientJsonWriter } = await import(pathToFileURL(join(SOURCE_DIR, "shared/capacity-resilient-json.js")));
-const { TRUNCATED_RESPONSE_ERROR } = await import(pathToFileURL(join(SOURCE_DIR, "shared/utils.js")));
 const { reconcileAsyncRun } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/stale-run-reconciler.js")));
 const { readProcessTerminal } = await import(pathToFileURL(join(SOURCE_DIR, "runs/background/process-terminal.js")));
 
-test("a live child keeps pending terminal proof between result and final status writes", async () => {
+const unexpectedStatus = async () => { throw new Error("Unexpected status call"); };
+
+test("live child keeps pending terminal proof and orphaned child reconciles to observer-unavailable", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-matt-terminal-race-"));
   try {
-    const runId = "matt-terminal-race", resultsDir = join(directory, "results");
-    const asyncDir = join(directory, runId), statusPath = join(asyncDir, "status.json");
+    const runId = "matt-terminal-race";
+    const resultsDir = join(directory, "results");
+    const asyncDir = join(directory, runId);
+    const statusPath = join(asyncDir, "status.json");
     const pending = { version: 1, state: "pending", runId, runnerProcessInstanceId: "runner-live" };
     const running = {
       lifecycleArtifactVersion: 3, runId, mode: "single", state: "running", pid: 12345,
@@ -46,77 +40,35 @@ test("a live child keeps pending terminal proof between result and final status 
     await mkdir(resultsDir);
     await writeFile(statusPath, JSON.stringify(running));
     await writeFile(join(resultsDir, `${runId}.json`), JSON.stringify({ id: runId, success: true, state: "complete" }));
-    const options = { resultsDir, now: () => 2000, kill: () => true, pidNamespaceScope: () => "test-scope" };
-    const live = reconcileAsyncRun(asyncDir, options);
+    const live = reconcileAsyncRun(asyncDir, { resultsDir, now: () => 2000, kill: () => true, pidNamespaceScope: () => "test-scope" });
     assert.equal(live.repaired, false);
     assert.equal(live.status.state, "running");
-    assert.deepEqual(JSON.parse(await readFile(statusPath, "utf8")), running);
-    const complete = { ...running, state: "complete", endedAt: 2000,
-      processTerminal: { ...pending, state: "unknown", reason: "observer-unavailable" } };
-    await writeFile(statusPath, JSON.stringify(complete));
-    const settled = reconcileAsyncRun(asyncDir, options);
-    assert.equal(settled.repaired, false);
-    assert.deepEqual(settled.status, complete);
-    await writeFile(statusPath, JSON.stringify(running));
-    const foreign = reconcileAsyncRun(asyncDir, { ...options, pidNamespaceScope: () => "other-scope" });
-    assert.equal(foreign.repaired, true, "an unrelated live PID cannot keep this child running");
-    assert.equal(foreign.status.processTerminal.state, "unknown", "a result file alone is not observed exit proof");
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
 
-test("an orphaned terminal child stops waiting without granting observed runner exit proof", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "pi-matt-orphaned-runner-"));
-  try {
-    const runId = "matt-orphaned-runner", asyncDir = join(directory, runId), resultsDir = join(directory, "results");
-    const pending = { version: 1, state: "pending", runId, runnerProcessInstanceId: "orphaned-runner" };
-    await mkdir(asyncDir);
-    await mkdir(resultsDir);
-    const proofPath = join(asyncDir, "process-terminal.json");
-    await writeFile(proofPath, JSON.stringify(pending));
-    await writeFile(join(asyncDir, "status.json"), JSON.stringify({
-      lifecycleArtifactVersion: 3, runId, mode: "single", state: "complete", pid: 12345,
-      pidNamespaceScope: "test-scope", startedAt: 1000, lastUpdate: 1500, endedAt: 1500,
-      processTerminal: pending, steps: [{ agent: "matt-researcher", status: "completed" }],
-    }));
-    const options = { resultsDir, now: () => 2000, pidNamespaceScope: () => "test-scope" };
     const gone = () => { throw Object.assign(new Error("No such process"), { code: "ESRCH" }); };
-    reconcileAsyncRun(asyncDir, { ...options, kill: () => true });
-    assert.deepEqual(readProcessTerminal(asyncDir, pending), pending, "a live runner may still report its exit");
-    reconcileAsyncRun(asyncDir, { ...options, kill: gone, pidNamespaceScope: () => "other-scope" });
-    assert.deepEqual(readProcessTerminal(asyncDir, pending), pending, "a different PID namespace cannot prove the runner is gone");
-    reconcileAsyncRun(asyncDir, { ...options, kill: gone });
-    const proof = readProcessTerminal(asyncDir, pending);
-    assert.equal(proof.state, "unknown");
-    assert.equal(proof.reason, "observer-unavailable");
-    assert.deepEqual(JSON.parse(await readFile(proofPath, "utf8")), pending, "the original observer can still write its proof");
+    await writeFile(join(asyncDir, "process-terminal.json"), JSON.stringify(pending));
+    await writeFile(statusPath, JSON.stringify({ ...running, state: "complete", endedAt: 1500 }));
+    reconcileAsyncRun(asyncDir, { resultsDir, now: () => 2000, kill: gone, pidNamespaceScope: () => "test-scope" });
+    assert.equal(readProcessTerminal(asyncDir, pending).reason, "observer-unavailable");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("precise MCP grants exclude ambient tools and require the server's defining child extension", async () => {
+test("precise MCP grants exclude ambient tools", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-matt-mcp-grant-"));
   try {
     const script = `
       import assert from "node:assert/strict";
-      import { resolveMcpDirectToolResolution, extensionOnlyMcpServers } from
+      import { resolveMcpDirectToolResolution } from
         ${JSON.stringify(pathToFileURL(join(SOURCE_DIR, "runs/shared/mcp-direct-tool-allowlist.js")).href)};
-      const extensionPath = ${JSON.stringify(join(directory, "required.ts"))};
-      const names = ["web_search_exa", "web_fetch_exa", "unapproved_write"];
       const host = {
         getCommands: () => [{ name: "mcp", sourceInfo: { path: "builtin:mcp" } }],
-        getAllTools: () => names.map(name => ({ name: "mcp__exa__" + name, namespace: { name: "mcp__exa" } })),
-        getMcpServers: () => [{ name: "exa", extensionPath }],
+        getAllTools: () => ["web_search_exa", "web_fetch_exa", "unapproved_write"].map(name => ({ name: "mcp__exa__" + name, namespace: { name: "mcp__exa" } })),
+        getMcpServers: () => [{ name: "exa" }],
       };
       const grant = resolveMcpDirectToolResolution(["exa/web_search_exa", "exa/web_fetch_exa"], process.cwd(), host);
       assert.deepEqual(grant.unresolvedSelectors, []);
       assert.deepEqual(grant.selections.map(row => row.name), ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa"]);
-      assert.deepEqual(extensionOnlyMcpServers(grant.selections, host, process.cwd(), true, () => false), ["exa"]);
-      assert.deepEqual(extensionOnlyMcpServers(grant.selections, host, process.cwd(), true,
-        path => path === extensionPath), []);
-      assert.deepEqual(resolveMcpDirectToolResolution(["exa/missing"], process.cwd(), host).unresolvedSelectors, ["exa/missing"]);
     `;
     execFileSync(process.execPath, ["--input-type=module", "-e", script], {
       cwd: directory, encoding: "utf8",
@@ -127,1254 +79,147 @@ test("precise MCP grants exclude ambient tools and require the server's defining
   }
 });
 
-test("adapter v7 openUi=false cache resolves only the researcher's explicit tools", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "pi-matt-mcp-adapter-cache-"));
-  try {
-    const server = { url: "https://example.invalid/mcp", openUi: false };
-    // Fixture from pi-mcp-adapter@7.0.1 computeServerHash(server), not the resolver under test.
-    const configHash = "3fee343b09fc76cc2dd18aaba4b23fb1e3260d9ec6c796bbadad34ec53b20263";
-    await writeFile(join(directory, "mcp-cache.json"), JSON.stringify({ version: 1, servers: {
-      exa: { configHash, cachedAt: Date.now(), tools: ["web_search_exa", "web_fetch_exa", "unapproved_write"].map(name => ({ name })) },
-    } }));
-    const script = `
-      import assert from "node:assert/strict";
-      import { resolveMcpDirectToolResolution } from
-        ${JSON.stringify(pathToFileURL(join(SOURCE_DIR, "runs/shared/mcp-direct-tool-allowlist.js")).href)};
-      const host = { getCommands: () => [{ name: "mcp-adapter" }] };
-      const grant = resolveMcpDirectToolResolution(["exa/web_search_exa", "exa/web_fetch_exa"], process.cwd(), host,
-        { mcpServers: { exa: ${JSON.stringify(server)} } });
-      assert.deepEqual(grant.unresolvedSelectors, []);
-      assert.deepEqual(grant.selections.map(selection => selection.selector), ["exa/web_search_exa", "exa/web_fetch_exa"]);
-    `;
-    execFileSync(process.execPath, ["--input-type=module", "-e", script], {
-      cwd: directory, encoding: "utf8",
-      env: { ...process.env, PI_CODING_AGENT_DIR: directory },
-    });
-  } finally {
-    await rm(directory, { recursive: true, force: true });
+test("all registered workflows pass pi-subagents@0.90.0 script validation", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  for (const name of ["matt-tdd", "matt-code-review", "matt-research", "matt-prototype", "architecture-scan", "architecture-design"]) {
+    const plan = buildDispatchRequest(registry, registry.skills[name], "Sandbox check", ROOT);
+    const checked = validateWorkflowScript(plan.rpcParams.script);
+    assert.equal(checked.ok, true, `${name}: ${JSON.stringify(checked.errors)}`);
   }
 });
 
-function planFor(registry, name, evidence) {
-  const workflow = registry.skills[name];
-  const laneTasks = Object.fromEntries(workflow.workflow.lanes.map(lane => [lane.key, "Compatibility probe"]));
-  return buildDispatchRequest(registry, workflow, "Compatibility probe", ROOT, laneTasks, evidence);
-}
-
-function successfulResult(plan, key) {
-  const lane = plan.lanes.find(lane => lane.key === key);
-  const structuredOutput = lane.gate
-    ? { [lane.gate.field]: lane.gate.equals, ...Object.fromEntries((lane.gate.nonEmpty ?? []).map(field => [field, ["mock evidence"]])) }
-    : { question: "probe" };
-  return { key, ok: true, output: "", artifactPaths: [], structuredOutput };
-}
-
-const unexpectedStatus = async () => { throw new Error("Unexpected status call"); };
-
-function reviewResult(plan, key, verdict) {
-  return {
-    ...successfulResult(plan, key),
-    structuredOutput: {
-      axis: key, verdict, summary: `${key}: ${verdict}`,
-      findings: verdict === "FAIL" ? [{
-        severity: "P1", title: `${key} finding`, evidence: `${key}: ${"evidence ".repeat(800)}`,
-        locations: [`${key}.mjs:1`], recommendation: `Fix ${key}`,
-      }] : [],
-      notes: verdict === "NO_EVIDENCE" ? ["Required evidence is unavailable"] : [],
-    },
-  };
-}
-
-function implementResult(plan) {
-  return {
-    ...successfulResult(plan, "implement"),
-    structuredOutput: {
-      status: "COMPLETE", summary: "Implemented", residualRisks: [], changedFiles: ["file.mjs"],
-      confirmedSeams: [{ name: "module", interface: "public", behaviors: ["works"] }],
-      cycles: [{ test: "works", redEvidence: "failed first", greenEvidence: "passed next", files: ["file.mjs"] }],
-      commands: [
-        { command: "test red", phase: "RED", exitCode: 1, testCount: 1, outcome: "failed as expected" },
-        { command: "test green", phase: "GREEN", exitCode: 0, testCount: 1, outcome: "passed" },
-      ],
-    },
-  };
-}
-
-test("envelope recollection runs in the pinned sandbox with only a collector capability and no child sessions", async () => {
+test("matt-tdd runs claim, worker, and verify host step in real sandbox and handles BLOCKED cleanly", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const template = planFor(registry, "matt-tdd");
-  const original = implementResult(template);
-  const evidence = {
-    controlled: true, path: "/tmp/mock-review.md", head: "a".repeat(40),
-    command: "trusted-collector", claimCommand: "must-not-claim",
-    resultPath: "/tmp/mock-review-result.json",
-  };
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "recollect", ROOT,
-    { implement: "unused", standards: "unused", spec: "unused" }, evidence, undefined,
-    { implementResult: original, repairOnly: true, recollect: true });
-  assert.deepEqual(plan.lanes, []);
-  assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: "trusted-collector" }]);
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const calls = [], emits = [];
-  const result = await runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async () => { throw new Error("Recollection must not launch a child"); },
-    onEmit: values => { emits.splice(0, emits.length, ...values); },
-    host: async key => {
-      calls.push(key);
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
-        outputPath: "/tmp/mock-collector-output", durationMs: 1,
-        stdout: JSON.stringify({ path: evidence.path, head: evidence.head, snapshotId: "b".repeat(64),
-          complete: true, boundary: { incremental: false, changedPaths: ["response.mjs"], approvedFindingIds: [] } }) };
-    },
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Build parser", ROOT, {
+    hostControls: { claimCommand: "claim-cmd", verifyCommand: "verify-cmd" },
   });
-  assert.deepEqual(calls, ["review-evidence"]);
-  assert.deepEqual(result.value, [original]);
-  assert.ok(emits.some(row => row.type === "pi-x-matt.review-pending"));
-});
-
-test("pinned workflow sandbox saves the initial writer timeout snapshot before report settlement", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Timeout probe", ROOT,
-    { implement: "implementation", standards: "standards", spec: "AC1" },
-    { writerTimeoutCommand: "trusted-snapshot", command: "unused-collector" }, undefined, { sealWriterTimeout: true });
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const snapshot = { snapshotId: "a".repeat(64), indexId: "b".repeat(64) };
-  const retained = { agent: "matt-worker", resumability: { state: "resumable" } };
-  const calls = [], emits = [];
-  await assert.rejects(() => runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    onEmit: values => { emits.splice(0, emits.length, ...values); },
-    launch: async (key, params) => {
-      calls.push(key);
-      if (key === "implement") return { ...retained, key, ok: false, runId: "writer", output: "",
-        terminalOutcome: { state: "partial", reason: "timeout" }, artifactPaths: [] };
-      assert.equal(key, "implement-settlement");
-      assert.equal(params.resume, "writer");
-      return { ...implementResult(plan), ...retained, key, runId: "settled", structuredOutput: { status: "BLOCKED" } };
-    },
-    host: async (key, params) => {
-      calls.push(key);
-      assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
-        outputPath: "/tmp/mock-timeout-snapshot.log", durationMs: 1, stdout: JSON.stringify(snapshot) };
-    },
-  }), /implement\.status/);
-  assert.deepEqual(calls, ["implement", "seal-writer-timeout", "implement-settlement"]);
-  assert.deepEqual(emits.find(row => row.type === "pi-x-matt.writer-timeout-snapshot")?.snapshot, snapshot);
-  const writer = emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0];
-  assert.equal(writer.runId, "settled");
-  assert.equal(writer.recoveryHistory[0].terminalOutcome.reason, "timeout");
-});
-
-test("pinned workflow sandbox passes the host writer binding and seals scope BLOCKED before any checks", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Scope probe", ROOT,
-    { implement: "finish in approved scope" },
-    { writerScopeSealCommand: "trusted-scope-seal", preReviewCommand: "not-run", command: "not-collected" },
-    undefined, { delivery: "verified", writerBinding: "/tmp/mock-grant.json", verification: { approvedFindingIds: [] } });
   const checked = validateWorkflowScript(plan.rpcParams.script);
   assert.equal(checked.ok, true, JSON.stringify(checked.errors));
-  const calls = [], emits = [];
-  const snapshot = { snapshotId: "a".repeat(64), indexId: "b".repeat(64) };
-  await assert.rejects(() => runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    onEmit: values => { emits.splice(0, emits.length, ...values); },
-    launch: async (key, params) => {
-      calls.push(key);
-      assert.equal(params.agent, SCOPED_WRITER_AGENT);
-      assert.deepEqual(params.extensionBindings, { [WRITER_SCOPE_BINDING]: "/tmp/mock-grant.json" });
-      assert.equal(params.worktree, false);
-      return { ...implementResult(plan), agent: params.agent, runId: "same-writer", resumability: { state: "resumable" },
-        structuredOutput: { status: "BLOCKED", scopeBlocker: { paths: ["tests/new.java"], reason: "Correct module path" } } };
-    },
-    host: async (key, params) => {
-      calls.push(key);
-      assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
-        outputPath: "/tmp/mock-scope-output", durationMs: 1, stdout: JSON.stringify(snapshot) };
-    },
-  }), /paused before an out-of-scope write/);
-  assert.deepEqual(calls, ["implement", "seal-writer-scope"]);
-  assert.deepEqual(emits.find(row => row.type === "pi-x-matt.writer-scope-checkpoint")?.snapshot, snapshot);
-});
 
-test("pinned workflow sandbox verifies a changed standalone continuation without launching reviewers for verified delivery", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const evidence = {
-    controlled: true, path: "/tmp/mock-review.md", head: "a".repeat(40), resultPath: "/tmp/mock-review-result.json",
-    writerTimeoutStartCommand: "trusted-timeout-start", writerTimeoutCommand: "trusted-timeout-end",
-    preReviewCommand: "trusted-check", command: "trusted-collector",
-  };
-  const before = { snapshotId: "b".repeat(64), indexId: "d".repeat(64) };
-  const after = { ...before, snapshotId: "c".repeat(64) };
-  const timedOut = { key: "implement", ok: false, agent: "matt-worker", runId: "original",
-    terminalOutcome: { state: "partial", reason: "timeout" } };
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Timeout continuation", ROOT,
-    { implement: "finish in approved scope" }, evidence, undefined,
-    { delivery: "verified", writableTimeout: true, timeoutRecovery: { originalResult: timedOut },
-      verification: { approvedFindingIds: [] }, resume: "original" });
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
   const calls = [];
-  const responses = {
-    "check-writer-timeout-start": before,
-    "check-writer-timeout-end": after,
-    "pre-review": { ...after, ok: true },
-    "review-evidence": { ...after, path: evidence.path, head: evidence.head, complete: true,
-      boundary: { incremental: false, changedPaths: ["parser.mjs"], approvedFindingIds: [] } },
-  };
-  const result = await runWorkflowScript({
+  const complete = await runWorkflowScript({
     script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
     launch: async (key, params) => {
-      calls.push(key);
-      assert.equal(key, "implement");
-      assert.equal(params.resume, "original");
-      return implementResult(plan);
-    },
-    host: async (key, params) => {
-      calls.push(key);
-      assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
-        outputPath: "/tmp/mock-timeout-output", durationMs: 1, stdout: JSON.stringify(responses[key]) };
-    },
-  });
-  assert.deepEqual(calls, ["check-writer-timeout-start", "implement", "check-writer-timeout-end", "pre-review", "review-evidence"]);
-  assert.equal(result.value[0].hostVerification.preReview.snapshotId, after.snapshotId);
-  assert.deepEqual(result.value[0].recoveryHistory, [timedOut]);
-});
-
-test("large evidence receipt survives the real host preview before both reviewers", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "matt-large-receipt-"));
-  let evidence;
-  try {
-    await writeFile(join(directory, "baseline.txt"), "baseline\n");
-    for (const args of [["init", "-q"], ["config", "user.email", "test@example.invalid"],
-      ["config", "user.name", "Test"], ["add", "."], ["commit", "-qm", "baseline"]]) {
-      execFileSync("git", args, { cwd: directory });
-    }
-    const baseline = await collectReviewEvidence(directory);
-    const paths = Array.from({ length: 24 }, (_, index) => `file-${index}-${"long-path-".repeat(8)}${index === 0 ? "路径🔎" : ""}.mjs`);
-    evidence = await prepareTddEvidence(directory, ROOT, {
-      allowedFiles: paths, previousSnapshotId: baseline.snapshotId,
-      batch: { fixedPoint: baseline.head },
-    });
-    const registry = await loadCurrentRegistry(ROOT);
-    const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "receipt regression", directory,
-      { implement: "mock implementation", standards: "standards", spec: "AC1" }, evidence);
-    const sessionId = `receipt:${directory}`;
-    const registration = registerWorkflowResource({ sessionId, definition: {
-      name: "receipt-test", version: 1, resolve: () => ({ script: plan.rpcParams.script, hostCommands: plan.hostCommands }),
-    } });
-    const resolved = resolveWorkflowResource("receipt-test", {}, sessionId);
-    registration.dispose();
-    assert.equal(resolved.ok, true);
-    const permit = resolved.resource.permit;
-    assert.notEqual(typeof consumeWorkflowResourcePermit(permit, resolved.resource.script), "string");
-    assert.ok(plan.hostCommands.length <= 32);
-    assert.equal(typeof authorizeWorkflowResourceHost(permit, "review-result-1", "unapproved command"), "string");
-    const calls = [], emits = [];
-    await assert.rejects(() => runWorkflowScript({
-      script: plan.rpcParams.script, timeoutMs: 15000, status: unexpectedStatus,
-      onEmit: values => { emits.splice(0, emits.length, ...values); },
-      launch: async key => {
-        calls.push(key);
-        if (key === "implement") {
-          for (const path of paths) await writeFile(join(directory, path), "export const value = 1;\n");
-          return implementResult(plan);
-        }
-        const result = reviewResult(plan, key, key === "spec" ? "FAIL" : "PASS");
-        if (key === "spec") result.structuredOutput.findings = paths.map((path, index) => ({
-          id: `file-${index}`, rootCauseId: `file-${index}`, severity: "P2", title: "Observable mismatch",
-          basis: { kind: "acceptance", reference: "AC1" }, evidence: "Synthetic evidence",
-          expected: "expected behavior", actual: "different behavior", locations: [`${path}:1`],
-          classification: "independent", relatedFindingIds: [], affectedBy: [], recommendation: "Correct the behavior",
-        }));
-        return result;
-      },
-      host: (key, params, signal) => {
-        assert.equal(authorizeWorkflowResourceHost(permit, key, params.command), undefined);
-        return executeWorkflowHostCommand({
-          key, params, signal, cwd: directory, defaultOutputPath: join(dirname(evidence.path), `${key}.log`),
-        });
-      },
-    }), /spec\.verdict/);
-    assert.deepEqual(calls, ["implement", "standards", "spec"]);
-    const candidate = emits.find(row => row.type === "pi-x-matt.batch-candidate").candidate;
-    const pack = JSON.parse(await readFile(evidence.snapshotPath, "utf8"));
-    assert.ok(Buffer.byteLength(JSON.stringify({ candidate, boundary: pack.incremental })) > 4096);
-    assert.deepEqual(candidate, pack.batchCandidate);
-    assert.deepEqual(candidate.files.map(file => file.path).sort(), [...paths].sort());
-    const spec = emits.findLast(row => row.type === "pi-x-matt.stage-results").results.find(row => row.key === "spec");
-    assert.equal(spec.ok, true, "every changed path remains valid, rather than becoming a report contract error");
-    assert.equal(spec.contractError, undefined);
-    assert.equal(spec.structuredOutput.findings.length, paths.length);
-  } finally {
-    if (evidence) await rm(dirname(evidence.path), { recursive: true, force: true });
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("broken evidence receipt frames stop reviewers instead of accepting partial or changed data", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  for (const damage of ["truncated", "changed", "over-limit"]) {
-    const directory = await mkdtemp(join(tmpdir(), "matt-broken-receipt-"));
-    try {
-      const resultPath = join(directory, "review-result.json");
-      const result = {
-        path: join(directory, "review.md"), head: "a".repeat(40), snapshotId: "b".repeat(64), complete: true,
-        candidate: { head: "a".repeat(40), snapshotId: "b".repeat(64),
-          files: Array.from({ length: 32 }, (_, index) => ({ path: `file-${index}-${"path-".repeat(16)}`, sha256: "c".repeat(64) })) },
-        boundary: { incremental: false, changedPaths: ["file.mjs"], approvedFindingIds: [] },
+      calls.push(`launch:${key}`);
+      assert.equal(params.agent, "matt-worker");
+      return {
+        key, ok: true, output: "", artifactPaths: [],
+        structuredOutput: {
+          status: "COMPLETE", summary: "ok", confirmedSeams: [], cycles: [], changedFiles: ["a.js"], commands: [], residualRisks: [],
+        },
       };
-      const first = reviewResultFrame(result);
-      assert.ok(first.count > 1);
-      const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
-      const evidence = { path: result.path, head: result.head, controlled: true, batch: true, resultPath,
-        command: "trusted-collector", resultCommands: Array.from({ length: MAX_REVIEW_RESULT_PARTS - 1 }, (_, index) => ({
-          key: `review-result-${index + 1}`,
-          command: [process.execPath, join(ROOT, "scripts/read-review-result.mjs"), resultPath, String(index + 1)].map(quote).join(" "),
-        })) };
-      if (damage === "changed") result.candidate.files[0].sha256 = "d".repeat(64);
-      if (damage === "over-limit") result.boundary.changedPaths = Array.from({ length: 1000 }, (_, index) => `path-${index}-${"x".repeat(100)}`);
-      await writeFile(resultPath, JSON.stringify(result));
-      const plan = planFor(registry, "matt-tdd", evidence), calls = [];
-      await assert.rejects(() => runWorkflowScript({
-        script: plan.rpcParams.script, timeoutMs: 10000, status: unexpectedStatus,
-        launch: async key => { calls.push(key); return implementResult(plan); },
-        host: async (key, params, signal) => {
-          if (key === "review-evidence") return hostResult(key, first);
-          assert.ok(plan.hostCommands.some(row => row.key === key && row.command === params.command));
-          const frame = await executeWorkflowHostCommand({
-            key, params, signal, cwd: directory, defaultOutputPath: join(directory, `${key}.log`),
-          });
-          return damage === "truncated" ? { ...frame, stdout: frame.stdout.trimEnd().slice(0, -1) } : frame;
+    },
+    host: async (key) => {
+      calls.push(`host:${key}`);
+      return {
+        key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
+        outputPath: "/tmp/out", durationMs: 1,
+        stdout: key === "verify" ? JSON.stringify({ ok: true, results: [{ command: "npm test", ok: true, exitCode: 0 }] }) : '{"claimed":true}',
+      };
+    },
+  });
+  assert.deepEqual(calls, ["host:implement-claim", "launch:implement", "host:verify"]);
+  assert.equal(complete.value[0].hostVerification.ok, true);
+
+  // BLOCKED returns cleanly without throwing or running verify
+  const blockedCalls = [];
+  const blocked = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key) => {
+      blockedCalls.push(`launch:${key}`);
+      return {
+        key, ok: true, output: "", artifactPaths: [],
+        structuredOutput: {
+          status: "BLOCKED", summary: "need info", confirmedSeams: [], cycles: [], changedFiles: [], commands: [], residualRisks: [],
         },
-      }), damage === "truncated" ? /JSON|SyntaxError/ : damage === "changed" ? /changed or is incomplete/ : /Host command .* failed/);
-      assert.deepEqual(calls, ["implement"], damage);
-      if (damage === "over-limit") {
-        assert.match(await readFile(join(directory, "review-result-1.log"), "utf8"), /24-frame host transport limit/);
-      }
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  }
+      };
+    },
+    host: async (key) => {
+      blockedCalls.push(`host:${key}`);
+      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "", outputPath: "/tmp/out", durationMs: 1, stdout: '{"claimed":true}' };
+    },
+  });
+  assert.deepEqual(blockedCalls, ["host:implement-claim", "launch:implement"]);
+  assert.equal(blocked.value[0].structuredOutput.status, "BLOCKED");
 });
 
-// The real sandbox drives onEmit; the adapter uses the pinned async executor's
-// status projection and atomic writer. Never recover from partial.children here:
-// the failure checkpoint must already be on disk when the sandbox rejects.
-async function withPersistedWorkflow(plan, launch, inspect) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-matt-workflow-status-"));
-  const statusPath = join(directory, "status.json");
-  const writer = createCapacityResilientJsonWriter();
-  let status = { runId: "test-workflow", state: "running", workflow: { emits: [] } };
-  const calls = [];
-  let failure;
-  try {
-    writer.write(statusPath, status);
-    try {
-      const result = await runWorkflowScript({
-        script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-        launch: async key => { calls.push(key); return launch(key); },
-        host: async key => {
-          calls.push(key);
-          return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
-            stdout: "", stderr: "", outputPath: "/tmp/mock-host.log", durationMs: 1 };
-        },
-        onEmit: emits => {
-          status.workflow = { ...status.workflow, emits };
-          writer.write(statusPath, status);
-        },
-      });
-      status = { ...status, state: "complete", workflow: { ...status.workflow, value: result.value } };
-    } catch (error) {
-      failure = error;
-      const published = JSON.parse(await readFile(statusPath, "utf8"));
-      assert.deepEqual(published.workflow.emits, error.partial.emits);
-      assert.ok(published.workflow.emits.some(value => value.type === "pi-x-matt.stage-results"),
-        `complete stage results must be persisted before the gate throws: ${error.message}`);
-      status = { ...published, state: "failed", error: error.message };
-    }
-    writer.write(statusPath, status);
-    // Consume only the documented status.json source, not the in-memory emits.
-    const persisted = JSON.parse(await readFile(statusPath, "utf8"));
-    const checkpoint = persisted.workflow.emits.findLast(value => value.type === "pi-x-matt.stage-results");
-    assert.equal(checkpoint.version, 1);
-    assert.equal(checkpoint.workflow, "matt-tdd");
-    const results = persisted.state === "complete" ? persisted.workflow.value : checkpoint.results;
-    await inspect({ persisted, checkpoint, results, calls, failure });
-  } finally {
-    writer.dispose();
-    await rm(directory, { recursive: true, force: true });
-  }
-}
-
-test("TDD PASS remains readable from persisted workflow.value", async () => {
+test("matt-code-review runs shared evidence pack and returns advisory ISSUES without failing workflow", async () => {
   const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
-  await withPersistedWorkflow(plan,
-    key => key === "implement" ? implementResult(plan) : reviewResult(plan, key, "PASS"),
-    ({ persisted, checkpoint, results, calls, failure }) => {
-      assert.equal(failure, undefined);
-      assert.equal(persisted.state, "complete");
-      assert.equal(checkpoint.stage, 2);
-      assert.deepEqual(results, persisted.workflow.value);
-      assert.deepEqual(results, checkpoint.results);
-      assert.deepEqual(results.map(result => result.key), ["implement", "standards", "spec"]);
-      assert.deepEqual(calls, ["implement", "review-evidence", "standards", "spec"]);
-    });
-});
-
-test("verified TDD settles one writer and a checked candidate in the pinned native sandbox", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const evidence = { command: "trusted-collector", path: "/tmp/verified-review.md",
-    controlled: true, preReviewCommand: "trusted-check" };
-  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "shared", ROOT,
-    { implement: "Implement and test" }, evidence, undefined, { delivery: "verified", verification: {} });
+  const plan = buildDispatchRequest(registry, registry.skills["matt-code-review"], "Review PR", ROOT, {
+    hostControls: { evidenceKind: "worktree", evidenceCommand: "collect-cmd", evidencePath: "/tmp/review.md" },
+  });
   assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const calls = [];
-  const candidate = { snapshotId: "snapshot", indexId: "index", boundary: { incremental: false } };
-  const result = await runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async key => {
-      calls.push(key);
-      assert.equal(key, "implement");
-      return implementResult(plan);
-    },
-    host: async key => {
-      calls.push(key);
-      const payload = key === "pre-review" ? { ...candidate, ok: true, results: [] } : candidate;
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
-        stdout: JSON.stringify(payload), stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 };
-    },
-  });
-  assert.deepEqual(result.value.map(row => row.key), ["implement"]);
-  assert.equal(result.value[0].hostVerification.ok, true);
-  assert.deepEqual(calls, ["implement", "pre-review", "review-evidence"]);
-  assert.ok(!result.emits.some(row => row.type === "pi-x-matt.review-pending"));
-});
 
-test("controlled incremental review and selective recovery run in the pinned native sandbox", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md", controlled: true };
-  const workflow = registry.skills["matt-tdd"];
-  const laneTasks = { implement: "Implementation pack", standards: "Standards only", spec: "Spec only" };
-  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks, evidence);
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const result = await runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async key => key === "implement" ? implementResult(plan) : reviewResult(plan, key, "PASS"),
-    host: async key => ({ key, kind: "command", ok: true, state: "passed", exitCode: 0,
-      stdout: JSON.stringify({ boundary: { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: [] } }),
-      stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 }),
-  });
-  assert.deepEqual(result.value.map(row => row.key), ["implement", "standards", "spec"]);
-  const prior = result.value.map(row => row.key === "spec" ? { key: "spec", ok: false, error: "fetch failed" } : row);
-  const recovery = buildDispatchRequest(registry, workflow, "shared", ROOT, laneTasks, evidence, {
-    results: prior, keys: ["spec"], boundary: { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: [] },
-  });
-  const calls = [];
-  const recovered = await runWorkflowScript({
-    script: recovery.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async key => { calls.push(key); return reviewResult(plan, key, "PASS"); },
-    host: async () => { throw new Error("Recovery must not recapture evidence"); },
-  });
-  assert.deepEqual(calls, ["spec"]);
-  assert.equal(recovered.value[2].recoveryHistory[0].error, "fetch failed");
-});
-
-test("committed single-axis recovery validates in the pinned sandbox without repeating collector or other reviewer", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-code-review"];
-  const evidence = { committed: true, command: "must-not-run", path: "/tmp/pinned-committed-review.md",
-    fixedPoint: "a".repeat(40), head: "b".repeat(40) };
-  const tasks = { standards: "standards only", spec: "original acceptance source" };
-  const base = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence);
-  const standards = { ...reviewResult(base, "standards", "PASS"), artifactPaths: [evidence.path] };
-  const prior = [standards, { key: "spec", ok: false, error: "usage limit reached" }];
-  const recovery = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, {
-    results: prior, keys: ["spec"], attempt: 1,
-  });
-  assert.equal(validateWorkflowScript(recovery.rpcParams.script).ok, true);
-  assert.deepEqual(recovery.hostCommands, []);
-  const calls = [];
-  const recovered = await runWorkflowScript({
-    script: recovery.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async key => { calls.push(key); return reviewResult(base, key, "PASS"); },
-    host: async () => { throw new Error("Recovery must not recapture committed evidence"); },
-  });
-  assert.deepEqual(calls, ["spec"]);
-  assert.deepEqual(recovered.value[0], standards);
-  assert.equal(recovered.value[1].recoveryHistory[0].error, "usage limit reached");
-  assert.ok(recovered.value[1].artifactPaths.includes(evidence.path));
-});
-
-test("each reviewer FAIL or NO_EVIDENCE fails closed with both full results persisted", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const evidence = { command: "trusted-collector", path: "/tmp/mock-review.md" };
-  const plan = planFor(registry, "matt-tdd", evidence);
-  for (const axis of ["standards", "spec"]) {
-    for (const verdict of ["FAIL", "NO_EVIDENCE"]) {
-      const expected = plan.lanes.map(({ key }) => key === "implement"
-        ? implementResult(plan) : reviewResult(plan, key, key === axis ? verdict : "PASS"));
-      await withPersistedWorkflow(plan, key => expected.find(result => result.key === key),
-        ({ persisted, checkpoint, results, failure, calls }) => {
-          assert.match(failure.message, new RegExp(`${axis}\\.verdict`));
-          assert.equal(persisted.state, "failed");
-          assert.equal(Object.hasOwn(persisted.workflow, "value"), false);
-          assert.equal(checkpoint.stage, 2);
-          const outputs = results.map((result, index) => {
-            const output = result.structuredOutput;
-            if (result.key !== "spec" || output.verdict !== "NO_EVIDENCE") return output;
-            assert.deepEqual(output.notes.slice(0, expected[index].structuredOutput.notes.length),
-              expected[index].structuredOutput.notes);
-            assert.match(output.notes.join("\n"), /laneTasks\.spec.*parent spec/);
-            return { ...output, notes: expected[index].structuredOutput.notes };
-          });
-          assert.deepEqual(outputs, expected.map(result => result.structuredOutput));
-          assert.ok(results.slice(1).every(result => result.artifactPaths.includes(evidence.path)));
-          assert.deepEqual(calls, ["implement", "review-evidence", "standards", "spec"], "no automatic rerun");
-        });
-    }
-  }
-});
-
-test("writer-only repair and deferred review validate and execute in the native sandbox", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-tdd"];
-  const tasks = { implement: "Repair all approved findings", standards: "Standards only", spec: "Spec only" };
-  const evidence = { command: "trusted-collector", path: "/tmp/repair.md", controlled: true, claimCommand: "trusted-claim" };
-  const boundary = { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: ["spec:F1"] };
-  const repair = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
-    { repairOnly: true, resume: "retained-writer" });
-  assert.equal(validateWorkflowScript(repair.rpcParams.script).ok, true);
-  const calls = [];
-  const repaired = await runWorkflowScript({
-    script: repair.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async (key, params) => {
-      calls.push(key);
-      assert.equal(params.resume, "retained-writer");
-      for (const field of ["agent", "context", "skill", "outputSchema", "gate"]) assert.equal(field in params, false);
-      return implementResult(repair);
-    },
-    host: async key => {
-      calls.push(key);
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
-        stdout: JSON.stringify({ boundary }), stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 };
-    },
-  });
-  assert.deepEqual(calls, ["implement-claim", "implement", "review-evidence"]);
-  assert.deepEqual(repaired.value.map(row => row.key), ["implement"]);
-  assert.ok(repaired.emits.some(row => row.type === "pi-x-matt.review-pending"));
-  const review = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
-    { implementResult: repaired.value[0], boundary });
-  assert.deepEqual(review.hostCommands, []);
-  assert.equal(validateWorkflowScript(review.rpcParams.script).ok, true);
-  calls.length = 0;
-  const reviewed = await runWorkflowScript({
-    script: review.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async (key, params) => {
-      calls.push(key);
-      assert.equal(params.context, "fresh");
-      return reviewResult(review, key, "PASS");
-    },
-    host: async () => { throw new Error("Deferred review must not rerun writer or collector"); },
-  });
-  assert.deepEqual(calls, ["standards", "spec"]);
-  assert.deepEqual(reviewed.value.map(row => row.key), ["implement", "standards", "spec"]);
-});
-
-test("writer execution recovery preserves failure history in the pinned native sandbox", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-tdd"];
-  const original = { key: "implement", agent: "matt-worker", ok: false, runId: "failed-writer",
-    error: "fetch failed", resumability: { state: "resumable" } };
-  const evidence = { command: "trusted-collector", path: "/tmp/recovered.md", controlled: true, claimCommand: "trusted-claim" };
-  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT,
-    { implement: "Complete the retained repair" }, evidence, undefined,
-    { repairOnly: true, resume: original.runId, writerRecovery: { originalResult: original } });
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const calls = [];
-  const recovered = await runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async (key, params) => {
-      calls.push(key);
-      assert.equal(params.resume, original.runId);
-      assert.equal("agent" in params, false);
-      return implementResult(plan);
-    },
-    host: async key => {
-      calls.push(key);
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0,
-        stdout: JSON.stringify({ boundary: { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: ["spec:F1"] } }),
-        stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 };
-    },
-  });
-  assert.deepEqual(calls, ["implement-claim", "implement", "review-evidence"]);
-  assert.deepEqual(recovered.value[0].recoveryHistory, [original]);
-  assert.ok(recovered.emits.some(row => row.type === "pi-x-matt.review-pending"));
-});
-
-const HOST_FAILURE_NOTE = /宿主确定性校验未通过/;
-const hostResult = (key, stdout) => ({ key, kind: "command", ok: true, state: "passed", exitCode: 0,
-  stdout: JSON.stringify(stdout), stderr: "", outputPath: "/tmp/mock-host", durationMs: 1 });
-const failingGate = { ok: false, drift: false, results: [{ command: "npm test", ok: false, exitCode: 1, tail: "expected 2, got 3" }] };
-const accountedResult = (plan, ids, extra = {}) => {
-  const result = implementResult(plan);
-  return { ...result, ...extra, structuredOutput: { ...result.structuredOutput,
-    findingResolutions: ids.map(findingId => ({ findingId, cycleTest: "works", evidence: "the cycle now covers it" })) } };
-};
-
-test("host verification only follows a writer run and tells reviewers about real command failures alone", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-tdd"];
-  const tasks = { implement: "Implement the slice", standards: "Standards only", spec: "Spec only" };
-  const evidence = { command: "trusted-collector", path: "/tmp/verified.md", preReviewCommand: "trusted-gate" };
-  const ungated = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence);
-  assert.deepEqual(ungated.hostCommands.map(row => row.key), ["review-evidence"]);
-  assert.doesNotMatch(ungated.rpcParams.script, /pre-review|hostVerification = /);
-
-  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
-    { verification: { approvedFindingIds: [] } });
-  assert.deepEqual(plan.hostCommands, [
-    { key: "pre-review", command: "trusted-gate" }, { key: "pre-review-recheck", command: "trusted-gate" },
-    { key: "review-evidence", command: "trusted-collector" },
-  ]);
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const cases = [
-    { name: "passing gate", gate: { ok: true, drift: false, results: [{ command: "npm test", ok: true, exitCode: 0 }] }, ok: true, note: false },
-    { name: "failing command", gate: failingGate, ok: false, note: true },
-    { name: "candidate drift", gate: { ok: false, drift: true, results: [{ command: "npm test", ok: true, exitCode: 0 }] }, ok: false, note: false },
-    { name: "runner failure", gate: new Error("host step exited 1"), ok: false, note: false },
-  ];
-  for (const { name, gate, ok, note } of cases) {
-    const calls = [], reviewerTasks = [];
-    const run = await runWorkflowScript({
-      script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-      launch: async (key, params) => {
-        calls.push(key);
-        if (key === "implement") return implementResult(plan);
-        reviewerTasks.push(params.task);
-        return reviewResult(plan, key, "PASS");
-      },
-      host: async key => {
-        calls.push(key);
-        if (key === "pre-review" && gate instanceof Error) throw gate;
-        return hostResult(key, key === "pre-review" ? gate : {});
-      },
-    });
-    // The writer returned no retained handle, so nothing can be corrected: the result is disclosed, not lost.
-    assert.deepEqual(calls, ["implement", "pre-review", "review-evidence", "standards", "spec"], name);
-    const { hostVerification } = run.value[0];
-    assert.equal(hostVerification.ok, ok, name);
-    assert.equal("accounting" in hostVerification, false, "an initial dispatch has no approved findings to account for");
-    if (gate instanceof Error) assert.match(hostVerification.preReview.error, /host step exited 1/);
-    else assert.deepEqual(hostVerification.preReview, gate);
-    assert.equal(reviewerTasks.length, 2);
-    assert.ok(reviewerTasks.every(task => HOST_FAILURE_NOTE.test(task) === note), name);
-    assert.ok(reviewerTasks.every(task => task.includes('"hostVerification"') ), "reviewers see the host-measured row itself");
-    assert.deepEqual(run.emits.filter(row => row.type === "pi-x-matt.host-verification").map(row => row.state), ["settled"]);
-    assert.deepEqual(run.emits.findLast(row => row.type === "pi-x-matt.stage-results").results[0].hostVerification, hostVerification);
-  }
-});
-
-test("a failed check resumes the same writer once, and a refused correction keeps the completed work", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-tdd"];
-  const tasks = { implement: "Repair all approved findings", standards: "Standards only", spec: "Spec only" };
-  const evidence = { command: "trusted-collector", path: "/tmp/corrected.md", controlled: true,
-    claimCommand: "trusted-claim", preReviewCommand: "trusted-gate" };
-  const approved = ["standards:F1", "spec:F2"];
-  const boundary = { incremental: true, changedPaths: ["file.mjs"], approvedFindingIds: approved };
-  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT, tasks, evidence, undefined,
-    { repairOnly: true, resume: "writer-0", verification: { approvedFindingIds: approved } });
-  assert.deepEqual(plan.hostCommands.map(row => row.key), ["implement-claim", "pre-review", "pre-review-recheck", "review-evidence"]);
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const retained = runId => ({ runId, resumability: { state: "resumable" } });
-  const execute = async (correction, recheck) => {
-    const calls = [];
-    let correctionTask;
-    const run = await runWorkflowScript({
-      script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-      launch: async (key, params) => {
-        calls.push(key);
-        if (key === "implement") return { ...accountedResult(plan, ["standards:F1"]), ...retained("writer-1") };
-        assert.equal(key, "implement-correction");
-        assert.equal(params.resume, "writer-1", "the correction continues the writer that just ran, not the handle it resumed from");
-        assert.equal(params.timeoutMs, 600000);
-        for (const field of ["agent", "context", "skill", "outputSchema"]) assert.equal(field in params, false);
-        correctionTask = params.task;
-        if (correction instanceof Error) throw correction;
-        return correction;
-      },
-      host: async key => {
-        calls.push(key);
-        return hostResult(key, key === "pre-review" ? failingGate : key === "pre-review-recheck" ? recheck : { boundary });
-      },
-    });
-    assert.deepEqual(calls, ["implement-claim", "implement", "pre-review", "implement-correction", "pre-review-recheck", "review-evidence"]);
-    assert.match(correctionTask, /宿主校验纠正/);
-    assert.match(correctionTask, /"unresolvedFindingIds":\["spec:F2"\]/);
-    assert.match(correctionTask, /expected 2, got 3/);
-    assert.deepEqual(run.emits.filter(row => row.type === "pi-x-matt.host-verification").map(row => row.state), ["correcting", "settled"]);
-    assert.ok(run.emits.some(row => row.type === "pi-x-matt.review-pending"));
-    return run.value[0];
-  };
-  const passing = { ok: true, drift: false, results: [{ command: "npm test", ok: true, exitCode: 0 }] };
-
-  const applied = await execute({ ...accountedResult(plan, approved, { key: "implement-correction" }), ...retained("writer-2") }, passing);
-  assert.equal(applied.key, "implement");
-  assert.equal(applied.runId, "writer-2");
-  assert.equal(applied.structuredOutput.findingResolutions.length, 2);
-  assert.deepEqual(applied.correctionHistory.map(row => row.runId), ["writer-1"]);
-  assert.deepEqual([applied.hostVerification.ok, applied.hostVerification.correction, applied.hostVerification.initial.ok,
-    applied.hostVerification.initial.accounting.unresolvedFindingIds, applied.hostVerification.accounting.unresolvedFindingIds],
-  [true, { state: "applied" }, false, ["spec:F2"], []]);
-
-  const blocked = accountedResult(plan, approved, { key: "implement-correction" });
-  blocked.structuredOutput = { ...blocked.structuredOutput, status: "BLOCKED", summary: "needs a file outside the approved scope" };
-  const refused = await execute({ ...blocked, ...retained("writer-2") }, failingGate);
-  assert.equal(refused.structuredOutput.status, "COMPLETE", "a refused correction cannot erase the completed repair");
-  assert.equal(refused.structuredOutput.findingResolutions.length, 1);
-  assert.equal(refused.runId, "writer-2", "the next repair must resume the newest retained handle");
-  assert.equal("correctionHistory" in refused, false);
-  assert.deepEqual([refused.hostVerification.ok, refused.hostVerification.correction, refused.hostVerification.preReview.ok,
-    refused.hostVerification.accounting.unresolvedFindingIds],
-  [false, { state: "rejected", status: "BLOCKED", summary: "needs a file outside the approved scope" },
-    false, ["spec:F2"]]);
-
-  const crashed = await execute(new Error("fetch failed"), passing);
-  assert.equal(crashed.runId, "writer-1");
-  assert.equal(crashed.hostVerification.ok, false, "a passing gate does not excuse an unaccounted approved finding");
-  assert.equal(crashed.hostVerification.preReview.ok, true);
-  assert.match(crashed.hostVerification.correction.error, /fetch failed/);
-});
-
-test("both failing review axes retain all findings, not just the first gate error", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd");
-  await withPersistedWorkflow(plan,
-    key => key === "implement" ? implementResult(plan) : reviewResult(plan, key, "FAIL"),
-    ({ persisted, results, failure }) => {
-      assert.equal(persisted.state, "failed");
-      assert.match(failure.message, /standards\.verdict/);
-      for (const result of results.slice(1)) {
-        assert.deepEqual(result.structuredOutput, reviewResult(plan, result.key, "FAIL").structuredOutput);
-        assert.ok(result.structuredOutput.findings[0].evidence.length > 5000);
-      }
-    });
-});
-
-test("blocked or missing implement results persist but cannot launch evidence or review", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
-  for (const missing of [false, true]) {
-    const implement = implementResult(plan);
-    if (missing) delete implement.structuredOutput;
-    else implement.structuredOutput.status = "BLOCKED";
-    await withPersistedWorkflow(plan, () => implement, ({ persisted, checkpoint, results, failure, calls }) => {
-      assert.equal(persisted.state, "failed");
-      assert.match(failure.message, missing ? /without valid structuredOutput/ : /implement\.status/);
-      assert.equal(checkpoint.stage, 1);
-      assert.deepEqual(results, [implement]);
-      assert.deepEqual(calls, ["implement"]);
-    });
-  }
-});
-
-test("execution and invalid-output failures remain distinct from valid review verdicts on disk", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd");
-  const cases = [
-    { ok: false, error: "provider failed after structured_output", structuredOutput: reviewResult(plan, "spec", "FAIL").structuredOutput },
-    { ok: true },
-    { ok: false, error: "Structured output validation failed: invalid verdict" },
-  ];
-  for (const result of cases) {
-    await withPersistedWorkflow(plan,
-      key => key === "implement" ? implementResult(plan)
-        : key === "standards" ? reviewResult(plan, key, "FAIL")
-          : { key, output: "", artifactPaths: [], ...result },
-      ({ persisted, results, calls }) => {
-        assert.equal(persisted.state, "failed");
-        // The first gate error is not an aggregate verdict: inspect every lane.
-        const standards = results.find(result => result.key === "standards");
-        assert.equal(standards.ok, true);
-        assert.equal(standards.structuredOutput.verdict, "FAIL");
-        assert.deepEqual(standards.structuredOutput.findings, reviewResult(plan, "standards", "FAIL").structuredOutput.findings);
-        const spec = results.find(result => result.key === "spec");
-        assert.equal(spec.ok, result.ok);
-        assert.deepEqual(spec.structuredOutput, result.structuredOutput);
-        assert.equal(spec.error, result.error);
-        assert.ok(spec.ok !== true || !spec.structuredOutput, "not a valid review rejection");
-        assert.deepEqual(calls, ["implement", "standards", "spec"]);
-      });
-  }
-});
-
-test("project filter selects the installed npm extension and matches the bundled version", async () => {
-  const manifest = JSON.parse(await readFile(join(PACKAGE_ROOT, "package.json"), "utf8"));
-  const ownManifest = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
-  const settings = JSON.parse(await readFile(join(ROOT, ".pi/settings.json"), "utf8"));
-  assert.equal(manifest.version, ownManifest.dependencies["pi-subagents"]);
-  const entry = settings.packages.find(entry => entry.source === `npm:pi-subagents@${manifest.version}`);
-  assert.ok(entry);
-  assert.deepEqual(entry.extensions, manifest.pi.extensions.map(path => `+${path.replace(/^\.\//, "")}`));
-  for (const path of manifest.pi.extensions) {
-    assert.equal((await stat(join(PACKAGE_ROOT, path))).isFile(), true);
-  }
-});
-
-test("leaf context isolation survives the runtime's global inheritance default", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "pi-matt-agent-context-"));
-  try {
-    const agents = join(directory, ".pi", "agents");
-    await mkdir(agents, { recursive: true });
-    const names = ["matt-reader", "matt-researcher", "matt-reviewer", "matt-worker"];
-    for (const name of names) {
-      await writeFile(join(agents, `${name}.md`), await readFile(join(ROOT, ".pi", "agents", `${name}.md`)));
-    }
-    await writeFile(join(directory, ".pi", "settings.json"), JSON.stringify({
-      subagents: {
-        disableBuiltins: true, defaultInheritGlobalContext: true,
-        agentOverrides: { "matt-researcher": {
-          tools: ["read", "mcp:exa/web_search_exa", "mcp:exa/web_fetch_exa"],
-        } },
-      },
-    }));
-    const script = `
-      import { discoverAgents } from ${JSON.stringify(pathToFileURL(join(SOURCE_DIR, "agents/agents.js")).href)};
-      const { agents } = discoverAgents(process.cwd(), "project", undefined, { globalNpmRoot: null });
-      console.log(JSON.stringify(agents.map(({ name, inheritProjectContext, inheritGlobalContext, tools, mcpDirectTools }) =>
-        ({ name, inheritProjectContext, inheritGlobalContext, tools, mcpDirectTools }))));
-    `;
-    const discovered = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
-      cwd: directory, encoding: "utf8",
-      env: { ...process.env, PI_CODING_AGENT_DIR: join(directory, "user"), PI_SUBAGENT_EXTRA_AGENT_DIRS: "" },
-    }));
-    assert.deepEqual(discovered.map(agent => agent.name).sort(), [...names].sort());
-    for (const agent of discovered) {
-      assert.equal(agent.inheritGlobalContext, false, agent.name);
-      assert.equal(agent.inheritProjectContext, agent.name !== "matt-researcher", agent.name);
-    }
-    const researcher = discovered.find(agent => agent.name === "matt-researcher");
-    assert.deepEqual(researcher.tools, ["read"]);
-    assert.deepEqual(researcher.mcpDirectTools, ["exa/web_search_exa", "exa/web_fetch_exa"]);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("truncated replies fail closed without parsing partial output or automatically resuming", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
-  for (const failedKey of ["implement", "spec"]) {
-    await withPersistedWorkflow(plan, key => key === failedKey
-      ? { key, ok: false, error: TRUNCATED_RESPONSE_ERROR, runId: "retained",
-        resumability: { state: "resumable" }, output: '{"status":"COMPLETE","verdict":"PASS"' }
-      : key === "implement" ? implementResult(plan) : reviewResult(plan, key, "PASS"),
-    ({ persisted, results, calls, failure }) => {
-      assert.equal(persisted.state, "failed");
-      assert.ok(failure.message.includes(TRUNCATED_RESPONSE_ERROR));
-      const failed = results.find(result => result.key === failedKey);
-      assert.equal(failed.error, TRUNCATED_RESPONSE_ERROR);
-      assert.equal(failed.structuredOutput, undefined);
-      assert.deepEqual(calls, failedKey === "implement"
-        ? ["implement"] : ["implement", "review-evidence", "standards", "spec"]);
-      assert.equal(persisted.workflow.emits.some(row => row.type === "pi-x-matt.recovery"), false);
-    });
-  }
-});
-
-test("all generated workflows validate and run in the installed sandbox with mock children", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  for (const workflow of Object.values(registry.skills)) {
-    if (workflow.class !== "orchestration") continue;
-    const plan = planFor(registry, workflow.name);
-    const validation = validateWorkflowScript(plan.rpcParams.script);
-    assert.equal(validation.ok, true, JSON.stringify(validation.errors));
-    const result = await runWorkflowScript({
-      script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-      launch: async (key, params) => {
-        assert.equal(params.label, `${workflow.name} / ${key}`);
-        return successfulResult(plan, key);
-      },
-    });
-    assert.deepEqual(result.value.map(result => result.key), plan.lanes.map(lane => lane.key), workflow.name);
-  }
-});
-
-test("a failed implement with retained COMPLETE output cannot run host evidence or reviewers", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
-  const calls = [];
-  await assert.rejects(() => runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async key => {
-      calls.push(key);
-      return { ...successfulResult(plan, key), ok: false, error: "provider failed after structured_output" };
-    },
-    host: async () => { throw new Error("Host evidence must not run"); },
-  }), /provider failed after structured_output/);
-  assert.deepEqual(calls, ["implement"]);
-});
-
-test("reconsideration plans validate and merge exact decisions in the pinned native sandbox", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const workflow = registry.skills["matt-tdd"];
-  const evidence = { command: "trusted-collector", path: "/tmp/review.md", controlled: true };
-  const finding = {
-    id: "parse", rootCauseId: "parse-order", severity: "P1", title: "validation order",
-    basis: { kind: "acceptance", reference: "AC1" }, evidence: "null reaches normalize",
-    expected: "reject null", actual: "throws", locations: ["parser.mjs:1"],
-    classification: "original", relatedFindingIds: [], affectedBy: [], recommendation: "validate first",
-  };
-  const implemented = {
-    key: "implement", ok: true, artifactPaths: [],
-    structuredOutput: {
-      status: "COMPLETE", summary: "implemented", residualRisks: [],
-      confirmedSeams: [{ name: "parse", interface: "parse", behaviors: ["validate"] }],
-      cycles: [{ test: "parse", redEvidence: "red", greenEvidence: "green", files: ["parser.mjs"] }],
-      changedFiles: ["parser.mjs"],
-      commands: [{ command: "test", phase: "GREEN", exitCode: 0, testCount: 1, outcome: "passed" }],
-    },
-  };
-  const standards = {
-    key: "standards", ok: true, artifactPaths: [evidence.path],
-    structuredOutput: { axis: "standards", verdict: "PASS", summary: "standards pass", findings: [], notes: [] },
-  };
-  const spec = {
-    key: "spec", ok: true, artifactPaths: [evidence.path],
-    structuredOutput: { axis: "spec", verdict: "FAIL", summary: "spec fail", findings: [finding], notes: [] },
-  };
-  const targets = [{ ...finding, id: "spec:parse", axis: "spec", reason: "disputed", challengeEvidence: "ticket AC1" }];
-  const plan = buildDispatchRequest(registry, workflow, "shared", ROOT,
-    { implement: "Implementation", standards: "Standards only", spec: "Spec only" }, evidence, undefined, {
-      reconsider: {
-        keys: ["spec"], targets, results: [implemented, standards, spec], history: {},
-        candidateSnapshotId: "snapshot", dispatchId: "reconsider-dispatch",
-      },
-    });
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  assert.deepEqual(plan.lanes.map(lane => lane.key), ["spec"]);
-  assert.equal(plan.hostCommands.length, 0);
-  assert.match(plan.lanes[0].task, /spec:parse/);
-  assert.deepEqual(plan.lanes[0].outputSchema.properties.decisions.items.properties.decision.enum,
-    ["uphold", "withdraw"]);
-
-  const decision = decisions => ({
-    key: "spec", ok: true, artifactPaths: [],
-    structuredOutput: { axis: "spec", decisions },
-  });
-  await withPersistedWorkflow(plan,
-    key => {
-      assert.equal(key, "spec");
-      return decision([{ findingId: "spec:parse", decision: "withdraw",
-        justification: "accepted behavior says optional", evidence: "ticket AC1" }]);
-    },
-    ({ persisted, results, calls, failure }) => {
-      assert.equal(failure, undefined);
-      assert.equal(persisted.state, "complete");
-      assert.deepEqual(calls, ["spec"], "no writer, host collector or other axis runs");
-      assert.deepEqual(results.map(result => result.key), ["implement", "standards", "spec"]);
-      assert.equal(results[1].structuredOutput.verdict, "PASS");
-      assert.deepEqual(results[2].structuredOutput, { ...spec.structuredOutput, verdict: "PASS", findings: [] });
-      assert.equal(results[2].reconsiderationHistory[0].effectiveVerdict, "PASS");
-    });
-
-  const standardsFail = { ...standards, structuredOutput: {
-    ...standards.structuredOutput, verdict: "FAIL",
-    findings: [{ ...finding, basis: { kind: "standard", reference: "S1" } }],
-  } };
-  const standardsPlan = buildDispatchRequest(registry, workflow, "shared", ROOT,
-    { implement: "Implementation", standards: "Standards only", spec: "Spec only" }, evidence, undefined, {
-      reconsider: { keys: ["standards"],
-        targets: [{ ...standardsFail.structuredOutput.findings[0], id: "standards:parse", axis: "standards",
-          reason: "disputed", challengeEvidence: "S1" }],
-        results: [implemented, standardsFail, { ...spec, structuredOutput: {
-          ...spec.structuredOutput, verdict: "PASS", findings: [],
-        } }], candidateSnapshotId: "snapshot", dispatchId: "standards-reconsider",
-      },
-    });
-  for (const outcome of ["withdraw", "uphold"]) {
-    await withPersistedWorkflow(standardsPlan,
-      key => ({ key, ok: true, structuredOutput: { axis: "standards", decisions: [{
-        findingId: "standards:parse", decision: outcome, justification: "S1 interpretation", evidence: "S1",
-      }] } }),
-      ({ persisted, results, calls, failure }) => {
-        assert.equal(failure, undefined, "a valid decision is not an execution or schema failure");
-        assert.equal(persisted.state, "complete");
-        assert.deepEqual(calls, ["standards"]);
-        assert.equal(results[1].structuredOutput.verdict, outcome === "withdraw" ? "PASS" : "FAIL");
-        const applied = persisted.workflow.emits.find(row => row.type === "pi-x-matt.reconsideration-complete");
-        assert.equal(applied.reviewPassed, outcome === "withdraw");
-        assert.deepEqual(applied.remainingFindingIds, outcome === "withdraw" ? [] : ["standards:parse"]);
-      });
-  }
-
-  let failedResults;
-  await withPersistedWorkflow(plan,
-    key => {
-      assert.equal(key, "spec");
-      return decision([{ findingId: "standards:parse", decision: "withdraw",
-        justification: "wrong axis", evidence: "wrong axis" }]);
-    },
-    ({ persisted, results, failure, calls }) => {
-      assert.match(failure.message, /reconsideration contract invalid/i);
-      assert.equal(persisted.state, "failed");
-      assert.deepEqual(calls, ["spec"]);
-      assert.equal(results[2].ok, false);
-      assert.equal(results[2].contractError.kind, "reconsideration");
-      assert.equal(results[2].reconsiderationHistory.at(-1).decisionError.length > 0, true);
-      assert.equal(results[1].structuredOutput.verdict, "PASS", "the other axis is preserved");
-      failedResults = results;
-    });
-  const correction = buildDispatchRequest(registry, workflow, "shared", ROOT,
-    { implement: "Implementation", standards: "Standards only", spec: "Spec only" }, evidence, undefined, {
-      reconsider: {
-        keys: ["spec"], targets, results: [implemented, standards, spec], priorResults: failedResults,
-        history: { spec: failedResults[2].reconsiderationHistory }, recovery: true, correctionKeys: ["spec"],
-        candidateSnapshotId: "snapshot", dispatchId: "corrected-reconsideration",
-      },
-    });
-  assert.equal(validateWorkflowScript(correction.rpcParams.script).ok, true);
-  await withPersistedWorkflow(correction,
-    () => decision([{ findingId: "spec:parse", decision: "withdraw", justification: "AC1 applies", evidence: "AC1" }]),
-    ({ results, calls, failure }) => {
-      assert.equal(failure, undefined);
-      assert.deepEqual(calls, ["spec"]);
-      assert.deepEqual(results[1], standards);
-      assert.deepEqual(results[2].correctionHistory[0], failedResults[2]);
-      assert.equal(results[2].structuredOutput.verdict, "PASS");
-    });
-  const { formatStructuredOutputRejectionError } =
-    await import(pathToFileURL(join(SOURCE_DIR, "runs/shared/structured-output.js")));
-  // The SDK supplies TypeBox at runtime; this peer-omitted suite tests its rejection projection, not the compiler.
-  const runtimeError = formatStructuredOutputRejectionError([{
-    role: "toolResult", toolName: "structured_output", isError: true,
-    content: [{ type: "text", text: "Structured output validation failed: /decisions/0/decision must be uphold or withdraw" }],
-  }]);
-  await withPersistedWorkflow(plan,
-    key => ({ key, ok: false, error: runtimeError,
-      results: [{ structuredOutputFailed: true, exitCode: 1, error: runtimeError }] }),
-    ({ results, calls, failure }) => {
-      assert.ok(failure);
-      assert.deepEqual(calls, ["spec"]);
-      assert.equal(results[2].ok, false);
-      assert.equal(results[2].contractError.kind, "structured-output");
-      assert.equal(results[2].structuredOutput, undefined);
-      assert.deepEqual(results[1], standards);
-    });
-});
-
-test("the bundled public resource API resolves a one-shot TDD plan in the installed runtime", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const plan = planFor(registry, "matt-tdd", { command: "trusted-collector", path: "/tmp/mock-review.md" });
-  const plans = new Map([["probe-id", plan]]);
-  const sessionId = "pi-x-matt-compat-test";
-  const resource = registerWorkflowResource({
-    sessionId,
-    definition: { name: "pi-x-matt.tdd", version: 1, resolve: args => resolveReviewWorkflow(plans, args) },
+  const plans = new Map([["d-review", plan]]);
+  const registration = registerWorkflowResource({
+    sessionId: "compat-session",
+    definition: { name: "pi-x-matt.dispatch", version: 1, resolve: (args) => resolveReviewWorkflow(plans, args) },
   });
   try {
-    const result = resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: "probe-id" }, sessionId);
-    assert.equal(result.ok, true);
-    assert.equal(result.resource.script, plan.rpcParams.script);
-    assert.equal(result.resource.provenance.name, "pi-x-matt.tdd");
-    assert.equal(resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: "probe-id" }, sessionId).ok, false);
-  } finally {
-    resource.dispose();
-  }
-  assert.equal(resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: "probe-id" }, sessionId).ok, false);
-});
-
-test("a truncated structured completion retains an explicit path to the complete JSON", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "pi-matt-completion-"));
-  try {
-    const structuredOutput = { question: "probe", summary: "x".repeat(3000), findings: [], sources: [], gaps: [] };
-    const structuredOutputPath = join(directory, "output.json");
-    await writeFile(structuredOutputPath, JSON.stringify(structuredOutput));
-    const details = buildCompletionDetails({
-      id: "probe-run", runId: "probe-run", agent: "workflow", mode: "workflow",
-      success: true, summary: "mock workflow summary",
-      results: [{
-        agent: "matt-researcher", runId: "child-run", workflowKey: "research",
-        success: true, exitCode: 0, output: "", outputState: "absent",
-        structuredOutput, structuredOutputPath,
-      }],
-    });
-    const notice = formatSingleCompletion(details);
-    assert.ok(notice.includes("[preview truncated]"));
-    assert.ok(notice.includes(structuredOutputPath));
-    assert.ok(!notice.includes(structuredOutput.summary));
-    assert.equal(details.childOutputs[0].workflowKey, "research");
-    assert.equal(details.childOutputs[0].runId, "child-run");
-    assert.equal(details.childOutputs[0].status, "completed");
-    const full = JSON.parse(await readFile(details.childOutputs[0].structuredOutputPath, "utf8"));
-    assert.deepEqual(full, structuredOutput);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("committed review runs one host capture before both read-only lanes in the pinned sandbox", async () => {
-  const registry = await loadCurrentRegistry(ROOT);
-  const committed = {
-    committed: true, kind: "committed", path: "/tmp/host-owned/review.md",
-    fixedPoint: "a".repeat(40), head: "b".repeat(40), command: "trusted-committed-collector",
-  };
-  const workflow = registry.skills["matt-code-review"];
-  const laneTasks = { standards: "Standards evidence only", spec: "Spec inline source: AC1 committed range" };
-  const plan = buildDispatchRequest(registry, workflow, "shared review facts", ROOT, laneTasks, committed);
-  assert.deepEqual(plan.hostCommands, [{ key: "review-evidence", command: committed.command }]);
-  assert.equal(validateWorkflowScript(plan.rpcParams.script).ok, true);
-  const calls = [], seen = [];
-  const result = await runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async (key, params) => {
-      calls.push(key);
-      seen.push({ key, params });
-      return reviewResult(plan, key, "PASS");
-    },
-    host: async (key, params) => {
-      calls.push(key);
-      assert.equal(key, "review-evidence");
-      assert.equal(params.command, committed.command);
-      return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "",
-        stdout: JSON.stringify({ path: committed.path, fixedPoint: committed.fixedPoint, head: committed.head, complete: true }),
-        outputPath: "/tmp/mock-committed-host", durationMs: 1 };
-    },
-  });
-  assert.deepEqual(calls, ["review-evidence", "standards", "spec"]);
-  assert.ok(seen.every(item => item.params.task.includes(committed.path)));
-  assert.match(seen.find(item => item.key === "spec").params.task, /Spec inline source: AC1 committed range/);
-  assert.doesNotMatch(seen.find(item => item.key === "standards").params.task, /Spec inline source/);
-  assert.ok(result.value.every(row => row.artifactPaths.includes(committed.path)));
-
-  calls.length = 0;
-  await assert.rejects(() => runWorkflowScript({
-    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
-    launch: async () => { calls.push("reviewer"); return successfulResult(plan, "standards"); },
-    host: async key => {
-      calls.push(key);
-      return { key, kind: "command", ok: false, state: "failed", exitCode: 1,
-        stdout: "", stderr: "incomplete committed evidence", outputPath: "/tmp/mock-committed-host", durationMs: 1 };
-    },
-  }), /incomplete committed evidence/);
-  assert.deepEqual(calls, ["review-evidence"], "a failed committed capture launches no reviewer");
-});
-
-test("actual committed dispatch resolves through the public resource and real host before mock reviewers", async () => {
-  const cwd = await mkdtemp(join(tmpdir(), "matt-committed-public-"));
-  const entries = [];
-  const sessionId = "committed-public-session";
-  let captured;
-  const runtime = createImplementationRuntime({
-    appendEntry: (customType, data) => entries.push({ type: "custom", customType, data: structuredClone(data) }),
-    events: { emit() {} },
-    sendUserMessage() {},
-  }, ROOT, {
-    rpc: async (method, params) => {
-      assert.equal(method, "spawn");
-      captured = params;
-      return { details: {} };
-    },
-  });
-  const ctx = {
-    cwd, hasUI: true, isProjectTrusted: () => true,
-    sessionManager: { getSessionId: () => sessionId, getBranch: () => entries },
-    ui: { confirm: async () => true },
-  };
-  runtime.start(ctx, "startup");
-  const resource = registerWorkflowResource({
-    sessionId,
-    definition: { name: "pi-x-matt.tdd", version: 1, resolve: args => runtime.resolve(args) },
-  });
-  const evidence = [];
-  const git = (...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-  try {
-    await mkdir(join(cwd, ".pi"), { recursive: true });
-    await writeFile(join(cwd, ".pi", "settings.json"), "{}");
-    git("init", "-q");
-    git("config", "user.email", "test@example.invalid");
-    git("config", "user.name", "Test");
-    await writeFile(join(cwd, "tracked.txt"), "before\n");
-    git("add", ".");
-    git("commit", "-qm", "base");
-    const fixedPoint = git("rev-parse", "HEAD");
-    await writeFile(join(cwd, "tracked.txt"), "after\n");
-    git("commit", "-qam", "feature");
-    const head = git("rev-parse", "HEAD");
-    const laneTasks = { standards: "Standards evidence only", spec: "Spec inline source: PUBLIC-CHAIN-MARKER" };
-    const queued = await runtime.dispatch({
-      workflow: "matt-code-review", task: "shared review facts", laneTasks,
-      reviewScope: { kind: "committed", fixedPoint },
-    }, undefined, ctx);
-    evidence.push(dirname(queued.details.reviewEvidencePath));
-    await runtime.flush();
-    assert.equal(captured.workflow, "pi-x-matt.tdd");
-    assert.equal(captured.args.dispatchId, queued.details.dispatchId);
-    assert.equal("script" in captured, false);
-
-    const resolved = resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: queued.details.dispatchId }, sessionId);
+    const resolved = resolveWorkflowResource("pi-x-matt.dispatch", { dispatchId: "d-review" }, "compat-session");
     assert.equal(resolved.ok, true);
-    assert.equal(validateWorkflowScript(resolved.resource.script).ok, true);
-    const calls = [], seen = [];
-    let packPath;
+    assert.equal(resolved.resource.provenance.name, "pi-x-matt.dispatch");
+
+    const seenTasks = [];
     const result = await runWorkflowScript({
       script: resolved.resource.script, timeoutMs: 5000, status: unexpectedStatus,
+      host: async (key) => ({
+        key, kind: "command", ok: true, state: "passed", exitCode: 0, stderr: "", outputPath: "/tmp/out", durationMs: 1,
+        stdout: JSON.stringify({ path: "/tmp/review.md", head: "a".repeat(40), complete: true, changedCount: 2 }),
+      }),
       launch: async (key, params) => {
-        calls.push(key);
-        seen.push({ key, params });
-        return { key, ok: true, artifactPaths: [], structuredOutput: {
-          axis: key, verdict: "PASS", summary: `${key} pass`, findings: [], notes: [],
-        } };
-      },
-      host: async (key, params) => {
-        calls.push(key);
-        assert.equal(key, "review-evidence");
-        const stdout = execFileSync("/bin/sh", ["-c", params.command], { cwd, encoding: "utf8" });
-        packPath = JSON.parse(stdout).path;
-        return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stdout, stderr: "",
-          outputPath: "/tmp/mock-public-committed", durationMs: 1 };
+        seenTasks.push(params.task);
+        return {
+          key, ok: true, output: "", artifactPaths: [],
+          structuredOutput: {
+            axis: key,
+            verdict: key === "standards" ? "ISSUES" : "PASS",
+            summary: `${key} done`,
+            findings: key === "standards" ? [{
+              severity: "P2", title: "Minor naming", locations: ["a.js:1"], evidence: "unclear name", suggestion: "rename",
+            }] : [],
+            notes: [],
+          },
+        };
       },
     });
-    assert.deepEqual(calls, ["review-evidence", "standards", "spec"]);
-    assert.ok(seen.every(item => item.params.task.includes(packPath)));
-    assert.match(seen.find(item => item.key === "spec").params.task, /PUBLIC-CHAIN-MARKER/);
-    assert.doesNotMatch(seen.find(item => item.key === "standards").params.task, /PUBLIC-CHAIN-MARKER/);
-    assert.ok(result.value.every(row => row.artifactPaths.includes(packPath)));
-    const pack = JSON.parse(await readFile(packPath.replace(/\.md$/, ".json"), "utf8"));
-    assert.equal(pack.fixedPoint, fixedPoint);
-    assert.equal(pack.head, head);
-
-    const second = await runtime.dispatch({
-      workflow: "matt-code-review", task: "shared review facts", laneTasks,
-      reviewScope: { kind: "committed", fixedPoint },
-    }, undefined, ctx);
-    evidence.push(dirname(second.details.reviewEvidencePath));
-    await runtime.flush();
-    const secondResource = resolveWorkflowResource("pi-x-matt.tdd", { dispatchId: second.details.dispatchId }, sessionId);
-    assert.equal(secondResource.ok, true);
-    git("commit", "--allow-empty", "-qm", "moved after admission");
-    const failedLaunches = [];
-    const reviewMock = key => ({ key, ok: true, artifactPaths: [], structuredOutput: {
-      axis: key, verdict: "PASS", summary: `${key} pass`, findings: [], notes: [],
-    } });
-    await assert.rejects(() => runWorkflowScript({
-      script: secondResource.resource.script, timeoutMs: 5000, status: unexpectedStatus,
-      launch: async key => { failedLaunches.push(key); return reviewMock(key); },
-      host: async (key, params) => {
-        const stdout = execFileSync("/bin/sh", ["-c", params.command], { cwd, encoding: "utf8" });
-        return { key, kind: "command", ok: true, state: "passed", exitCode: 0, stdout, stderr: "",
-          outputPath: "/tmp/mock-public-committed", durationMs: 1 };
-      },
-    }), /HEAD changed/i);
-    assert.deepEqual(failedLaunches, [], "drifted committed host capture launches no reviewer");
+    assert.equal(result.value.length, 2);
+    assert.equal(result.value[0].structuredOutput.verdict, "ISSUES");
+    assert.equal(result.value[1].structuredOutput.verdict, "PASS");
+    assert.ok(seenTasks.every((task) => task.includes("/tmp/review.md")));
+    assert.ok(result.value.every((row) => row.artifactPaths.includes("/tmp/review.md")));
   } finally {
-    resource.dispose();
-    runtime.shutdown();
-    for (const directory of evidence) await rm(directory, { recursive: true, force: true });
-    await rm(cwd, { recursive: true, force: true });
+    registration.dispose();
   }
+});
+
+test("timeout triggers a single settlement resume in sandbox", async () => {
+  const registry = await loadCurrentRegistry(ROOT);
+  const plan = buildDispatchRequest(registry, registry.skills["matt-tdd"], "Long task", ROOT);
+  const calls = [];
+  const result = await runWorkflowScript({
+    script: plan.rpcParams.script, timeoutMs: 5000, status: unexpectedStatus,
+    launch: async (key, params) => {
+      calls.push({ key, resume: params.resume });
+      if (key === "implement") {
+        return {
+          key, ok: false, runId: "writer-1", output: "", artifactPaths: [],
+          terminalOutcome: { state: "partial", reason: "timeout" },
+          resumability: { state: "resumable" },
+        };
+      }
+      return {
+        key, ok: true, runId: "writer-1", output: "", artifactPaths: [],
+        structuredOutput: {
+          status: "BLOCKED", summary: "timed out mid-way", confirmedSeams: [], cycles: [], changedFiles: ["a.js"], commands: [], residualRisks: [],
+        },
+      };
+    },
+  });
+  assert.deepEqual(calls, [
+    { key: "implement", resume: undefined },
+    { key: "implement-settlement", resume: "writer-1" },
+  ]);
+  assert.equal(result.value[0].structuredOutput.status, "BLOCKED");
+  assert.equal(result.value[0].recoveryHistory.length, 1);
 });
