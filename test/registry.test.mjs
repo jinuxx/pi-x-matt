@@ -126,8 +126,8 @@ test("project settings, manifest, extension and agents keep clean boundaries", a
   const extension = await readFile(join(ROOT, ".pi", "extensions", "pi-matt-dispatch", "index.ts"), "utf8");
   assert.match(extension, /createDispatchService\(pi, PACKAGE_ROOT\)/);
   assert.match(extension, /registerWorkflowResource/);
-  assert.match(extension, /registerCommand\("matt-revoke"/);
   assert.match(extension, /registerCommand\("matt-reset"/);
+  assert.doesNotMatch(extension, /registerCommand\("matt-revoke"/);
 
   for (const name of ["matt-reader", "matt-researcher", "matt-reviewer", "matt-worker"]) {
     const content = await readFile(join(ROOT, ".pi", "agents", `${name}.md`), "utf8");

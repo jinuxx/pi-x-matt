@@ -24,10 +24,10 @@ export default function (pi: ExtensionAPI) {
     pi.events.on("subagent:child-status", (event) => service.childStatus(event)),
   ];
 
-  pi.on("session_start", (event, ctx) => {
+  pi.on("session_start", (_event, ctx) => {
     for (const dispose of unsubscribe) dispose();
     unsubscribe = observe();
-    service.start(ctx, event.reason);
+    service.start(ctx);
     resource?.dispose();
     resource = registerWorkflowResource({
       sessionId: ctx.sessionManager.getSessionId(),
@@ -43,17 +43,8 @@ export default function (pi: ExtensionAPI) {
     unsubscribe = [];
   });
 
-  pi.on("session_tree", () => service.revoke("session-tree-changed"));
+  pi.on("session_tree", () => service.reset("session-tree-changed"));
   pi.on("turn_end", () => service.flush());
-
-  pi.registerCommand("matt-revoke", {
-    description: "Revoke writer authorization and cancel queued dispatches",
-    handler: (args, ctx) => {
-      if (args.trim() || !["tui", "rpc"].includes(ctx.mode)) throw new Error("Usage: /matt-revoke (TUI/RPC)");
-      service.revoke("user-cancelled");
-      ctx.ui.notify("Writer authorization revoked. Already-running subagents can be stopped via /subagents-stop.", "info");
-    },
-  });
 
   pi.registerCommand("matt-reset", {
     description: "Clear stuck active dispatch state and cancel queued dispatches",

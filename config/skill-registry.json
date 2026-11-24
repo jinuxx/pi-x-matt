@@ -997,7 +997,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-diagnosing-bugs/SKILL.md",
-      "sourceDigest": "a29c5ee642ef83513444c4631f705ceffe27299fd9328832e4a6ffadd44cdd91",
+      "sourceDigest": "32868e86ed79f3e7f5e78314ce7351dd9da7818b3bc5f0c26617236425202403",
       "upstreamPath": "skills/engineering/diagnosing-bugs/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "849198df88cdb65fd0d97236604c1fca7ff2f22d2f705f9724a800d0266b118d"
@@ -1074,7 +1074,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "5fab1184c029f2e1c1c012f65527d8509d3a138cfd652c3ed324b44a6e6aa6d8",
+      "sourceDigest": "615ee976cfcae533363a3b3b6cfbc1a7b3cfde295207e4d72e76f682ec8ba100",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
@@ -1107,7 +1107,7 @@
         "prototype-executor"
       ],
       "sourcePath": ".pi/skills/matt-prototype/SKILL.md",
-      "sourceDigest": "46336f8ea1ddabb40df74e60fe59a28951373b0384dc423e198925ce31c6b51d",
+      "sourceDigest": "c6e0352fb895e2af0ef710e7a650c3c155c26fd21b149a5e7b9cb31c64e13022",
       "workflowPath": ".pi/skills/matt-prototype/workflow.json",
       "workflowDigest": "96e373948522323f6c149123ee2285094099adbb7f75f6a5990a14e7da8e6b0d",
       "workflow": {
@@ -1389,7 +1389,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": ".pi/skills/matt-setup/SKILL.md",
-      "sourceDigest": "3fc816002c2b8e2c25e0367efb3b4e13bb381ed37a85775255c681cd991b35e3",
+      "sourceDigest": "3b705e5860aae21c1cec46fedf5871f346d92d84d5be057e9af7615c9bb192f3",
       "upstreamPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "b01e05bfe8c323171275c6ceec78b12f1bd4c62dfd26c2cfe8be806d3883f1ed"
@@ -1405,7 +1405,7 @@
         "tdd-executor"
       ],
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
-      "sourceDigest": "fa4d4fca3eab0dd029650c1d00313956692565ebb8342ea56b2a10b6b6362152",
+      "sourceDigest": "37a7abe2330331f255bda3403b4fe1de27b9f7b11267147ec69b9cd0d6e7492a",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
       "workflowDigest": "98cbd45b1e77e73f105ef96201c009c7a2613f9b7513711962c34d8ae537de25",
       "workflow": {

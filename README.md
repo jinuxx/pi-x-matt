@@ -13,7 +13,7 @@ v0.3.0 回归“**确定性测试做门禁，LLM Review 做建议，人类始终
 
 ```bash
 pi install -l npm:pi-subagents@0.90.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.0
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.1
 ```
 
 若要保持最小加载（不加载 `pi-subagents` 自带 skills/prompts/builtin agents），在目标项目 `.pi/settings.json` 中使用：
@@ -77,7 +77,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.0
 ### 2. 单票实现与批次实现
 
 - **`matt-implement`**：调用 `pi_matt_dispatch({ workflow: "matt-tdd", task, verifyCommands })`。
-  - 同一会话内首次对项目启动写者（或新增 `verifyCommands`）时确认一次，之后同项目复用，调用其他 `/skill` 不会撤销授权。
+  - 在受信任项目内直接执行，不重复弹出写者确认框。
   - 默认只跑单写者 TDD + 确定性 `verifyCommands`，**不自动发起每票 code review**。
   - 若需续修，可传 `resumeRunId` 续跑原 `matt-worker`，也可省略该参数随时开 fresh writer 或在父会话直接修正。
   - 核对 `git diff --stat` 与测试通过后，提交到当前分支并在本地把 ticket 写为 `resolved`（附 `Implementation commit: <SHA>`）。
@@ -103,8 +103,7 @@ pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.0
 
 ### 4. 控制命令
 
-- `/matt-revoke`：撤销本会话写授权并取消尚未启动的派发队列。
-- `/matt-reset`：一键清除当前卡住的活跃派发跟踪与队列状态。
+- `/matt-reset`：一键清除当前卡住的活跃派发跟踪与队列状态（已在运行的子代理用 `/subagents-stop` 停止）。
 
 ## 本地隐私与归档边界
 

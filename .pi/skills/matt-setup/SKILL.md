@@ -27,9 +27,9 @@ metadata:
 
 先总结已存在、缺失和可能复用的配置。已有 `.x-matt/agents/*.md` 时按更新处理，保留用户自定义内容，不从头覆盖。
 
-## 分段决策
+## 一次确认推荐配置
 
-每节只问一个问题，使用 `ask_user_question`，并把有仓库证据的推荐项放在第一位。
+常规业务项目直接按仓库探索结果组装完整推荐配置（Local Markdown、canonical labels、按仓库信号判断 single/multi-context、`.pi/APPEND_SYSTEM.md` 入口与本机 Git exclude），**在下方“写入前确认”合并为一次 `ask_user_question` 确认即可**，不再把 A/B/C/D 拆成多轮连环弹窗。仅当遇到需要人工裁决的冲突或特殊情况（例如：源码维护例外选择远端 tracker、存在真实多 context 需要确认布局、发现全局 `APPEND_SYSTEM.md` 会被遮蔽、或存在需迁移的旧 tracked 个人文件）时，才在该次确认中一并列出选项。
 
 ### A. Issue tracker
 

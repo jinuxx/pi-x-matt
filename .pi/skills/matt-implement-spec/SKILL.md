@@ -21,7 +21,7 @@ metadata:
 2. 读取目标 active `spec.md`（`Type: spec`、`Status: spec-ready`，跳过 `.x-matt/work/shipped/`）及同目录下全部 `issues/*.md`。
 3. 校验依赖图：所有 blocker 为本 feature 内真实 ticket，无循环依赖；已 `resolved` 的 ticket 核对 `Implementation commit` 属于当前 `HEAD` ancestry。
 4. 检查 `git status` 干净（不含 ignored 本地资料），记录整批起始 `fixedPoint`（新批次取当前 `HEAD` SHA；续跑时取首个实现提交前的原始 `fixedPoint`）。
-5. 向用户简明展示待执行 tickets 顺序与各票主要验证命令，取得一次确认后即可连续推进，不逐票停下询问。
+5. 简明列出待执行 tickets 顺序与各票主要验证命令后直接连续推进，不重复停下询问确认；仅在工作区不干净、依赖异常或续跑缺少基线时暂停澄清。
 
 ## 串行逐票循环
 

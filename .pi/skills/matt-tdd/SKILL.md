@@ -32,7 +32,7 @@ metadata:
 }
 ```
 
-- 首次在当前 session 写该项目时会弹出一次简明确认；之后同项目内免重复确认，直到 `/matt-revoke` 或会话结束。
+- 在受信任项目内直接派发，不重复弹出写者确认框。
 - `matt-worker` 完成 RED→GREEN 后返回 `COMPLETE` 或 `BLOCKED`；宿主随后运行 `verifyCommands` 并把真实结果附在 `hostVerification`。
 - 若测试未通过、返回 `BLOCKED` 或需要后续修复：可传 `resumeRunId` 续跑原 writer，也可省略 `resumeRunId` 直接启动新的 fresh writer，或由父会话直接修复，绝不卡死。
 - 按 [Workflow Result Reading](results.md) 核验结果与实际 `git diff`；需要独立评审时再显式调用 `matt-code-review`。

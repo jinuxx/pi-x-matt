@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- **移除多余二次确认弹窗**：删除 `lib/dispatch-authorization.mjs` 的 `ctx.ui.confirm` 写者弹窗与 `/matt-revoke` 命令，信任边界直接对齐 Pi 原生 `ctx.isProjectTrusted()`，消除“刚触发 implement 又弹窗授权”及多票切换 `verifyCommands` 反复弹窗的摩擦；保留 `/matt-reset` 与单写者并发防重。
+- **精简 4 处 skill 重复确认**：`matt-implement-spec` 列出计划后直接推进不重复停下询问；`matt-setup` 将 4 轮分段确认合并为写入前一次确认；`matt-prototype` 问题明确时直接构建、构建失败自动修正；`matt-diagnosing-bugs` 验证已选假设时可直接加临时 `[DEBUG-<id>]` 探针并在修复前清理。
+
 ## 0.3.0
 
 - **彻底减负重构（Breaking）**：移除过度防御的跨轮状态机与 12 种特化恢复通道（`batch-authorization`、`diagnostic-workspace`、`repair-contract`、`review-contract`、`final-validation`、`risk-acceptance`、`writer-scope`、`scoped-writer`），将运行时核心重写为轻量 `dispatch-service.mjs` 与精简版 `dispatcher-core.mjs`。

@@ -4,12 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import {
-  authorizeWriterDispatch,
-  createDispatchAuthorization,
-  normalizeVerifyCommands,
-} from "../lib/dispatch-authorization.mjs";
-import { findProjectRoot, loadCurrentRegistry, prepareDispatchRequest } from "../lib/dispatcher-core.mjs";
+import { findProjectRoot, loadCurrentRegistry, normalizeVerifyCommands, prepareDispatchRequest } from "../lib/dispatcher-core.mjs";
 import { resolveReviewWorkflow } from "../lib/review-workflow.mjs";
 import { buildDispatchRequest } from "./helpers/dispatch-plan.mjs";
 
@@ -47,49 +42,8 @@ test("loadCurrentRegistry rejects stale on-disk registry cache", async () => {
   });
 });
 
-test("session authorization confirms once per project, reuses across dispatches, and prompts only for new verifyCommands", async () => {
-  const entries = [];
-  const auth = createDispatchAuthorization({ persist: (data) => entries.push({ type: "custom", customType: "pi-x-matt.authorization", data }) });
-  auth.start("s1");
-
-  let prompts = 0;
-  const ctx = { hasUI: true, ui: { confirm: async () => { prompts++; return true; } } };
-
-  assert.equal(await authorizeWriterDispatch({
-    workflowName: "matt-tdd", projectRoot: ROOT, branch: "main", verifyCommands: ["npm test"], ctx, authorization: auth,
-  }), "user-confirmed");
-  assert.equal(prompts, 1);
-
-  assert.equal(await authorizeWriterDispatch({
-    workflowName: "matt-tdd", projectRoot: ROOT, branch: "main", verifyCommands: ["npm test"], ctx: { hasUI: false }, authorization: auth,
-  }), "reused-session-grant");
-  assert.equal(prompts, 1);
-
-  // Adding a new verifyCommand prompts once more and merges it into the session grant.
-  assert.equal(await authorizeWriterDispatch({
-    workflowName: "matt-tdd", projectRoot: ROOT, branch: "main", verifyCommands: ["npm test", "npm run lint"], ctx, authorization: auth,
-  }), "user-confirmed");
-  assert.equal(prompts, 2);
-
-  // Restoring from custom session entries preserves the grant.
-  const restored = createDispatchAuthorization();
-  restored.start("s1", entries, true);
-  assert.equal(restored.matches(ROOT, ["npm test", "npm run lint"]), true);
-
-  restored.revoke("user-cancelled");
-  assert.equal(restored.matches(ROOT, []), false);
-});
-
-test("authorization fails cleanly without UI or when declined, and validates verifyCommands", async () => {
-  const auth = createDispatchAuthorization();
-  auth.start("s1");
-  await assert.rejects(() => authorizeWriterDispatch({
-    workflowName: "matt-tdd", projectRoot: ROOT, ctx: { hasUI: false }, authorization: auth,
-  }), /interactive session/);
-  await assert.rejects(() => authorizeWriterDispatch({
-    workflowName: "matt-tdd", projectRoot: ROOT, ctx: { hasUI: true, ui: { confirm: async () => false } }, authorization: auth,
-  }), /not authorized/);
-
+test("normalizeVerifyCommands deduplicates and validates bounds", () => {
+  assert.deepEqual(normalizeVerifyCommands(undefined), []);
   assert.deepEqual(normalizeVerifyCommands(["npm test", " npm test ", "npm run lint"]), ["npm test", "npm run lint"]);
   assert.throws(() => normalizeVerifyCommands(["bad\ncommand"]), /single-line/);
   assert.throws(() => normalizeVerifyCommands(Array(9).fill("echo hi")), /at most 8/);

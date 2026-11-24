@@ -28,12 +28,13 @@ async function createRepoProject(run) {
   }
 }
 
-function createHarness(cwd, { confirm = async () => true, rpc } = {}) {
+function createHarness(cwd, { rpc } = {}) {
   const entries = [];
   const events = [];
   const messages = [];
   const notifications = [];
   const rpcCalls = [];
+  let confirmCalls = 0;
   const pi = {
     appendEntry: (customType, data) => entries.push({ type: "custom", customType, data }),
     sendUserMessage: (text, opts) => messages.push({ text, opts }),
@@ -50,19 +51,20 @@ function createHarness(cwd, { confirm = async () => true, rpc } = {}) {
     cwd,
     hasUI: true,
     isProjectTrusted: () => true,
-    ui: { confirm, notify: (text, level) => notifications.push({ text, level }) },
+    ui: {
+      confirm: async () => { confirmCalls++; return true; },
+      notify: (text, level) => notifications.push({ text, level }),
+    },
     sessionManager: { getSessionId: () => "sess-1", getBranch: () => entries },
   };
-  service.start(ctx, "startup");
-  return { service, ctx, entries, events, messages, notifications, rpcCalls };
+  service.start(ctx);
+  return { service, ctx, entries, events, messages, notifications, rpcCalls, getConfirmCalls: () => confirmCalls };
 }
 
-test("matt-tdd confirms once per session, allows repeated fresh or resumed dispatches, and supports /matt-reset", async () => {
+test("matt-tdd dispatches directly without confirm dialogs, prevents concurrent writers, and supports /matt-reset", async () => {
   await createRepoProject(async (cwd) => {
-    let confirmCount = 0;
     const asyncDirs = [];
-    const { service, ctx, rpcCalls } = createHarness(cwd, {
-      confirm: async () => { confirmCount++; return true; },
+    const { service, ctx, rpcCalls, getConfirmCalls } = createHarness(cwd, {
       rpc: async (method, params) => {
         rpcCalls.push({ method, params });
         const asyncDir = await mkdtemp(join(tmpdir(), "pi-matt-run-"));
@@ -76,9 +78,9 @@ test("matt-tdd confirms once per session, allows repeated fresh or resumed dispa
         workflow: "matt-tdd",
         task: "Implement feature A",
         verifyCommands: ["node -e 'process.exit(0)'"],
-      }, undefined, ctx);
-      assert.equal(confirmCount, 1);
-      assert.equal(first.details.authorization, "user-confirmed");
+      }, undefined, { ...ctx, hasUI: false });
+      assert.equal(getConfirmCalls(), 0);
+      assert.equal(first.details.queued, true);
 
       await service.flush();
       assert.equal(rpcCalls.length, 1);
@@ -92,7 +94,7 @@ test("matt-tdd confirms once per session, allows repeated fresh or resumed dispa
         /still active/,
       );
 
-      // Mark first writer complete -> second dispatch succeeds immediately with reused grant (no deadlock!).
+      // Mark first writer complete -> second dispatch with different verifyCommands succeeds immediately without prompts.
       await writeFile(join(asyncDirs[0], "status.json"), JSON.stringify({
         runId: "run-1", state: "complete", workflow: { value: [{ key: "implement", ok: true, structuredOutput: { status: "COMPLETE" } }] },
       }));
@@ -101,11 +103,11 @@ test("matt-tdd confirms once per session, allows repeated fresh or resumed dispa
       const second = await service.dispatch({
         workflow: "matt-tdd",
         task: "Follow-up fix",
-        resumeRunId: "writer-child-1",
-        verifyCommands: ["node -e 'process.exit(0)'"],
-      }, undefined, ctx);
-      assert.equal(confirmCount, 1, "reuses session grant without re-prompting");
-      assert.equal(second.details.authorization, "reused-session-grant");
+        resumeRunId: " writer-child-1 ",
+        verifyCommands: ["node -e 'console.log(1)'"],
+      }, undefined, { ...ctx, hasUI: false });
+      assert.equal(getConfirmCalls(), 0);
+      assert.equal(second.details.queued, true);
 
       await service.flush();
       const resolved2 = service.resolve(rpcCalls[1].params.args);
@@ -115,36 +117,25 @@ test("matt-tdd confirms once per session, allows repeated fresh or resumed dispa
       service.reset("user-reset");
       const third = await service.dispatch({ workflow: "matt-tdd", task: "Fresh start" }, undefined, ctx);
       assert.equal(third.details.queued, true);
-      assert.equal(confirmCount, 1, "reset does not revoke session authorization");
-
-      // /matt-revoke cancels queued dispatch and revokes authorization.
-      service.revoke("user-cancelled");
-      assert.equal(service.authorization.matches(cwd, []), false);
     } finally {
       for (const dir of asyncDirs) await rm(dir, { recursive: true, force: true });
     }
   });
 });
 
-test("read-only workflows skip confirmation, support worktree/committed reviewScope and single-axis lanes rerun", async () => {
+test("read-only workflows support worktree/committed reviewScope, single-axis lanes rerun, and direct script launch", async () => {
   await createRepoProject(async (cwd, git, fixedPoint) => {
-    let prompted = false;
-    const { service, ctx, rpcCalls } = createHarness(cwd, {
-      confirm: async () => { prompted = true; return true; },
-    });
+    const { service, ctx, rpcCalls, getConfirmCalls } = createHarness(cwd);
 
-    // Worktree code review without any UI confirmation
     const wt = await service.dispatch({
       workflow: "matt-code-review",
       task: "Review worktree",
       reviewScope: { kind: "worktree" },
       laneTasks: { standards: "Check standards", spec: "Check spec" },
     }, undefined, { ...ctx, hasUI: false });
-    assert.equal(prompted, false);
-    assert.equal(wt.details.authorization, "not-required");
+    assert.equal(getConfirmCalls(), 0);
     assert.ok(wt.details.reviewEvidencePath);
 
-    // Committed code review with single-axis rerun
     await writeFile(join(cwd, "app.js"), "export const a = 2;\n");
     git("add", "app.js");
     git("commit", "-qm", "update a");
@@ -166,9 +157,8 @@ test("read-only workflows skip confirmation, support worktree/committed reviewSc
     assert.equal(plan2.hostCommands.length, 1);
     assert.equal(plan2.hostCommands[0].key, "review-evidence");
 
-    // Pure research workflow runs directly via script without needing workflow resource
     const research = await service.dispatch({ workflow: "matt-research", task: "Check docs" }, undefined, { ...ctx, hasUI: false });
-    assert.equal(research.details.authorization, "not-required");
+    assert.equal(research.details.queued, true);
     await service.flush();
     assert.equal(rpcCalls[2].params.workflow, undefined);
     assert.equal(typeof rpcCalls[2].params.script, "string");
@@ -185,6 +175,10 @@ test("rejects workflow-specific parameter misuse and untrusted projects", async 
     await assert.rejects(
       () => service.dispatch({ workflow: "matt-code-review", task: "hi", resumeRunId: "r1" }, undefined, ctx),
       /resumeRunId only applies to matt-tdd/,
+    );
+    await assert.rejects(
+      () => service.dispatch({ workflow: "matt-tdd", task: "hi", resumeRunId: "   " }, undefined, ctx),
+      /non-empty string/,
     );
     await assert.rejects(
       () => service.dispatch({ workflow: "matt-tdd", task: "hi", reviewScope: { kind: "worktree" } }, undefined, ctx),

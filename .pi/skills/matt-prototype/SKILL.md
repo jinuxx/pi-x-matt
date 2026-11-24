@@ -23,7 +23,7 @@ Prototype 是**回答一个设计问题的 throwaway code**。只有问题无法
 - **Logic**：状态模型、业务规则、transition、data shape 或 API surface 是否符合预期。
 - **UI**：页面/组件应采用什么 layout、information hierarchy 或 primary interaction。
 
-问题含糊、同时跨两类或范围超过一次短原型时，使用 `ask_user_question` 让用户选择或拆分；不得按 surrounding code 静默默认。展示唯一 question、branch、预期 artifact、允许文件和 review 方式，取得明确确认后才调度 worker。
+问题含糊、同时跨两类或范围超过一次短原型时，使用 `ask_user_question` 让用户选择或拆分；问题与分支已明确时直接调度 worker 构建，不必额外二次确认。
 
 ## Workspace gate
 
@@ -61,7 +61,7 @@ worker 返回后，父会话先读取真实 diff，确认只包含批准 artifac
 - Logic：在浏览器中打开自包含 HTML，核对 free-play、每个 walkthrough reset、action 后状态与非法操作呈现。
 - UI：启动项目现有开发命令，在真实 host context 中逐个打开 `?variant=` URL，核对 variants 结构差异、switcher、键盘行为、read-only/stub mutation 与 production hide gate。
 
-使用可用浏览器工具做 load/interaction verification；工具不可用时把准确路径/URL 交给用户手动打开，但不得声称已自动验证。运行失败、页面空白、控制台关键错误、variant 不可区分或改动越界时停止；只可在用户确认原 question/scope 不变后顺序重跑一个 worker 修正。
+使用可用浏览器工具做 load/interaction verification；工具不可用时把准确路径/URL 交给用户手动打开，但不得声称已自动验证。运行失败、页面空白、控制台关键错误或 variant 不可区分时，在原 question 范围内直接重跑 worker 修好后再交用户评审；改动越界则停止处理。
 
 ## HITL verdict
 
@@ -94,4 +94,4 @@ worker 返回后，父会话先读取真实 diff，确认只包含批准 artifac
 
 ## Completion gate
 
-只有以下全部满足才完成：唯一 question 与 branch 经用户确认；唯一 worker 返回有效 `BUILT`；artifact 实际 runnable；用户本人给出 verdict；prototype commit 只存在于本地 `prototype/<slug>`；原 branch 无 prototype 残留；context pointer 可核验；无 push、真实 mutation、secret 或 caller-owned 改动。否则返回阻塞点，不把“文件已生成”当成问题已回答。
+只有以下全部满足才完成：唯一 question 与 branch 明确；唯一 worker 返回有效 `BUILT`；artifact 实际 runnable；用户本人给出 verdict；prototype commit 只存在于本地 `prototype/<slug>`；原 branch 无 prototype 残留；context pointer 可核验；无 push、真实 mutation、secret 或 caller-owned 改动。否则返回阻塞点，不把“文件已生成”当成问题已回答。
