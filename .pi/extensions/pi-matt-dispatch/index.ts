@@ -44,6 +44,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_tree", () => service.reset("session-tree-changed"));
+  pi.on("input", (event) => {
+    if (event?.source !== "extension") service.noteUserInput();
+  });
   pi.on("turn_end", () => service.flush());
 
   pi.registerCommand("matt-reset", {

@@ -201,3 +201,77 @@ test("rejects workflow-specific parameter misuse and untrusted projects", async 
     );
   });
 });
+
+test("autonomous round soft-brake pauses excess rounds on same HEAD, ignores failures, and resets on user input or commit", async () => {
+  await createRepoProject(async (cwd, git) => {
+    const asyncDirs = [];
+    const { service, ctx, rpcCalls, getConfirmCalls } = createHarness(cwd, {
+      rpc: async (method, params) => {
+        rpcCalls.push({ method, params });
+        const asyncDir = await mkdtemp(join(tmpdir(), "pi-matt-budget-"));
+        asyncDirs.push(asyncDir);
+        return { details: { runId: `run-${rpcCalls.length}`, asyncDir } };
+      },
+    });
+
+    const settle = async (index, state, workflowValue = [{ key: "implement", ok: true, structuredOutput: { status: "COMPLETE" } }]) => {
+      await writeFile(join(asyncDirs[index], "status.json"), JSON.stringify({
+        runId: `run-${index + 1}`, state, workflow: { value: workflowValue },
+      }));
+      await service.completion({ runId: `run-${index + 1}` });
+    };
+
+    try {
+      // Round 1 failed (e.g. upstream stream disconnect) must NOT consume round budget.
+      await service.dispatch({ workflow: "matt-tdd", task: "Attempt 1" }, undefined, ctx);
+      await service.flush();
+      await settle(0, "failed");
+
+      // Completed rounds 1 and 2 on same HEAD pass cleanly with 0 confirm prompts.
+      await service.dispatch({ workflow: "matt-tdd", task: "Round 1" }, undefined, ctx);
+      await service.flush();
+      await settle(1, "complete");
+
+      await service.dispatch({ workflow: "matt-tdd", task: "Round 2" }, undefined, ctx);
+      await service.flush();
+      await settle(2, "complete");
+
+      // Autonomous round 3 on same HEAD is soft-paused without throwing or prompting.
+      const pausedTdd = await service.dispatch({ workflow: "matt-tdd", task: "Round 3" }, undefined, ctx);
+      assert.equal(pausedTdd.details.paused, true);
+      assert.equal(pausedTdd.details.reason, "autonomous-round-budget");
+      assert.equal(rpcCalls.length, 3);
+      assert.equal(getConfirmCalls(), 0);
+
+      // User input resets the streak immediately without any lock or unlock command.
+      service.noteUserInput();
+      const resumedTdd = await service.dispatch({ workflow: "matt-tdd", task: "User approved fix" }, undefined, ctx);
+      assert.equal(resumedTdd.details.queued, true);
+      await service.flush();
+      await settle(3, "complete");
+
+      // 1 completed code review on same HEAD -> 2nd autonomous review is soft-paused.
+      await service.dispatch({ workflow: "matt-code-review", task: "Review 1", reviewScope: { kind: "worktree" } }, undefined, ctx);
+      await service.flush();
+      await settle(4, "complete", [
+        { key: "standards", ok: true, structuredOutput: { verdict: "PASS" } },
+        { key: "spec", ok: true, structuredOutput: { verdict: "PASS" } },
+      ]);
+
+      const pausedReview = await service.dispatch({ workflow: "matt-code-review", task: "Review 2", reviewScope: { kind: "worktree" } }, undefined, ctx);
+      assert.equal(pausedReview.details.paused, true);
+      assert.equal(pausedReview.details.reason, "autonomous-round-budget");
+      assert.equal(rpcCalls.length, 5);
+
+      // New commit changes HEAD -> budget resets automatically.
+      await writeFile(join(cwd, "app.js"), "export const a = 3;\n");
+      git("add", "app.js");
+      git("commit", "-qm", "next ticket");
+      const nextReview = await service.dispatch({ workflow: "matt-code-review", task: "Next HEAD review", reviewScope: { kind: "worktree" } }, undefined, ctx);
+      assert.equal(nextReview.details.queued, true);
+      assert.equal(getConfirmCalls(), 0);
+    } finally {
+      for (const dir of asyncDirs) await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

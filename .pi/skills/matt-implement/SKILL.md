@@ -32,8 +32,11 @@ metadata:
 1. 按 [matt-tdd](../matt-tdd/SKILL.md) 通过 `pi_matt_dispatch` 派发 `workflow: "matt-tdd"`，传入简洁的 [Context Pack](../matt-tdd/context-packs.md) 与聚焦 `verifyCommands`（如相关单测、typecheck）。
 2. 等待完成并按 [Workflow Result Reading](../matt-tdd/results.md) 读取 `structuredOutput` 与 `hostVerification`。
 3. 核对实际 `git diff --stat` 与关键改动：
-   - 若测试失败、返回 `BLOCKED` 或存在明显问题：可传 `resumeRunId` 续跑原 writer，也可省略 `resumeRunId` 启动新的 fresh writer，或由父会话直接做小范围修正。
-   - 如本次改动涉及高风险领域（鉴权、数据完整性、不可逆迁移等）或用户显式要求，可调用一次 `matt-code-review`（`reviewScope: { kind: "worktree" }`）获取**建议型**双轴报告，与用户一起决定修哪些、忽略哪些。
+   - **父会话直修 vs 派 `matt-worker` 边界**：
+     - **同时满足 4 条时由父会话直接修改并自跑聚焦测试**（不开 `matt-worker`）：① 非新票首轮（属于超时收尾或评审定向小修）；② 范围明确且合计 **≤ 3 个文件**（生产+测试），不新增表/SQL、新实体/Mapper 或新接口契约；③ 方案确定（如删无用导入、补校验/注解/锁、修单个断言或映射、补 1~3 个回归用例）；④ 相关代码上下文已在当前会话手头。**逃生阀**：父会话直修最多试跑 **1~2 次聚焦测试**，未过或牵涉扩大时立刻停手转交 `matt-worker`。
+     - **其余情况**（新票首次实现、涉及 > 3 个文件、新增表/接口/跨层重构、或多项 P0/P1 合并修复）交给 `matt-tdd`（可传 `resumeRunId` 续跑原 writer 或开 fresh writer）。
+   - **按需评审与防套娃**：仅在改动涉及鉴权、资金、不可逆迁移等高风险领域或用户显式要求时，调用**最多 1 次** `matt-code-review`（`reviewScope: { kind: "worktree" }`）；禁止单票“修完再复审”。确认需要修的 P0/P1 **合并为 1 轮修完**（不拆成多轮串行派发），P2 与偏门理论边界直接记入残余风险，不擅自返工。
+   - 若 `pi_matt_dispatch` 返回无人值守轮次软刹车提示，**不改票据状态**，直接用大白话汇总当前成果与剩余项（触发条件、最坏后果、预估改动量），请用户决定直接提交还是继续修。
 
 ## 验证与提交
 

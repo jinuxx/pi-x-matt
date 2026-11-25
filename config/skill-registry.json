@@ -794,9 +794,9 @@
         "review-spec"
       ],
       "sourcePath": ".pi/skills/matt-code-review/SKILL.md",
-      "sourceDigest": "08aa2bf35d848b272dc35ee7e9f7dc95ce868e28fb4ce145cb07886059e1208f",
+      "sourceDigest": "aeddbcb7fe05550dd85c5fe847c411c6435606e6ae9acc20547f7e35337fc107",
       "workflowPath": ".pi/skills/matt-code-review/workflow.json",
-      "workflowDigest": "9a057df96217b2bf2bfe0234e3d901ecf5e727f161a4ca65a2d200712e593089",
+      "workflowDigest": "9ce2fb4ce9a68bd8c01c4a40d8c7843dd58b53c7a04ef395ee93a500e6705b76",
       "workflow": {
         "version": 1,
         "name": "matt-code-review",
@@ -855,6 +855,14 @@
                           "minLength": 1
                         }
                       },
+                      "trigger": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "impact": {
+                        "type": "string",
+                        "minLength": 1
+                      },
                       "evidence": {
                         "type": "string",
                         "minLength": 1
@@ -868,6 +876,8 @@
                       "severity",
                       "title",
                       "locations",
+                      "trigger",
+                      "impact",
                       "evidence",
                       "suggestion"
                     ],
@@ -944,6 +954,14 @@
                           "minLength": 1
                         }
                       },
+                      "trigger": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "impact": {
+                        "type": "string",
+                        "minLength": 1
+                      },
                       "evidence": {
                         "type": "string",
                         "minLength": 1
@@ -957,6 +975,8 @@
                       "severity",
                       "title",
                       "locations",
+                      "trigger",
+                      "impact",
                       "evidence",
                       "suggestion"
                     ],
@@ -1058,7 +1078,7 @@
         "matt-domain-modeling"
       ],
       "sourcePath": ".pi/skills/matt-implement/SKILL.md",
-      "sourceDigest": "ce48425529f99febee84b65b9fcd55ad4475d45dee9289b423d0aeee303d43ee",
+      "sourceDigest": "74d63edf2417c07a6a9c98ac6e54de288cacf1ec444387fff53aa2ea9048d67c",
       "upstreamPath": "skills/engineering/implement/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "483bdc4ccf4ac31d86ac7beeaa0d0db80313e71e120bb8c59b3196ae5decd53d"
@@ -1074,7 +1094,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "c30282f8a4c2c8ac0e474e765a4261c9306111be089fa72d2a5e926b7f623ca1",
+      "sourceDigest": "21bec269ea312718630eafcccca2edfdf20d45c77476f6a53dedaf6aae3ad828",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
@@ -1688,7 +1708,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-spec/SKILL.md",
-      "sourceDigest": "ae9a602674857d5c4c498fb7f08a9273853608c9f892f5aaac8d00b61ba07cb6",
+      "sourceDigest": "4c0754b780387fee16dc9fed7a4656c74155f73f5bdb906e7e5496d042f80d9e",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "9c921a8d88138a41401d8897ca1bb852088ab1b7b605cdd04edc13e3e8aab6dd"
@@ -1702,7 +1722,7 @@
       "dispatch": "none",
       "dependsOn": [],
       "sourcePath": "skillpacks/leaf/review-standards/SKILL.md",
-      "sourceDigest": "28c8566335bb7c21b9cd543f8914e5724b853a0807843f586e95dded552d5c4b",
+      "sourceDigest": "2ddda8267cd1cc3491060ea88077e1eaaad9bddc16cb6b8ecd7dd5411b9c10a8",
       "upstreamPath": "skills/engineering/code-review/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "9c921a8d88138a41401d8897ca1bb852088ab1b7b605cdd04edc13e3e8aab6dd"

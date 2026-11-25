@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4
+
+- **无状态无人值守软刹车（零弹窗、零状态机）**：`dispatch-service.mjs` 在内存中按 `git HEAD` 跟踪自上次提交或真实用户输入（`pi.on("input")`）以来的完成轮次（`matt-tdd` 上限 2 轮、`matt-code-review` 上限 1 轮；断流失败不计次）。顺风局和人工掌舵时全程零弹窗；仅在无人值守连跑超预算时暂缓派发并让父会话用大白话汇报等用户拍板，提交新 commit 或用户任意回复即自动清零，绝不将票据标为 `blocked`。
+- **评审 Schema 强制“说人话”与威胁模型校准**：`matt-code-review/workflow.json` 为每条 `finding` 增加必填的 `trigger`（触发条件）与 `impact`（最坏后果）字段；`review-standards` / `review-spec` 将极端并发窗口、内部后台对抗型 DoS、报错即可重试且不写脏数据的边界统一校准为 `P2`。
+- **明确父会话直修与 `matt-worker` 分工边界**：在 `matt-implement` 与 `matt-implement-spec` 中固化“4 条绿灯 + 1 个逃生阀”规则（非首轮、≤ 3 文件且无新表/新接口、方案确定、上下文在手头时由父会话直接修改并最多试跑 1~2 次聚焦测试，避免小改动反复支付子代理冷启动税）；明确批次逐票默认 0 次评审、单票最多 1 轮按需评审且合并修复 P0/P1。
+
 ## 0.3.3
 
 - **修正工作流结果读取规范**：移除 `matt-tdd/results.md` 中“优先读取 `*_output.md`”的指引（避免与 `matt-research` 等 skill 的结构化结果要求冲突或漏读 `hostVerification`），改为明确禁止把原始 `*_output.md` 当作结构化结果、禁止整文件 `read` `status.json`，并提供单行 `node -e` 权威摘要抽取命令。

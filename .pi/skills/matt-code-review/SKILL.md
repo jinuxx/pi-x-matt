@@ -46,5 +46,5 @@ metadata:
 按 [Workflow Result Reading](../matt-tdd/results.md) 读取两轴完整 `structuredOutput`，分别在 `## Standards` 与 `## Spec` 下呈现：
 
 - 保持两轴独立，不合并改写彼此结论；
-- 区分高优先级问题（P0/P1）与一般建议（P2/notes）；
+- 区分高优先级问题（P0/P1）与一般建议（P2/notes），每条用大白话呈现触发条件（`trigger`）与最坏后果（`impact`）；
 - 给出处理建议，交由用户拍板决定修复哪些项、忽略哪些项。

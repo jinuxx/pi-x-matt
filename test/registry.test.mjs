@@ -85,7 +85,7 @@ test("registry captures all parent workflows, advisory code review, and single-l
   for (const lane of review.workflow.lanes) {
     assert.deepEqual(lane.outputSchema.properties.verdict.enum, ["PASS", "ISSUES", "NO_EVIDENCE"]);
     assert.deepEqual(lane.outputSchema.properties.findings.items.required, [
-      "severity", "title", "locations", "evidence", "suggestion",
+      "severity", "title", "locations", "trigger", "impact", "evidence", "suggestion",
     ]);
   }
 
