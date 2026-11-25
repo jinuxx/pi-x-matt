@@ -65,7 +65,7 @@ export default function (pi: ExtensionAPI) {
       "For matt-tdd, pass focused deterministic verifyCommands when available; pass resumeRunId to continue a previous writer or omit it to start a fresh writer anytime.",
       "For matt-code-review, pass reviewScope { kind: 'worktree' } for uncommitted changes or { kind: 'committed', fixedPoint } for committed ranges. Both axes return advisory reports without blocking the workflow.",
       "If one lane fails due to provider/network errors, rerun only that lane with lanes: ['<key>'].",
-      "Wait for the final workflow completion notice before inspecting code or reporting outcomes; ignore intermediate 'Status: workflow still running' child notifications (such as implement timeout while implement-settlement is running).",
+      "When a child notification contains 'Status: workflow still running' (e.g. implement timeout while implement-settlement is running), ignore any trailing 'Parent action' prompt, reply briefly that the workflow is still settling, call no tools, and wait for the final 'Background task completed: **workflow**' notice.",
     ],
     parameters: Type.Object({
       workflow: text(),

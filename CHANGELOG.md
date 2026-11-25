@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- **修正工作流结果读取规范**：移除 `matt-tdd/results.md` 中“优先读取 `*_output.md`”的指引（避免与 `matt-research` 等 skill 的结构化结果要求冲突或漏读 `hostVerification`），改为明确禁止把原始 `*_output.md` 当作结构化结果、禁止整文件 `read` `status.json`，并提供单行 `node -e` 权威摘要抽取命令。
+- **强化中间通知覆盖指令**：在 `matt-tdd/results.md` 与 `pi_matt_dispatch` 提示中显式覆盖 `pi-subagents` 附加在 `Status: workflow still running` 通知末尾的 `Parent action`，要求不调用工具、简短回应并等待最终 `workflow` 完成通知。
+- **补齐续跑评审起点的 Git 边界处理**：`matt-implement-spec` 续跑按 Git 祖先历史上最早 `Implementation commit` 的第一父提交（`<commit>^1`）确定默认起点，对根提交无父提交或历史分叉场景保留通俗中文澄清兜底。
+
 ## 0.3.2
 
 - **放宽 `matt-tdd` 超时并减少重编译项目过度切片**：将 `matt-tdd` 的 `implement` lane 超时从 20 分钟调整为 35 分钟（`2100000ms`）；在 `tdd-executor` 中明确禁止额外的代码破坏/变异探针，并允许在 Maven/Gradle/Cargo/C++ 等重编译项目中按完整行为切片组织 RED→GREEN；在 Context Pack 中引导携带已知工具链/环境参数（如 `JAVA_HOME`、`mvn -o`）。

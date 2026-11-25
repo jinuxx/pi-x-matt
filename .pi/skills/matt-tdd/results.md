@@ -5,14 +5,20 @@
 ## 等待最终完成通知（勿在增量通知时提前介入）
 
 - 只以 `Background task completed: **workflow**` 最终通知作为结算起点。
-- 若中途收到 `Workflow child failed: **implement**` 或 `Workflow child completed: ...` 且包含 `Status: workflow still running`（例如 `implement` 超时后工作流正在自动运行 `implement-settlement` 或 `verify`），**不要提前检查代码、调用工具、新建超时待办或向用户下结论**；静等最终 `workflow` 完成通知到达后再读取收尾结果。
+- 若中途收到 `Workflow child failed: ...` 或 `Workflow child completed: ...` 且包含 `Status: workflow still running`（例如 `implement` 超时后工作流正在自动运行 `implement-settlement` 或 `verify`），**即使通知末尾附带 `Parent action`，也只回复一句简短提示（如“等待工作流收尾”）并立即结束本回合**，不调用工具、不读文件、不新建超时待办、不下结论；等最终 `Background task completed: **workflow**` 通知到达后再读取结果。
 
 ## 读取完整结果
 
-1. **优先读取子任务输出文件**：直接读取最终通知中各子任务指向的 `*_output.md`（体积小，含完整结构化 JSON）。
-2. **不要整文件 `read` `status.json`**：大项目下的 `status.json` 常超过 10k tokens，直接全文读取会被截断而导致误判“缺少结构化报告”。需要核对 `hostVerification`、终态 `state` 或失败 `emits` 时，用简短脚本（如 `node -e` / `jq`）只抽取所需摘要字段：
-   - `state === "complete"`：抽取 `workflow.value` 中各 lane 的 `key`、`ok`、`structuredOutput`（以及 `matt-tdd` 可选的 `hostVerification`）。
-   - `state === "failed"`（例如执行异常、超时或某轴遇到 429/网络失败）：抽取 `workflow.emits` 中最后一个 `type === "pi-x-matt.stage-results"` 的 `results` 摘要，保留已成功 lane 的结果并定位失败原因。
+- **禁止把 `*_output.md`（普通原始输出文本）当作已校验的 `structuredOutput`**（它不经过 schema 校验，也不包含 `hostVerification`）。
+- **禁止整文件 `read` `status.json`**（大项目下常超过 10k tokens 被截断，容易误判“缺少结构化报告”）。
+- 统一用简短命令只从 `status.json` 抽取权威摘要字段（`state`、`workflow.value` 或失败时最后一条 `pi-x-matt.stage-results`）：
+
+```bash
+node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const r=s.workflow?.value??s.workflow?.emits?.findLast(e=>e.type==="pi-x-matt.stage-results")?.results??[];console.log(JSON.stringify({state:s.state,lanes:r.map(({key,ok,structuredOutput,hostVerification,error})=>({key,ok,structuredOutput,hostVerification,error}))},null,2))' "<status.json路径>"
+```
+
+1. `state === "complete"`：消费各 lane 的 `structuredOutput`（以及 `matt-tdd` 可选的 `hostVerification`）。
+2. `state === "failed"`（例如执行异常、超时或某轴遇到 429/网络失败）：消费上述 `lanes` 摘要，保留已成功 lane 的结果并定位失败原因。
 
 ## 结果语义
 
