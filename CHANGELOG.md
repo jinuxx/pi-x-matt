@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- **放宽 `matt-tdd` 超时并减少重编译项目过度切片**：将 `matt-tdd` 的 `implement` lane 超时从 20 分钟调整为 35 分钟（`2100000ms`）；在 `tdd-executor` 中明确禁止额外的代码破坏/变异探针，并允许在 Maven/Gradle/Cargo/C++ 等重编译项目中按完整行为切片组织 RED→GREEN；在 Context Pack 中引导携带已知工具链/环境参数（如 `JAVA_HOME`、`mvn -o`）。
+- **消除超时增量通知提前唤醒与 `status.json` 截断误报**：在 `matt-tdd/results.md` 与 `pi_matt_dispatch` 提示中要求静待最终 `workflow` 完成通知，避免 `implement` 超时且 `implement-settlement` 仍在运行时的提前介入；明确优先读取 `*_output.md` 并按需抽取 `status.json` 摘要字段，避免全文读取超长 `status.json` 被截断。
+- **优化续跑体验与日志去重**：`matt-implement-spec` 续跑时自动以最早已解决票的 `Implementation commit^` 作为默认评审起点并禁止向用户抛出 `fixedPoint` 等内部字段名；`dispatch-service.mjs` 对重复的 `subagent:child-status` 阶段事件去重。
+
 ## 0.3.1
 
 - **移除多余二次确认弹窗**：删除 `lib/dispatch-authorization.mjs` 的 `ctx.ui.confirm` 写者弹窗与 `/matt-revoke` 命令，信任边界直接对齐 Pi 原生 `ctx.isProjectTrusted()`，消除“刚触发 implement 又弹窗授权”及多票切换 `verifyCommands` 反复弹窗的摩擦；保留 `/matt-reset` 与单写者并发防重。

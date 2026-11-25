@@ -64,7 +64,7 @@ function createHarness(cwd, { rpc } = {}) {
 test("matt-tdd dispatches directly without confirm dialogs, prevents concurrent writers, and supports /matt-reset", async () => {
   await createRepoProject(async (cwd) => {
     const asyncDirs = [];
-    const { service, ctx, rpcCalls, getConfirmCalls } = createHarness(cwd, {
+    const { service, ctx, entries, rpcCalls, getConfirmCalls } = createHarness(cwd, {
       rpc: async (method, params) => {
         rpcCalls.push({ method, params });
         const asyncDir = await mkdtemp(join(tmpdir(), "pi-matt-run-"));
@@ -87,6 +87,21 @@ test("matt-tdd dispatches directly without confirm dialogs, prevents concurrent 
       assert.equal(rpcCalls[0].params.workflow, DISPATCH_RESOURCE);
       const resolved1 = service.resolve(rpcCalls[0].params.args);
       assert.equal(resolved1.hostCommands.map((c) => c.key).join(","), "implement-claim,verify");
+
+      // Duplicate subagent:child-status heartbeats with identical timestamp are recorded once.
+      service.childStatus({ runId: "run-1", workflowKey: "implement", childRunId: "child-1", status: "started", ts: 1000 });
+      service.childStatus({ runId: "run-1", workflowKey: "implement", childRunId: "child-1", status: "started", ts: 1000 });
+      service.childStatus({ runId: "run-1", workflowKey: "implement", childRunId: "child-1", status: "completed", ts: 2000 });
+      const execEntries = entries
+        .map((entry) => entry.data)
+        .filter((data) => data.dispatchId === first.details.dispatchId && data.phase === "execution");
+      assert.deepEqual(
+        execEntries.map(({ state, lane, runId, at }) => ({ state, lane, runId, at })),
+        [
+          { state: "started", lane: "implement", runId: "child-1", at: 1000 },
+          { state: "completed", lane: "implement", runId: "child-1", at: 2000 },
+        ],
+      );
 
       // While first writer is still running, a second writer in the same project is blocked.
       await assert.rejects(

@@ -92,6 +92,7 @@ test("registry captures all parent workflows, advisory code review, and single-l
   const tdd = registry.skills["matt-tdd"];
   assert.equal(tdd.workflow.mode, "single");
   assert.equal(tdd.agent, "matt-worker");
+  assert.equal(tdd.workflow.lanes[0].timeoutMs, 2100000);
   assert.deepEqual(
     tdd.workflow.lanes.map(({ key, agent, skills, gate }) => ({ key, agent, skills, gate })),
     [{ key: "implement", agent: "matt-worker", skills: ["tdd-executor"], gate: undefined }],

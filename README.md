@@ -13,7 +13,7 @@ v0.3.0 回归“**确定性测试做门禁，LLM Review 做建议，人类始终
 
 ```bash
 pi install -l npm:pi-subagents@0.90.0
-pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.1
+pi install -l git:github.com/jinuxx/pi-x-matt@v0.3.2
 ```
 
 若要保持最小加载（不加载 `pi-subagents` 自带 skills/prompts/builtin agents），在目标项目 `.pi/settings.json` 中使用：

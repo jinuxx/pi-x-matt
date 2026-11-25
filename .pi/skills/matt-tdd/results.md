@@ -2,12 +2,17 @@
 
 所有通过 `pi_matt_dispatch` 调度的执行型 workflow 共用本读取规则。派发后等待原生异步完成通知，不轮询。
 
+## 等待最终完成通知（勿在增量通知时提前介入）
+
+- 只以 `Background task completed: **workflow**` 最终通知作为结算起点。
+- 若中途收到 `Workflow child failed: **implement**` 或 `Workflow child completed: ...` 且包含 `Status: workflow still running`（例如 `implement` 超时后工作流正在自动运行 `implement-settlement` 或 `verify`），**不要提前检查代码、调用工具、新建超时待办或向用户下结论**；静等最终 `workflow` 完成通知到达后再读取收尾结果。
+
 ## 读取完整结果
 
-通知中的 preview 可能截断；按通知指向的 `status.json` 读取完整 JSON：
-
-1. `state === "complete"`：直接从 `workflow.value` 按 lane `key` 读取每条 lane 的 `structuredOutput`（以及 `matt-tdd` 可选的 `hostVerification`）。
-2. `state === "failed"`（例如执行异常、超时或某轴遇到 429/网络失败）：从 `workflow.emits` 取最后一个 `type === "pi-x-matt.stage-results"` 的 `results` 数组，保留已成功 lane 的结果并定位失败原因。
+1. **优先读取子任务输出文件**：直接读取最终通知中各子任务指向的 `*_output.md`（体积小，含完整结构化 JSON）。
+2. **不要整文件 `read` `status.json`**：大项目下的 `status.json` 常超过 10k tokens，直接全文读取会被截断而导致误判“缺少结构化报告”。需要核对 `hostVerification`、终态 `state` 或失败 `emits` 时，用简短脚本（如 `node -e` / `jq`）只抽取所需摘要字段：
+   - `state === "complete"`：抽取 `workflow.value` 中各 lane 的 `key`、`ok`、`structuredOutput`（以及 `matt-tdd` 可选的 `hostVerification`）。
+   - `state === "failed"`（例如执行异常、超时或某轴遇到 429/网络失败）：抽取 `workflow.emits` 中最后一个 `type === "pi-x-matt.stage-results"` 的 `results` 摘要，保留已成功 lane 的结果并定位失败原因。
 
 ## 结果语义
 

@@ -1074,7 +1074,7 @@
         "matt-implement"
       ],
       "sourcePath": ".pi/skills/matt-implement-spec/SKILL.md",
-      "sourceDigest": "615ee976cfcae533363a3b3b6cfbc1a7b3cfde295207e4d72e76f682ec8ba100",
+      "sourceDigest": "097b17d789065b10ed37832401035d78c648b8d2f94c3f9fa739ef2e91af683d",
       "upstreamPath": "skills/engineering/implement-spec/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "1993a473cec40ac85d081c112cdffdc63ec3267c2e412055ad09e013a2f623d1"
@@ -1407,7 +1407,7 @@
       "sourcePath": ".pi/skills/matt-tdd/SKILL.md",
       "sourceDigest": "37a7abe2330331f255bda3403b4fe1de27b9f7b11267147ec69b9cd0d6e7492a",
       "workflowPath": ".pi/skills/matt-tdd/workflow.json",
-      "workflowDigest": "98cbd45b1e77e73f105ef96201c009c7a2613f9b7513711962c34d8ae537de25",
+      "workflowDigest": "0ff24329aef59c8b1b2e362854d070fd14ae5f6eaa5f46c2eb0a81f43cd49fd7",
       "workflow": {
         "version": 1,
         "name": "matt-tdd",
@@ -1419,8 +1419,8 @@
             "skills": [
               "tdd-executor"
             ],
-            "timeoutMs": 1200000,
-            "taskPrefix": "作为唯一写者执行已确认的 TDD 实现。先阅读父会话提供的任务上下文与关键文件，按测试切入点逐个 vertical slice 取得真实 RED 后写最小 GREEN，最后运行相关聚焦测试。不要提交、推送或覆盖用户既有无关改动；需要产品或架构决策时使用 contact_supervisor。完成后调用 structured_output 返回证据。",
+            "timeoutMs": 2100000,
+            "taskPrefix": "作为唯一写者执行已确认的 TDD 实现。先阅读父会话提供的任务上下文与关键文件，按测试切入点逐个行为切片取得真实 RED 后写最小 GREEN，最后运行相关聚焦测试；在重编译项目中按行为组合并切片以减少重复编译，不要做额外的代码破坏/变异探针。不要提交、推送或覆盖用户既有无关改动；需要产品或架构决策时使用 contact_supervisor。完成后调用 structured_output 返回证据。",
             "outputSchema": {
               "type": "object",
               "properties": {
@@ -1718,7 +1718,7 @@
         "codebase-design"
       ],
       "sourcePath": "skillpacks/leaf/tdd-executor/SKILL.md",
-      "sourceDigest": "7ba29beb23c2eaa92a347f18cb4fc316fa83072101107c58d8a3bdc6a86b60c3",
+      "sourceDigest": "4a1691cb3aacd5ab834a75c3fcace9030fd400a076bd270b5a395ac465749300",
       "upstreamPath": "skills/engineering/tdd/SKILL.md",
       "upstreamSha": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
       "upstreamDigest": "5505d25bbaa8fc14a79e4d20163936958992a2995b7f1dd1d6197edc9ed722e0"
