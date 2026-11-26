@@ -45,4 +45,4 @@ metadata:
 3. 使用 `<type>: <中文现在时摘要>` 提交到当前 branch；不自动 push、不创建 PR、不自动归档。提交后若 hook 追加未授权工具归因，停止、不 push 并报告真实提交。
 4. 提交成功后，若为 Local Markdown ticket，仅在本地将 `Status` 改为 `resolved`，并在 `## Comments` 追加 `Implementation commit: <完整 commit SHA>` 与验证摘要（不暂存、不提交 tracker；不修改 parent spec）。
 
-完成后报告 commit SHA、改动文件、验证命令结果及残余风险。
+完成后报告 commit SHA、改动文件、验证命令结果及残余风险。若当前处于 `matt-implement-spec` 批次且本票完成后已无剩余未解决票，不要直接收工，必须先按 `matt-implement-spec` 执行整批全量回归与集成评审。

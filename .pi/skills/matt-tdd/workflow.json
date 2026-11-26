@@ -7,7 +7,7 @@
       "key": "implement",
       "agent": "matt-worker",
       "skills": ["tdd-executor"],
-      "timeoutMs": 2100000,
+      "timeoutMs": 2700000,
       "taskPrefix": "作为唯一写者执行已确认的 TDD 实现。先阅读父会话提供的任务上下文与关键文件，按测试切入点逐个行为切片取得真实 RED 后写最小 GREEN，最后运行相关聚焦测试；在重编译项目中按行为组合并切片以减少重复编译，不要做额外的代码破坏/变异探针。不要提交、推送或覆盖用户既有无关改动；需要产品或架构决策时使用 contact_supervisor。完成后调用 structured_output 返回证据。",
       "outputSchema": {
         "type": "object",

@@ -33,10 +33,10 @@ metadata:
 
 ## 整批收尾与集成评审
 
-全部 tickets 均为 `resolved` / `out-of-scope` 后：
+全部 tickets 均为 `resolved` / `out-of-scope` 后，**先核对本节再收工**（避免长会话压缩后遗漏；未完成本节前不要宣布整批结束）：
 
-1. 运行项目完整测试套件与全量 typecheck/build；如有失败先定位修复。
-2. 调用一次 `pi_matt_dispatch` 的 `matt-code-review`，传入 `reviewScope: { kind: "committed", fixedPoint: "<起始 SHA>" }`：
+1. 运行项目完整测试套件（或跨全票联合回归）与全量 typecheck/build；如有失败先定位修复。
+2. 调用 `pi_matt_dispatch` 的 `matt-code-review`，传入 `reviewScope: { kind: "committed", fixedPoint: "<起始 SHA>" }`（若整批超过 5 票或改动量极大，可按业务阶段拆分为 2~3 次连续提交区间分别评审，避免单份 diff 过巨影响质量）：
    - `laneTasks.spec` 提供完整 active parent spec 与聚合验收清单；
    - `laneTasks.standards` 提供适用工程规范与隐私/安全关注点。
 3. 将建议型双轴报告整理呈现给用户（区分 P0/P1 与 P2 建议），由用户决定是否做针对性修补或直接结束交付。
